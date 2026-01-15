@@ -332,6 +332,7 @@ export default function SettingsDialog({ open, onOpenChange, onApiKeySaved }: Se
                     <div className="h-10 animate-pulse rounded-md bg-muted" />
                   ) : (
                     <select
+                      data-testid="settings-model-select"
                       value={selectedModel?.provider !== 'ollama' ? selectedModel?.model || '' : ''}
                       onChange={(e) => handleModelChange(e.target.value)}
                       className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
