@@ -17,6 +17,41 @@ vi.mock('@/lib/analytics', () => ({
   },
 }));
 
+// Mock react-i18next with translations for Home page
+const translations: Record<string, string> = {
+  'home.title': 'What will you accomplish today?',
+  'home.placeholder': 'Describe a task and let AI handle the rest',
+  'home.examples.title': 'Example prompts',
+  'home.examples.toggle': 'Example prompts',
+};
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, defaultValue?: string | Record<string, unknown>, options?: Record<string, unknown>) => {
+      // Return translation from our mock translations
+      if (translations[key]) {
+        return translations[key];
+      }
+      // Handle both t(key, fallback) and t(key, fallback, { count: n }) formats
+      if (typeof defaultValue === 'string') {
+        if (options) {
+          let result = defaultValue;
+          Object.entries(options).forEach(([k, v]) => {
+            result = result.replace(`{{${k}}}`, String(v));
+          });
+          return result;
+        }
+        return defaultValue;
+      }
+      return key;
+    },
+    i18n: {
+      changeLanguage: vi.fn(),
+      language: 'en',
+    },
+  }),
+}));
+
 // Create mock functions
 const mockStartTask = vi.fn();
 const mockAddTaskUpdate = vi.fn();

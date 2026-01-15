@@ -202,14 +202,14 @@ describe('appSettings Integration', () => {
       const result = getAppSettings();
 
       // Assert
-      expect(result).toEqual({
-        debugMode: false,
-        onboardingComplete: false,
-        selectedModel: {
-          provider: 'anthropic',
-          model: 'anthropic/claude-opus-4-5',
-        },
+      expect(result.debugMode).toBe(false);
+      expect(result.onboardingComplete).toBe(false);
+      expect(result.selectedModel).toEqual({
+        provider: 'anthropic',
+        model: 'anthropic/claude-opus-4-5',
       });
+      expect(result.ollamaConfig == null).toBe(true); // null or undefined
+      expect(result.language).toBe('en');
     });
 
     it('should return all settings after modifications', async () => {
@@ -225,11 +225,11 @@ describe('appSettings Integration', () => {
       const result = getAppSettings();
 
       // Assert
-      expect(result).toEqual({
-        debugMode: true,
-        onboardingComplete: true,
-        selectedModel: customModel,
-      });
+      expect(result.debugMode).toBe(true);
+      expect(result.onboardingComplete).toBe(true);
+      expect(result.selectedModel).toEqual(customModel);
+      expect(result.ollamaConfig == null).toBe(true); // null or undefined
+      expect(result.language).toBe('en');
     });
 
     it('should reflect partial modifications correctly', async () => {
@@ -272,14 +272,14 @@ describe('appSettings Integration', () => {
       const result = getAppSettings();
 
       // Assert
-      expect(result).toEqual({
-        debugMode: false,
-        onboardingComplete: false,
-        selectedModel: {
-          provider: 'anthropic',
-          model: 'anthropic/claude-opus-4-5',
-        },
+      expect(result.debugMode).toBe(false);
+      expect(result.onboardingComplete).toBe(false);
+      expect(result.selectedModel).toEqual({
+        provider: 'anthropic',
+        model: 'anthropic/claude-opus-4-5',
       });
+      expect(result.ollamaConfig == null).toBe(true); // null or undefined
+      expect(result.language).toBe('en');
     });
 
     it('should reset debugMode to default after clear', async () => {

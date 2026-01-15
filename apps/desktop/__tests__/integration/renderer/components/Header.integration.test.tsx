@@ -5,9 +5,32 @@
  * @vitest-environment jsdom
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+
+// Mock react-i18next with translations for Header
+const translations: Record<string, string> = {
+  'navigation.home': 'Home',
+  'navigation.history': 'History',
+  'navigation.settings': 'Settings',
+};
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, defaultValue?: string) => {
+      if (translations[key]) {
+        return translations[key];
+      }
+      return typeof defaultValue === 'string' ? defaultValue : key;
+    },
+    i18n: {
+      changeLanguage: vi.fn(),
+      language: 'en',
+    },
+  }),
+}));
+
 import Header from '@/components/layout/Header';
 
 describe('Header Integration', () => {
