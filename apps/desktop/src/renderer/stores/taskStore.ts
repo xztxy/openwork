@@ -40,6 +40,11 @@ interface TaskState {
   setupProgressTaskId: string | null;
   setupDownloadStep: number; // 1=Chromium, 2=FFMPEG, 3=Headless Shell
 
+  // Task launcher
+  isLauncherOpen: boolean;
+  openLauncher: () => void;
+  closeLauncher: () => void;
+
   // Actions
   startTask: (config: TaskConfig) => Promise<Task | null>;
   setSetupProgress: (taskId: string | null, message: string | null) => void;
@@ -51,6 +56,7 @@ interface TaskState {
   addTaskUpdate: (event: TaskUpdateEvent) => void;
   addTaskUpdateBatch: (event: TaskUpdateBatchEvent) => void;
   updateTaskStatus: (taskId: string, status: TaskStatus) => void;
+  setTaskSummary: (taskId: string, summary: string) => void;
   loadTasks: () => Promise<void>;
   loadTaskById: (taskId: string) => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;
@@ -71,6 +77,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   setupProgress: null,
   setupProgressTaskId: null,
   setupDownloadStep: 1,
+  isLauncherOpen: false,
 
   setSetupProgress: (taskId: string | null, message: string | null) => {
     // Detect which package is being downloaded from the message
@@ -398,6 +405,27 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     });
   },
 
+  // Update task summary (AI-generated)
+  setTaskSummary: (taskId: string, summary: string) => {
+    set((state) => {
+      // Update in tasks list
+      const updatedTasks = state.tasks.map((task) =>
+        task.id === taskId ? { ...task, summary } : task
+      );
+
+      // Update currentTask if it matches
+      const updatedCurrentTask =
+        state.currentTask?.id === taskId
+          ? { ...state.currentTask, summary }
+          : state.currentTask;
+
+      return {
+        tasks: updatedTasks,
+        currentTask: updatedCurrentTask,
+      };
+    });
+  },
+
   loadTasks: async () => {
     const accomplish = getAccomplish();
     const tasks = await accomplish.listTasks();
@@ -433,8 +461,12 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       setupProgress: null,
       setupProgressTaskId: null,
       setupDownloadStep: 1,
+      isLauncherOpen: false,
     });
   },
+
+  openLauncher: () => set({ isLauncherOpen: true }),
+  closeLauncher: () => set({ isLauncherOpen: false }),
 }));
 
 // Global subscription to setup progress events (browser download, etc.)
@@ -461,5 +493,10 @@ if (typeof window !== 'undefined' && window.accomplish) {
         state.setSetupProgress(null, null);
       }
     }
+  });
+
+  // Subscribe to task summary updates
+  window.accomplish.onTaskSummary?.(( data: { taskId: string; summary: string }) => {
+    useTaskStore.getState().setTaskSummary(data.taskId, data.summary);
   });
 }

@@ -11,13 +11,13 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ConversationListItem from './ConversationListItem';
 import SettingsDialog from './SettingsDialog';
-import { Settings, MessageSquarePlus } from 'lucide-react';
+import { Settings, MessageSquarePlus, Search } from 'lucide-react';
 import logoImage from '/assets/logo-1.png';
 
 export default function Sidebar() {
   const navigate = useNavigate();
   const [showSettings, setShowSettings] = useState(false);
-  const { tasks, loadTasks, updateTaskStatus, addTaskUpdate } = useTaskStore();
+  const { tasks, loadTasks, updateTaskStatus, addTaskUpdate, openLauncher } = useTaskStore();
   const accomplish = getAccomplish();
 
   useEffect(() => {
@@ -49,17 +49,26 @@ export default function Sidebar() {
   return (
     <>
       <div className="flex h-screen w-[260px] flex-col border-r border-border bg-card pt-12">
-        {/* New Task Button - Full Width */}
-        <div className="px-3 py-3 border-b border-border">
+        {/* Action Buttons */}
+        <div className="px-3 py-3 border-b border-border flex gap-2">
           <Button
             onClick={handleNewConversation}
             variant="default"
             size="sm"
-            className="w-full justify-center gap-2"
+            className="flex-1 justify-center gap-2"
             title="New Task"
           >
             <MessageSquarePlus className="h-4 w-4" />
             New Task
+          </Button>
+          <Button
+            onClick={openLauncher}
+            variant="outline"
+            size="sm"
+            className="px-2"
+            title="Search Tasks (⌘K)"
+          >
+            <Search className="h-4 w-4" />
           </Button>
         </div>
 
