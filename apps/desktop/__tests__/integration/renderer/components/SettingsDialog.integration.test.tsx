@@ -159,6 +159,31 @@ describe('SettingsDialog Integration', () => {
       expect(mockGetApiKeys).not.toHaveBeenCalled();
       expect(mockGetDebugMode).not.toHaveBeenCalled();
     });
+
+    it('should display current model when one is set', async () => {
+      // Arrange
+      mockGetSelectedModel.mockResolvedValue({ provider: 'anthropic', model: 'claude-opus-4-5' });
+      render(<SettingsDialog {...defaultProps} />);
+
+      // Assert
+      await waitFor(() => {
+        expect(screen.getByText('Current Model')).toBeInTheDocument();
+        expect(screen.getByText('claude-opus-4-5')).toBeInTheDocument();
+      });
+    });
+
+    it('should not display current model section when no model is set', async () => {
+      // Arrange
+      mockGetSelectedModel.mockResolvedValue(null);
+      render(<SettingsDialog {...defaultProps} />);
+
+      // Assert - Wait for dialog to render
+      await waitFor(() => {
+        expect(screen.getByText('Choose Model')).toBeInTheDocument();
+      });
+      // Current Model section should not be present
+      expect(screen.queryByText('Current Model')).not.toBeInTheDocument();
+    });
   });
 
   describe('wizard navigation', () => {
@@ -647,6 +672,47 @@ describe('SettingsDialog Integration', () => {
         expect(screen.getByText(/Connected/)).toBeInTheDocument();
         expect(screen.getByText('Use This Model')).toBeInTheDocument();
       });
+    });
+
+    it('should show success message and stay on settings page after model selection', async () => {
+      // Arrange
+      mockTestOllamaConnection.mockResolvedValue({
+        success: true,
+        models: [
+          { id: 'llama2', displayName: 'Llama 2', size: 4000000000 },
+        ],
+      });
+      mockSetOllamaConfig.mockResolvedValue(undefined);
+      mockSetSelectedModel.mockResolvedValue(undefined);
+      mockGetSelectedModel.mockResolvedValue({ provider: 'ollama', model: 'llama2' });
+
+      const onOpenChangeMock = vi.fn();
+      render(<SettingsDialog {...defaultProps} onOpenChange={onOpenChangeMock} />);
+
+      // Act - Navigate to Local, test connection, and select model
+      await waitFor(() => {
+        expect(screen.getByText('Local')).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByText('Local'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Test')).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByText('Test'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Use This Model')).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByText('Use This Model'));
+
+      // Assert - Success message should appear
+      await waitFor(() => {
+        expect(screen.getByText(/Model set to/)).toBeInTheDocument();
+      });
+
+      // Assert - Dialog should NOT be closed (onOpenChange should not be called with false)
+      // This verifies the new behavior of staying on settings page instead of closing
+      expect(onOpenChangeMock).not.toHaveBeenCalledWith(false);
     });
   });
 
