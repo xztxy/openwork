@@ -28,8 +28,6 @@ const API_KEY_PROVIDERS = [
   { id: 'xai', name: 'xAI (Grok)', prefix: 'xai-', placeholder: 'xai-...' },
 ] as const;
 
-// Coming soon providers (displayed but not selectable)
-const COMING_SOON_PROVIDERS = [] as const;
 
 type ProviderId = typeof API_KEY_PROVIDERS[number]['id'];
 
@@ -274,15 +272,6 @@ export default function SettingsDialog({ open, onOpenChange, onApiKeySaved }: Se
                     >
                       <div className="font-medium text-foreground">{p.name}</div>
                     </button>
-                  ))}
-                  {COMING_SOON_PROVIDERS.map((p) => (
-                    <div
-                      key={p.id}
-                      className="rounded-xl border border-dashed border-muted-foreground/30 p-4 text-center opacity-60 cursor-not-allowed"
-                    >
-                      <div className="font-medium text-muted-foreground">{p.name}</div>
-                      <div className="text-xs text-muted-foreground/70 mt-1">Coming Soon</div>
-                    </div>
                   ))}
                 </div>
               </div>

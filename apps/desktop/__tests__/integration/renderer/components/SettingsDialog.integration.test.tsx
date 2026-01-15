@@ -176,7 +176,7 @@ describe('SettingsDialog Integration', () => {
         expect(screen.getByText('Anthropic')).toBeInTheDocument();
         expect(screen.getByText('OpenAI')).toBeInTheDocument();
         expect(screen.getByText('Google AI')).toBeInTheDocument();
-        expect(screen.getByText('Groq')).toBeInTheDocument();
+        expect(screen.getByText('xAI (Grok)')).toBeInTheDocument();
       });
     });
 

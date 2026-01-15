@@ -178,7 +178,7 @@ describe('appSettings Integration', () => {
       const { getSelectedModel, setSelectedModel } = await import('@main/store/appSettings');
       const model1 = { provider: 'anthropic', model: 'claude-3-opus' };
       const model2 = { provider: 'google', model: 'gemini-pro' };
-      const model3 = { provider: 'groq', model: 'mixtral-8x7b' };
+      const model3 = { provider: 'xai', model: 'grok-4' };
 
       // Act & Assert
       setSelectedModel(model1);
