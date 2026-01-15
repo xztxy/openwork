@@ -331,6 +331,20 @@ interface McpServerConfig {
   timeout?: number;
 }
 
+interface OllamaProviderModelConfig {
+  name: string;
+  tools?: boolean;
+}
+
+interface OllamaProviderConfig {
+  npm: string;
+  name: string;
+  options: {
+    baseURL: string;
+  };
+  models: Record<string, OllamaProviderModelConfig>;
+}
+
 interface OpenCodeConfig {
   $schema?: string;
   model?: string;
@@ -339,6 +353,7 @@ interface OpenCodeConfig {
   permission?: string | Record<string, string | Record<string, string>>;
   agent?: Record<string, AgentConfig>;
   mcp?: Record<string, McpServerConfig>;
+  provider?: Record<string, OllamaProviderConfig>;
 }
 
 /**
