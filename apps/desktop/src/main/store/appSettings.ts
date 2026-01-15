@@ -20,10 +20,7 @@ const appSettingsStore = new Store<AppSettingsSchema>({
   defaults: {
     debugMode: false,
     onboardingComplete: false,
-    selectedModel: {
-      provider: 'anthropic',
-      model: 'anthropic/claude-opus-4-5',
-    },
+    selectedModel: null,
     ollamaConfig: null,
   },
 });

@@ -145,7 +145,7 @@ describe('appSettings Integration', () => {
   });
 
   describe('selectedModel', () => {
-    it('should return default model on fresh store', async () => {
+    it('should return null on fresh store (no default model)', async () => {
       // Arrange
       const { getSelectedModel, clearAppSettings } = await import('@main/store/appSettings');
       clearAppSettings(); // Ensure fresh state
@@ -154,10 +154,7 @@ describe('appSettings Integration', () => {
       const result = getSelectedModel();
 
       // Assert
-      expect(result).toEqual({
-        provider: 'anthropic',
-        model: 'anthropic/claude-opus-4-5',
-      });
+      expect(result == null).toBe(true); // null or undefined
     });
 
     it('should persist selectedModel after setting new value', async () => {
@@ -204,10 +201,7 @@ describe('appSettings Integration', () => {
       // Assert
       expect(result.debugMode).toBe(false);
       expect(result.onboardingComplete).toBe(false);
-      expect(result.selectedModel).toEqual({
-        provider: 'anthropic',
-        model: 'anthropic/claude-opus-4-5',
-      });
+      expect(result.selectedModel == null).toBe(true); // null or undefined
       expect(result.ollamaConfig == null).toBe(true); // null or undefined
     });
 
@@ -242,10 +236,7 @@ describe('appSettings Integration', () => {
       // Assert
       expect(result.debugMode).toBe(true);
       expect(result.onboardingComplete).toBe(false);
-      expect(result.selectedModel).toEqual({
-        provider: 'anthropic',
-        model: 'anthropic/claude-opus-4-5',
-      });
+      expect(result.selectedModel == null).toBe(true); // null or undefined
     });
   });
 
@@ -272,10 +263,7 @@ describe('appSettings Integration', () => {
       // Assert
       expect(result.debugMode).toBe(false);
       expect(result.onboardingComplete).toBe(false);
-      expect(result.selectedModel).toEqual({
-        provider: 'anthropic',
-        model: 'anthropic/claude-opus-4-5',
-      });
+      expect(result.selectedModel == null).toBe(true); // null or undefined
       expect(result.ollamaConfig == null).toBe(true); // null or undefined
     });
 
@@ -307,7 +295,7 @@ describe('appSettings Integration', () => {
       expect(result).toBe(false);
     });
 
-    it('should reset selectedModel to default after clear', async () => {
+    it('should reset selectedModel to null after clear', async () => {
       // Arrange
       const { getSelectedModel, setSelectedModel, clearAppSettings } = await import('@main/store/appSettings');
 
@@ -318,10 +306,7 @@ describe('appSettings Integration', () => {
       const result = getSelectedModel();
 
       // Assert
-      expect(result).toEqual({
-        provider: 'anthropic',
-        model: 'anthropic/claude-opus-4-5',
-      });
+      expect(result == null).toBe(true); // null or undefined
     });
 
     it('should allow setting new values after clear', async () => {
