@@ -69,7 +69,7 @@ vi.mock('electron', () => {
         id: 1,
         isDestroyed: vi.fn(() => false),
       })),
-      getAllWindows: vi.fn(() => [{ id: 1 }]),
+      getAllWindows: vi.fn(() => [{ id: 1, webContents: { send: vi.fn() } }]),
     },
     shell: {
       openExternal: vi.fn(),
