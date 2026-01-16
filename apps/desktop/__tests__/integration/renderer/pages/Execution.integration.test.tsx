@@ -61,6 +61,7 @@ const mockAccomplish = {
   onTaskUpdateBatch: mockOnTaskUpdateBatch.mockReturnValue(() => {}),
   onPermissionRequest: mockOnPermissionRequest.mockReturnValue(() => {}),
   onTaskStatusChange: mockOnTaskStatusChange.mockReturnValue(() => {}),
+  getDebugMode: vi.fn().mockResolvedValue(false),
 };
 
 // Mock the accomplish module

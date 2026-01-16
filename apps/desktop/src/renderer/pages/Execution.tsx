@@ -59,6 +59,7 @@ export default function ExecutionPage() {
   const [taskRunCount, setTaskRunCount] = useState(0);
   const [currentTool, setCurrentTool] = useState<string | null>(null);
   const [currentToolInput, setCurrentToolInput] = useState<unknown>(null);
+  const [debugMode, setDebugMode] = useState(false);
 
   const {
     currentTask,
@@ -86,6 +87,11 @@ export default function ExecutionPage() {
       }, 100),
     []
   );
+
+  // Fetch debug mode setting
+  useEffect(() => {
+    accomplish.getDebugMode().then(setDebugMode).catch(() => {});
+  }, []);
 
   // Load task and subscribe to events
   useEffect(() => {
@@ -403,6 +409,7 @@ export default function ExecutionPage() {
                     input={message.toolInput}
                     output={message.content}
                     status="complete"
+                    debugMode={debugMode}
                   />
                 );
               }
@@ -450,6 +457,7 @@ export default function ExecutionPage() {
                     input={message.toolInput}
                     output={message.content}
                     status={isLastTool && currentTask.status === 'running' ? 'running' : 'complete'}
+                    debugMode={debugMode}
                   />
                 );
               }
