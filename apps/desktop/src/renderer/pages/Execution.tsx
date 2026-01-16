@@ -10,12 +10,21 @@ import type { TaskMessage } from '@accomplish/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { XCircle, CornerDownLeft, ArrowLeft, CheckCircle2, AlertCircle, Terminal, Wrench, FileText, Search, Code, Brain, Clock, Square, Play, Download, File } from 'lucide-react';
+import { XCircle, CornerDownLeft, ArrowLeft, CheckCircle2, AlertCircle, Terminal, Wrench, FileText, Search, Code, Brain, Clock, Square, Play, Download, File, Bug, ChevronUp, ChevronDown, Trash2, Copy, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import { StreamingText } from '../components/ui/streaming-text';
 import { isWaitingForUser } from '../lib/waiting-detection';
 import loadingSymbol from '/assets/loading-symbol.svg';
+
+// Debug log entry type
+interface DebugLogEntry {
+  taskId: string;
+  timestamp: string;
+  type: string;
+  message: string;
+  data?: unknown;
+}
 
 // Spinning Openwork icon component
 const SpinningIcon = ({ className }: { className?: string }) => (
@@ -74,6 +83,11 @@ export default function ExecutionPage() {
   const [taskRunCount, setTaskRunCount] = useState(0);
   const [currentTool, setCurrentTool] = useState<string | null>(null);
   const [currentToolInput, setCurrentToolInput] = useState<unknown>(null);
+  const [debugLogs, setDebugLogs] = useState<DebugLogEntry[]>([]);
+  const [debugPanelOpen, setDebugPanelOpen] = useState(false);
+  const [debugModeEnabled, setDebugModeEnabled] = useState(false);
+  const [debugCopied, setDebugCopied] = useState(false);
+  const debugPanelRef = useRef<HTMLDivElement>(null);
 
   const {
     currentTask,
@@ -102,10 +116,26 @@ export default function ExecutionPage() {
     []
   );
 
+  // Load debug mode setting on mount and subscribe to changes
+  useEffect(() => {
+    accomplish.getDebugMode().then(setDebugModeEnabled);
+
+    // Subscribe to debug mode changes from settings
+    const unsubscribeDebugMode = accomplish.onDebugModeChange?.(({ enabled }) => {
+      setDebugModeEnabled(enabled);
+    });
+
+    return () => {
+      unsubscribeDebugMode?.();
+    };
+  }, [accomplish]);
+
   // Load task and subscribe to events
   useEffect(() => {
     if (id) {
       loadTaskById(id);
+      // Clear debug logs when switching tasks
+      setDebugLogs([]);
     }
 
     // Handle individual task updates
@@ -153,11 +183,20 @@ export default function ExecutionPage() {
       }
     });
 
+    // Subscribe to debug logs
+    const unsubscribeDebugLog = accomplish.onDebugLog((log) => {
+      const entry = log as DebugLogEntry;
+      if (entry.taskId === id) {
+        setDebugLogs((prev) => [...prev, entry]);
+      }
+    });
+
     return () => {
       unsubscribeTask();
       unsubscribeTaskBatch?.();
       unsubscribePermission();
       unsubscribeStatusChange?.();
+      unsubscribeDebugLog();
     };
   }, [id, loadTaskById, addTaskUpdate, addTaskUpdateBatch, updateTaskStatus, setPermissionRequest, accomplish]);
 
@@ -172,6 +211,13 @@ export default function ExecutionPage() {
   useEffect(() => {
     scrollToBottom();
   }, [currentTask?.messages?.length, scrollToBottom]);
+
+  // Auto-scroll debug panel when new logs arrive
+  useEffect(() => {
+    if (debugPanelOpen && debugPanelRef.current) {
+      debugPanelRef.current.scrollTop = debugPanelRef.current.scrollHeight;
+    }
+  }, [debugLogs.length, debugPanelOpen]);
 
   // Auto-focus follow-up input when task completes
   const isComplete = ['completed', 'failed', 'cancelled', 'interrupted'].includes(currentTask?.status ?? '');
@@ -194,6 +240,20 @@ export default function ExecutionPage() {
     // Send a simple "continue" message to resume the task
     await sendFollowUp('continue');
   };
+
+  const handleCopyDebugLogs = useCallback(() => {
+    const text = debugLogs
+      .map((log) => {
+        const dataStr = log.data !== undefined
+          ? ` ${typeof log.data === 'string' ? log.data : JSON.stringify(log.data)}`
+          : '';
+        return `${new Date(log.timestamp).toISOString()} [${log.type}] ${log.message}${dataStr}`;
+      })
+      .join('\n');
+    navigator.clipboard.writeText(text);
+    setDebugCopied(true);
+    setTimeout(() => setDebugCopied(false), 2000);
+  }, [debugLogs]);
 
   const handlePermissionResponse = async (allowed: boolean) => {
     if (!permissionRequest || !currentTask) return;
@@ -692,6 +752,117 @@ export default function ExecutionPage() {
           <Button onClick={() => navigate('/')}>
             Start New Task
           </Button>
+        </div>
+      )}
+
+      {/* Debug Panel - Only visible when debug mode is enabled */}
+      {debugModeEnabled && (
+        <div className="flex-shrink-0 border-t border-border">
+          {/* Toggle header */}
+          <button
+            onClick={() => setDebugPanelOpen(!debugPanelOpen)}
+            className="w-full flex items-center justify-between px-6 py-2.5 bg-zinc-900 hover:bg-zinc-800 transition-colors"
+          >
+            <div className="flex items-center gap-2 text-sm text-zinc-400">
+              <Bug className="h-4 w-4" />
+              <span className="font-medium">Debug Logs</span>
+              {debugLogs.length > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-zinc-700 text-zinc-300 text-xs">
+                  {debugLogs.length}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {debugLogs.length > 0 && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCopyDebugLogs();
+                    }}
+                  >
+                    {debugCopied ? (
+                      <Check className="h-3 w-3 mr-1 text-green-400" />
+                    ) : (
+                      <Copy className="h-3 w-3 mr-1" />
+                    )}
+                    {debugCopied ? 'Copied' : 'Copy'}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDebugLogs([]);
+                    }}
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Clear
+                  </Button>
+                </>
+              )}
+              {debugPanelOpen ? (
+                <ChevronDown className="h-4 w-4 text-zinc-500" />
+              ) : (
+                <ChevronUp className="h-4 w-4 text-zinc-500" />
+              )}
+            </div>
+          </button>
+
+          {/* Collapsible panel content */}
+          <AnimatePresence>
+            {debugPanelOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 200, opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div
+                  ref={debugPanelRef}
+                  className="h-[200px] overflow-y-auto bg-zinc-950 text-zinc-300 font-mono text-xs p-4"
+                >
+                  {debugLogs.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-zinc-500">
+                      No debug logs yet. Run a task to see logs.
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {debugLogs.map((log, index) => (
+                        <div key={index} className="flex gap-2">
+                          <span className="text-zinc-500 shrink-0">
+                            {new Date(log.timestamp).toLocaleTimeString()}
+                          </span>
+                          <span className={cn(
+                            'shrink-0 px-1 rounded',
+                            log.type === 'error' ? 'bg-red-500/20 text-red-400' :
+                            log.type === 'warn' ? 'bg-yellow-500/20 text-yellow-400' :
+                            log.type === 'info' ? 'bg-blue-500/20 text-blue-400' :
+                            'bg-zinc-700 text-zinc-400'
+                          )}>
+                            [{log.type}]
+                          </span>
+                          <span className="text-zinc-300 break-all">
+                            {log.message}
+                            {log.data !== undefined && (
+                              <span className="text-zinc-500 ml-2">
+                                {typeof log.data === 'string' ? log.data : JSON.stringify(log.data, null, 0)}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
     </div>

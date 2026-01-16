@@ -137,6 +137,12 @@ const accomplishAPI = {
     ipcRenderer.on('debug:log', listener);
     return () => ipcRenderer.removeListener('debug:log', listener);
   },
+  // Debug mode setting changes
+  onDebugModeChange: (callback: (data: { enabled: boolean }) => void) => {
+    const listener = (_: unknown, data: { enabled: boolean }) => callback(data);
+    ipcRenderer.on('settings:debug-mode-changed', listener);
+    return () => ipcRenderer.removeListener('settings:debug-mode-changed', listener);
+  },
   // Task status changes (e.g., queued -> running)
   onTaskStatusChange: (callback: (data: { taskId: string; status: string }) => void) => {
     const listener = (_: unknown, data: { taskId: string; status: string }) => callback(data);

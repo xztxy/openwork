@@ -88,6 +88,7 @@ interface AccomplishAPI {
   onPermissionRequest(callback: (request: PermissionRequest) => void): () => void;
   onTaskProgress(callback: (progress: TaskProgress) => void): () => void;
   onDebugLog(callback: (log: unknown) => void): () => void;
+  onDebugModeChange?(callback: (data: { enabled: boolean }) => void): () => void;
   onTaskStatusChange?(callback: (data: { taskId: string; status: TaskStatus }) => void): () => void;
   onTaskSummary?(callback: (data: { taskId: string; summary: string }) => void): () => void;
 

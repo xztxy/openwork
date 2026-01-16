@@ -1031,6 +1031,10 @@ export function registerIPCHandlers(): void {
       throw new Error('Invalid debug mode flag');
     }
     setDebugMode(enabled);
+    // Broadcast the change to all renderer windows
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send('settings:debug-mode-changed', { enabled });
+    }
   });
 
   // Settings: Get all app settings
