@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import { StreamingText } from '../components/ui/streaming-text';
 import { isWaitingForUser } from '../lib/waiting-detection';
-import { ActivityRow, ThinkingRow, DebugPanel } from '../components/execution';
+import { ActivityRow, ThinkingRow, ProgressNarration, DebugPanel } from '../components/execution';
 import type { DebugLog } from '../components/execution';
 import loadingSymbol from '/assets/loading-symbol.svg';
 
@@ -503,55 +503,82 @@ export default function ExecutionPage() {
                 );
               }
 
-              // Skip assistant messages that duplicate the next tool's description
+              // Handle assistant messages - determine if conversation or progress narration
               if (message.type === 'assistant') {
                 const nextMessage = allMessages[index + 1];
-                if (nextMessage?.type === 'tool') {
+                const messageContent = message.content?.trim() || '';
+
+                // Check if this is progress narration (followed by tool, not a question)
+                const isFollowedByTool = nextMessage?.type === 'tool';
+                const isQuestion = messageContent.endsWith('?');
+                const isLastMessage = index === allMessages.length - 1;
+
+                // Skip if content exactly matches next tool's description
+                if (isFollowedByTool) {
                   const toolInput = nextMessage.toolInput as Record<string, unknown> | undefined;
                   const toolDescription = toolInput?.description as string | undefined;
-                  const messageContent = message.content?.trim();
-                  // Skip if content matches tool description (case-insensitive)
                   if (messageContent && toolDescription &&
                       messageContent.toLowerCase() === toolDescription.toLowerCase()) {
                     return null;
                   }
                 }
-              }
 
-              // Render other messages as MessageBubble
-              const filteredMessages = allMessages.filter(m => m.type !== 'tool');
-              const filteredIndex = filteredMessages.findIndex(m => m.id === message.id);
-              const isLastMessage = filteredIndex === filteredMessages.length - 1;
-              const isLastAssistantMessage = message.type === 'assistant' && isLastMessage;
+                // Progress narration: followed by tool AND not a question AND not last message
+                const isProgressNarration = isFollowedByTool && !isQuestion && !isLastMessage;
 
-              // Find the last assistant message index for the continue button
-              let lastAssistantIndex = -1;
-              for (let i = filteredMessages.length - 1; i >= 0; i--) {
-                if (filteredMessages[i].type === 'assistant') {
-                  lastAssistantIndex = i;
-                  break;
+                if (isProgressNarration) {
+                  // Render as subtle progress narration, not a bubble
+                  return (
+                    <ProgressNarration
+                      key={message.id}
+                      content={messageContent}
+                    />
+                  );
                 }
+
+                // Otherwise render as conversation bubble
+                const filteredMessages = allMessages.filter(m => m.type !== 'tool');
+                const filteredIndex = filteredMessages.findIndex(m => m.id === message.id);
+                const isLastFiltered = filteredIndex === filteredMessages.length - 1;
+                const isLastAssistantMessage = isLastFiltered;
+
+                // Find the last assistant message index for the continue button
+                let lastAssistantIndex = -1;
+                for (let i = filteredMessages.length - 1; i >= 0; i--) {
+                  if (filteredMessages[i].type === 'assistant') {
+                    lastAssistantIndex = i;
+                    break;
+                  }
+                }
+                const isLastAssistantForContinue = filteredIndex === lastAssistantIndex;
+
+                // Show continue button on last assistant message when:
+                // - Task was interrupted (user can always continue)
+                // - Task completed AND the message indicates agent is waiting for user action
+                const showContinue = isLastAssistantForContinue && !!hasSession &&
+                  (currentTask.status === 'interrupted' ||
+                   (currentTask.status === 'completed' && isWaitingForUser(message.content)));
+
+                return (
+                  <MessageBubble
+                    key={message.id}
+                    message={message}
+                    shouldStream={isLastAssistantMessage && currentTask.status === 'running'}
+                    isLastMessage={isLastFiltered}
+                    isRunning={currentTask.status === 'running'}
+                    showContinueButton={showContinue}
+                    continueLabel={currentTask.status === 'interrupted' ? 'Continue' : 'Done, Continue'}
+                    onContinue={handleContinue}
+                    isLoading={isLoading}
+                  />
+                );
               }
-              const isLastAssistantForContinue = filteredIndex === lastAssistantIndex;
 
-              // Show continue button on last assistant message when:
-              // - Task was interrupted (user can always continue)
-              // - Task completed AND the message indicates agent is waiting for user action
-              const showContinue = isLastAssistantForContinue && !!hasSession &&
-                (currentTask.status === 'interrupted' ||
-                 (currentTask.status === 'completed' && isWaitingForUser(message.content)));
-
+              // Render user/system messages as MessageBubble
               return (
                 <MessageBubble
                   key={message.id}
                   message={message}
-                  shouldStream={isLastAssistantMessage && currentTask.status === 'running'}
-                  isLastMessage={isLastMessage}
-                  isRunning={currentTask.status === 'running'}
-                  showContinueButton={showContinue}
-                  continueLabel={currentTask.status === 'interrupted' ? 'Continue' : 'Done, Continue'}
-                  onContinue={handleContinue}
-                  isLoading={isLoading}
                 />
               );
             })}
