@@ -58,6 +58,31 @@ export interface ActivityRowProps {
   status: 'running' | 'complete' | 'error';
 }
 
+// Clean output by removing common noise/warnings
+function cleanOutput(output: string): string {
+  if (!output) return output;
+
+  // Patterns to filter out (line by line)
+  const noisePatterns = [
+    /^npm warn\b/i,
+    /^npm WARN\b/,
+    /^warning:/i,
+    /^\[warn\]/i,
+    /^Debugger attached\./,
+    /^Waiting for the debugger/,
+    /^For help, see:/,
+  ];
+
+  const lines = output.split('\n');
+  const filteredLines = lines.filter(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return true; // Keep empty lines
+    return !noisePatterns.some(pattern => pattern.test(trimmed));
+  });
+
+  return filteredLines.join('\n').trim();
+}
+
 // Format request in a readable way based on tool type
 function formatRequest(tool: string, input: unknown): string {
   if (input === null || input === undefined) return '';
@@ -288,7 +313,7 @@ export const ActivityRow = memo(function ActivityRow({
   const fallbackName = TOOL_DISPLAY_NAMES[normalizedTool] || normalizedTool;
   const summary = getSummary(normalizedTool, input, fallbackName);
   const formattedInput = formatRequest(normalizedTool, input);
-  const formattedOutput = output || '';
+  const formattedOutput = cleanOutput(output || '');
 
   return (
     <motion.div
