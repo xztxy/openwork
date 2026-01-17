@@ -110,6 +110,14 @@ const accomplishAPI = {
   setOllamaConfig: (config: { baseUrl: string; enabled: boolean; lastValidated?: number; models?: Array<{ id: string; displayName: string; size: number }> } | null): Promise<void> =>
     ipcRenderer.invoke('ollama:set-config', config),
 
+  // Bedrock
+  validateBedrockCredentials: (credentials: string) =>
+    ipcRenderer.invoke('bedrock:validate', credentials),
+  saveBedrockCredentials: (credentials: string) =>
+    ipcRenderer.invoke('bedrock:save', credentials),
+  getBedrockCredentials: () =>
+    ipcRenderer.invoke('bedrock:get-credentials'),
+
   // Event subscriptions
   onTaskUpdate: (callback: (event: unknown) => void) => {
     const listener = (_: unknown, event: unknown) => callback(event);
