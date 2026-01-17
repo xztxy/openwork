@@ -509,7 +509,7 @@ export function registerIPCHandlers(): void {
       const denied = decision === 'deny';
       const resolved = resolveQuestion(requestId, {
         selectedOptions: parsedResponse.selectedOptions,
-        customText: parsedResponse.message,
+        customText: parsedResponse.customText,
         denied,
       });
       if (resolved) {

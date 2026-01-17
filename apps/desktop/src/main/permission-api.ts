@@ -252,7 +252,8 @@ export function startQuestionApiServer(): http.Server {
 
     let data: {
       question?: string;
-      options?: Array<{ id: string; label: string }>;
+      header?: string;
+      options?: Array<{ label: string; description?: string }>;
       multiSelect?: boolean;
     };
 
@@ -293,6 +294,7 @@ export function startQuestionApiServer(): http.Server {
       taskId,
       type: 'question',
       question: data.question,
+      header: data.header,
       options: data.options,
       multiSelect: data.multiSelect,
       createdAt: new Date().toISOString(),
