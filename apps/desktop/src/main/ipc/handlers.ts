@@ -66,6 +66,8 @@ import {
   taskConfigSchema,
   validate,
 } from './validation';
+import { BedrockClient, ListFoundationModelsCommand } from '@aws-sdk/client-bedrock';
+import { fromIni } from '@aws-sdk/credential-providers';
 import {
   isMockTaskEventsEnabled,
   createMockTask,
@@ -74,7 +76,7 @@ import {
 } from '../test-utils/mock-task-flow';
 
 const MAX_TEXT_LENGTH = 8000;
-const ALLOWED_API_KEY_PROVIDERS = new Set(['anthropic', 'openai', 'google', 'xai', 'custom']);
+const ALLOWED_API_KEY_PROVIDERS = new Set(['anthropic', 'openai', 'google', 'xai', 'custom', 'bedrock']);
 const API_KEY_VALIDATION_TIMEOUT_MS = 15000;
 
 interface OllamaModel {
@@ -862,6 +864,99 @@ export function registerIPCHandlers(): void {
         return { valid: false, error: 'Request timed out. Please check your internet connection and try again.' };
       }
       return { valid: false, error: 'Failed to validate API key. Check your internet connection.' };
+    }
+  });
+
+  // Bedrock: Validate AWS credentials
+  handle('bedrock:validate', async (_event: IpcMainInvokeEvent, credentials: string) => {
+    console.log('[Bedrock] Validation requested');
+
+    try {
+      const parsed = JSON.parse(credentials);
+      let client: BedrockClient;
+
+      if (parsed.authType === 'accessKeys') {
+        // Access key authentication
+        client = new BedrockClient({
+          region: parsed.region || 'us-east-1',
+          credentials: {
+            accessKeyId: parsed.accessKeyId,
+            secretAccessKey: parsed.secretAccessKey,
+          },
+        });
+      } else if (parsed.authType === 'profile') {
+        // AWS Profile authentication
+        client = new BedrockClient({
+          region: parsed.region || 'us-east-1',
+          credentials: fromIni({ profile: parsed.profileName || 'default' }),
+        });
+      } else {
+        return { valid: false, error: 'Invalid authentication type' };
+      }
+
+      // Test by listing foundation models
+      const command = new ListFoundationModelsCommand({});
+      await client.send(command);
+
+      console.log('[Bedrock] Validation succeeded');
+      return { valid: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Validation failed';
+      console.warn('[Bedrock] Validation failed:', message);
+
+      // Provide user-friendly error messages
+      if (message.includes('UnrecognizedClientException') || message.includes('InvalidSignatureException')) {
+        return { valid: false, error: 'Invalid AWS credentials. Please check your Access Key ID and Secret Access Key.' };
+      }
+      if (message.includes('AccessDeniedException')) {
+        return { valid: false, error: 'Access denied. Ensure your AWS credentials have Bedrock permissions.' };
+      }
+      if (message.includes('could not be found')) {
+        return { valid: false, error: 'AWS profile not found. Check your ~/.aws/credentials file.' };
+      }
+
+      return { valid: false, error: message };
+    }
+  });
+
+  // Bedrock: Save credentials
+  handle('bedrock:save', async (_event: IpcMainInvokeEvent, credentials: string) => {
+    const parsed = JSON.parse(credentials);
+
+    // Validate structure
+    if (parsed.authType === 'accessKeys') {
+      if (!parsed.accessKeyId || !parsed.secretAccessKey) {
+        throw new Error('Access Key ID and Secret Access Key are required');
+      }
+    } else if (parsed.authType === 'profile') {
+      if (!parsed.profileName) {
+        throw new Error('Profile name is required');
+      }
+    } else {
+      throw new Error('Invalid authentication type');
+    }
+
+    // Store the credentials
+    storeApiKey('bedrock', credentials);
+
+    return {
+      id: 'local-bedrock',
+      provider: 'bedrock',
+      label: parsed.authType === 'accessKeys' ? 'AWS Access Keys' : `AWS Profile: ${parsed.profileName}`,
+      keyPrefix: parsed.authType === 'accessKeys' ? `${parsed.accessKeyId.substring(0, 8)}...` : parsed.profileName,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    };
+  });
+
+  // Bedrock: Get credentials
+  handle('bedrock:get-credentials', async (_event: IpcMainInvokeEvent) => {
+    const stored = getApiKey('bedrock');
+    if (!stored) return null;
+    try {
+      return JSON.parse(stored);
+    } catch {
+      return null;
     }
   });
 
