@@ -287,6 +287,39 @@ To ask ANY question or get user input, you MUST use the AskUserQuestion MCP tool
 See the ask-user-question skill for full documentation and examples.
 </important>
 
+<tool name="AskUserQuestion">
+Use this MCP tool to ask users questions and get their responses.
+
+Parameters:
+{
+  "questions": [{
+    "question": "Your question to the user",
+    "header": "Short label (max 12 chars)",
+    "options": [
+      { "label": "Option 1", "description": "What this does" },
+      { "label": "Option 2", "description": "What this does" }
+    ],
+    "multiSelect": false
+  }]
+}
+
+WRONG (user won't see this):
+  I'll help organize your files. How would you like them organized?
+  - By type
+  - By date
+
+CORRECT (user will see a modal):
+  AskUserQuestion({
+    "questions": [{
+      "question": "How would you like your files organized?",
+      "options": [
+        { "label": "By type", "description": "Group by file extension" },
+        { "label": "By date", "description": "Group by month/year" }
+      ]
+    }]
+  })
+</tool>
+
 <behavior>
 - Use AskUserQuestion tool for clarifying questions before starting ambiguous tasks
 - Write small, focused scripts - each does ONE thing
