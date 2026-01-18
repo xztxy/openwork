@@ -44,9 +44,12 @@ import {
 import { getDesktopConfig } from '../config';
 import {
   startPermissionApiServer,
+  startQuestionApiServer,
   initPermissionApi,
   resolvePermission,
+  resolveQuestion,
   isFilePermissionRequest,
+  isQuestionRequest,
 } from '../permission-api';
 import type {
   TaskConfig,
@@ -289,6 +292,7 @@ export function registerIPCHandlers(): void {
     if (!permissionApiInitialized) {
       initPermissionApi(window, () => taskManager.getActiveTaskId());
       startPermissionApiServer();
+      startQuestionApiServer();
       permissionApiInitialized = true;
     }
 
@@ -500,6 +504,22 @@ export function registerIPCHandlers(): void {
       }
       // If not found in pending, fall through to standard handling
       console.warn(`[IPC] File permission request ${requestId} not found in pending requests`);
+    }
+
+    // Check if this is a question request from the MCP server
+    if (requestId && isQuestionRequest(requestId)) {
+      const denied = decision === 'deny';
+      const resolved = resolveQuestion(requestId, {
+        selectedOptions: parsedResponse.selectedOptions,
+        customText: parsedResponse.customText,
+        denied,
+      });
+      if (resolved) {
+        console.log(`[IPC] Question request ${requestId} resolved: ${denied ? 'denied' : 'answered'}`);
+        return;
+      }
+      // If not found in pending, fall through to standard handling
+      console.warn(`[IPC] Question request ${requestId} not found in pending requests`);
     }
 
     // Check if the task is still active
