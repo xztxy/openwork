@@ -83,9 +83,55 @@ jobs:
             apps/desktop/release/*-arm64.zip
           retention-days: 30
 
+  build-windows-x64:
+    name: Build Windows (x64)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download Node.js binaries
+        run: pnpm -F @accomplish/desktop download:nodejs
+
+      - name: Build desktop app
+        run: pnpm -F @accomplish/desktop build
+
+      - name: Package for Windows
+        run: node scripts/package.cjs --win --x64 --publish never
+        working-directory: apps/desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Openwork-Windows-x64
+          path: |
+            apps/desktop/release/*.exe
+          retention-days: 30
+
   create-release:
     name: Create GitHub Release
-    needs: [build-mac-arm64]
+    needs: [build-mac-arm64, build-windows-x64]
     runs-on: ubuntu-latest
 
     steps:
@@ -97,6 +143,13 @@ jobs:
         with:
           name: Accomplish-macOS-arm64
           path: ./release/mac
+        continue-on-error: true
+
+      - name: Download Windows x64 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Openwork-Windows-x64
+          path: ./release/win
         continue-on-error: true
 
       - name: Get version from tag
@@ -117,17 +170,25 @@ jobs:
           prerelease: false
           files: |
             ./release/mac/*
+            ./release/win/*
           body: |
-            ## Accomplish v${{ steps.version.outputs.version }}
+            ## Openwork v${{ steps.version.outputs.version }}
 
             ### Downloads
-            - **macOS (Apple Silicon)**: `Accomplish-*-mac-arm64.dmg`
+            - **macOS (Apple Silicon)**: `Openwork-*-mac-arm64.dmg`
+            - **Windows (x64)**: `Openwork-*-win-x64.exe`
 
             ### Installation
-            1. Download the appropriate installer for your Mac
-            2. Open the DMG and drag Accomplish to Applications
-            3. Launch Accomplish
-            4. Enter your API key to get started
+
+            **macOS:**
+            1. Download the DMG file
+            2. Open the DMG and drag Openwork to Applications
+            3. Launch Openwork
+
+            **Windows:**
+            1. Download the EXE installer
+            2. Run the installer
+            3. Launch Openwork from Start Menu
 
             ### What's Included
             - Bundled Node.js v20.18.1 runtime (no system Node.js required)
