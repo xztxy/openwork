@@ -440,6 +440,14 @@ test.describe('Settings Dialog', () => {
     // Verify LiteLLM platform option is visible (but disabled)
     await expect(settingsPage.litellmPlatformButton).toBeVisible({ timeout: TEST_TIMEOUTS.NAVIGATION });
 
+    // Verify API key input is visible when no key is configured
+    // (This may or may not be visible depending on test state)
+    const apiKeyInput = settingsPage.openrouterApiKeyInput;
+    const keyConfigured = await window.locator('text=API key configured').isVisible();
+    if (!keyConfigured) {
+      await expect(apiKeyInput).toBeVisible({ timeout: TEST_TIMEOUTS.NAVIGATION });
+    }
+
     // Capture proxy platforms content
     await captureForAI(
       window,

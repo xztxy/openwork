@@ -102,6 +102,14 @@ export class SettingsPage {
     return this.page.getByRole('button', { name: /Fetch Models|Refresh/ });
   }
 
+  get openrouterApiKeyInput() {
+    return this.page.getByPlaceholder('sk-or-...');
+  }
+
+  get saveOpenrouterApiKeyButton() {
+    return this.page.getByRole('button', { name: /Save API Key & Fetch Models/ });
+  }
+
   async navigateToSettings() {
     // Click the settings button in sidebar to navigate
     await this.sidebarSettingsButton.click();
