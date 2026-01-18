@@ -11,6 +11,11 @@ on:
           - patch
           - minor
           - major
+      dry_run:
+        description: 'Test mode - skips push to main, creates test release'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -70,7 +75,12 @@ jobs:
           git add apps/desktop/package.json
           git commit -m "chore(release): bump version to ${{ steps.bump.outputs.new_version }}"
           git tag "v${{ steps.bump.outputs.new_version }}"
-          git push origin HEAD:main --tags
+          if [ "${{ inputs.dry_run }}" == "true" ]; then
+            echo "DRY RUN: Skipping push to main"
+            git push origin "v${{ steps.bump.outputs.new_version }}" --force
+          else
+            git push origin HEAD:main --tags
+          fi
 
   build-mac-arm64:
     name: Build macOS (Apple Silicon)
@@ -198,9 +208,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.version-bump.outputs.new_version }}
-          name: Openwork v${{ needs.version-bump.outputs.new_version }}
+          name: ${{ inputs.dry_run == true && '[TEST] ' || '' }}Openwork v${{ needs.version-bump.outputs.new_version }}
           draft: true
-          prerelease: false
+          prerelease: ${{ inputs.dry_run }}
           generate_release_notes: true
           files: |
             ./release/arm64/*
