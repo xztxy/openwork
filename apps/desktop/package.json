@@ -16,6 +16,8 @@
     "package:mac": "pnpm build && node scripts/package.cjs --mac --publish never",
     "release": "pnpm build && node scripts/package.cjs --mac --publish always",
     "release:mac": "pnpm build && node scripts/package.cjs --mac --publish always",
+    "package:win": "pnpm build && node scripts/package.cjs --win --x64 --publish never",
+    "release:win": "pnpm build && node scripts/package.cjs --win --x64 --publish always",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
@@ -108,12 +110,12 @@
       "node_modules/debounce-fn/**",
       "!node_modules/@accomplish/**",
       "!node_modules/opencode-darwin-*/**",
-      "!node_modules/opencode-linux-*/**",
-      "!node_modules/opencode-win32-*/**"
+      "!node_modules/opencode-linux-*/**"
     ],
     "asar": true,
     "asarUnpack": [
       "node_modules/opencode-ai/bin/opencode",
+      "node_modules/opencode-ai/bin/opencode.exe",
       "node_modules/opencode-ai/package.json",
       "node_modules/node-pty/build/**/*.node",
       "node_modules/node-pty/package.json",
@@ -170,6 +172,17 @@
           "path": "/Applications"
         }
       ]
+    },
+    "win": {
+      "target": ["nsis"],
+      "icon": "resources/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Openwork"
     }
   }
 }
