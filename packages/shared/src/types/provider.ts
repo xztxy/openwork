@@ -2,7 +2,7 @@
  * Provider and model configuration types for multi-provider support
  */
 
-export type ProviderType = 'anthropic' | 'openai' | 'google' | 'xai' | 'ollama' | 'deepseek' | 'zai' | 'custom' | 'bedrock';
+export type ProviderType = 'anthropic' | 'openai' | 'openrouter' | 'google' | 'xai' | 'ollama' | 'deepseek' | 'zai' | 'custom' | 'bedrock';
 
 export interface ProviderConfig {
   id: ProviderType;
@@ -46,6 +46,24 @@ export interface OllamaConfig {
   enabled: boolean;
   lastValidated?: number;
   models?: OllamaModelInfo[];  // Discovered models from Ollama API
+}
+
+/**
+ * OpenRouter model info from API
+ */
+export interface OpenRouterModel {
+  id: string;           // e.g., "anthropic/claude-3.5-sonnet"
+  name: string;         // e.g., "Claude 3.5 Sonnet"
+  provider: string;     // e.g., "anthropic" (extracted from id)
+  contextLength: number;
+}
+
+/**
+ * OpenRouter configuration
+ */
+export interface OpenRouterConfig {
+  models: OpenRouterModel[];
+  lastFetched?: number;
 }
 
 /**
@@ -233,6 +251,39 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
         displayName: 'Claude Haiku 4.5',
         provider: 'bedrock',
         fullId: 'amazon-bedrock/anthropic.claude-haiku-4-5-20251001-v1:0',
+        contextWindow: 200000,
+        supportsVision: true,
+      },
+    ],
+  },
+  {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    requiresApiKey: true,
+    apiKeyEnvVar: 'OPENROUTER_API_KEY',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    models: [
+      {
+        id: 'anthropic/claude-opus-4.5',
+        displayName: 'Claude Opus 4.5',
+        provider: 'openrouter',
+        fullId: 'openrouter/anthropic/claude-opus-4.5',
+        contextWindow: 200000,
+        supportsVision: true,
+      },
+      {
+        id: 'anthropic/claude-sonnet-4.5',
+        displayName: 'Claude Sonnet 4.5',
+        provider: 'openrouter',
+        fullId: 'openrouter/anthropic/claude-sonnet-4.5',
+        contextWindow: 200000,
+        supportsVision: true,
+      },
+      {
+        id: 'anthropic/claude-haiku-4.5',
+        displayName: 'Claude Haiku 4.5',
+        provider: 'openrouter',
+        fullId: 'openrouter/anthropic/claude-haiku-4.5',
         contextWindow: 200000,
         supportsVision: true,
       },
