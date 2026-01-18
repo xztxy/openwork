@@ -35,21 +35,26 @@ const SpinningIcon = ({ className }: { className?: string }) => (
   />
 );
 
-// Tool name to human-readable progress mapping
+// Tool name to human-readable progress mapping (lowercase keys for case-insensitive lookup)
 const TOOL_PROGRESS_MAP: Record<string, { label: string; icon: typeof FileText }> = {
-  // Standard Claude Code tools
-  Read: { label: 'Reading files', icon: FileText },
-  Glob: { label: 'Finding files', icon: Search },
-  Grep: { label: 'Searching code', icon: Search },
-  Bash: { label: 'Running command', icon: Terminal },
-  Write: { label: 'Writing file', icon: FileText },
-  Edit: { label: 'Editing file', icon: FileText },
-  Task: { label: 'Running agent', icon: Brain },
-  WebFetch: { label: 'Fetching web page', icon: Search },
-  WebSearch: { label: 'Searching web', icon: Search },
+  // Standard Claude Code tools (lowercase for matching)
+  read: { label: 'Reading files', icon: FileText },
+  glob: { label: 'Finding files', icon: Search },
+  grep: { label: 'Searching code', icon: Search },
+  bash: { label: 'Running command', icon: Terminal },
+  write: { label: 'Writing file', icon: FileText },
+  edit: { label: 'Editing file', icon: FileText },
+  task: { label: 'Running agent', icon: Brain },
+  webfetch: { label: 'Fetching web page', icon: Search },
+  websearch: { label: 'Searching web', icon: Search },
+  todowrite: { label: 'Updating tasks', icon: FileText },
   // Dev Browser tools
   dev_browser_execute: { label: 'Executing browser action', icon: Terminal },
 };
+
+// Helper to lookup tool in map (case-insensitive)
+const getToolProgress = (toolName: string | null | undefined) =>
+  toolName ? TOOL_PROGRESS_MAP[toolName.toLowerCase()] : undefined;
 
 // Debounce utility
 function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): T {
@@ -562,10 +567,10 @@ export default function ExecutionPage() {
                   <SpinningIcon className="h-4 w-4" />
                   <span className="text-sm">
                     {currentTool
-                      ? ((currentToolInput as { description?: string })?.description || TOOL_PROGRESS_MAP[currentTool]?.label || currentTool)
+                      ? ((currentToolInput as { description?: string })?.description || getToolProgress(currentTool)?.label || currentTool)
                       : 'Thinking...'}
                   </span>
-                  {currentTool && !(currentToolInput as { description?: string })?.description && (
+                  {currentTool && !(currentToolInput as { description?: string })?.description && !getToolProgress(currentTool) && (
                     <span className="text-xs text-muted-foreground/60">
                       ({currentTool})
                     </span>
@@ -898,9 +903,9 @@ const MessageBubble = memo(function MessageBubble({ message, shouldStream = fals
   const isSystem = message.type === 'system';
   const isAssistant = message.type === 'assistant';
 
-  // Get tool icon from mapping
+  // Get tool icon from mapping (case-insensitive)
   const toolName = message.toolName || message.content?.match(/Using tool: (\w+)/)?.[1];
-  const ToolIcon = toolName && TOOL_PROGRESS_MAP[toolName]?.icon;
+  const ToolIcon = toolName && getToolProgress(toolName)?.icon;
 
   // Mark stream as complete when shouldStream becomes false
   useEffect(() => {
@@ -948,7 +953,7 @@ const MessageBubble = memo(function MessageBubble({ message, shouldStream = fals
           <>
             <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
               {ToolIcon ? <ToolIcon className="h-4 w-4" /> : <Wrench className="h-4 w-4" />}
-              <span>{TOOL_PROGRESS_MAP[toolName || '']?.label || toolName || 'Processing'}</span>
+              <span>{getToolProgress(toolName)?.label || toolName || 'Processing'}</span>
               {isLastMessage && isRunning && (
                 <SpinningIcon className="h-3.5 w-3.5 ml-1" />
               )}
