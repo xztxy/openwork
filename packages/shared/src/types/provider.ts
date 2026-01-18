@@ -256,39 +256,6 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
       },
     ],
   },
-  {
-    id: 'openrouter',
-    name: 'OpenRouter',
-    requiresApiKey: true,
-    apiKeyEnvVar: 'OPENROUTER_API_KEY',
-    baseUrl: 'https://openrouter.ai/api/v1',
-    models: [
-      {
-        id: 'anthropic/claude-opus-4.5',
-        displayName: 'Claude Opus 4.5',
-        provider: 'openrouter',
-        fullId: 'openrouter/anthropic/claude-opus-4.5',
-        contextWindow: 200000,
-        supportsVision: true,
-      },
-      {
-        id: 'anthropic/claude-sonnet-4.5',
-        displayName: 'Claude Sonnet 4.5',
-        provider: 'openrouter',
-        fullId: 'openrouter/anthropic/claude-sonnet-4.5',
-        contextWindow: 200000,
-        supportsVision: true,
-      },
-      {
-        id: 'anthropic/claude-haiku-4.5',
-        displayName: 'Claude Haiku 4.5',
-        provider: 'openrouter',
-        fullId: 'openrouter/anthropic/claude-haiku-4.5',
-        contextWindow: 200000,
-        supportsVision: true,
-      },
-    ],
-  },
 ];
 
 export const DEFAULT_MODEL: SelectedModel = {
