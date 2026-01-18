@@ -29,9 +29,43 @@ export default {
         return new Response('Invalid signature', { status: 401 });
       }
 
-      // Parse Slack payload
+      // Parse Slack payload with error handling
       const params = new URLSearchParams(body);
-      const payload = JSON.parse(params.get('payload'));
+      const payloadStr = params.get('payload');
+      if (!payloadStr) {
+        return new Response('Missing payload', { status: 400 });
+      }
+
+      let payload;
+      try {
+        payload = JSON.parse(payloadStr);
+      } catch (e) {
+        console.error('Failed to parse payload:', e);
+        return new Response('Invalid payload format', { status: 400 });
+      }
+
+      // Validate required payload fields
+      if (!payload.actions || !Array.isArray(payload.actions) || payload.actions.length === 0) {
+        return new Response('Invalid payload: missing actions', { status: 400 });
+      }
+      if (!payload.response_url) {
+        return new Response('Invalid payload: missing response_url', { status: 400 });
+      }
+      if (!payload.user?.id) {
+        return new Response('Invalid payload: missing user', { status: 400 });
+      }
+
+      // Validate response_url is from Slack (security check)
+      const responseUrl = payload.response_url;
+      try {
+        const url = new URL(responseUrl);
+        if (!url.hostname.endsWith('.slack.com')) {
+          console.error('Invalid response_url domain:', url.hostname);
+          return new Response('Invalid response_url', { status: 400 });
+        }
+      } catch (e) {
+        return new Response('Invalid response_url format', { status: 400 });
+      }
 
       // Get action (release_patch, release_minor, release_major)
       // Try action_id first, fall back to value field
@@ -46,7 +80,6 @@ export default {
       } else {
         bumpType = action.action_id; // Will fail validation but show in error
       }
-      const responseUrl = payload.response_url;
 
       // Validate bump type
       if (!['patch', 'minor', 'major'].includes(bumpType)) {
@@ -193,6 +226,24 @@ async function verifySlackSignature(signature, timestamp, body, secret) {
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
 
-  // Compare signatures
-  return signature === expectedSignature;
+  // Timing-safe comparison to prevent timing attacks
+  // Both strings must be same length for secure comparison
+  if (signature.length !== expectedSignature.length) {
+    return false;
+  }
+
+  const a = encoder.encode(signature);
+  const b = encoder.encode(expectedSignature);
+
+  // Use crypto.subtle.timingSafeEqual if available, otherwise manual constant-time compare
+  if (crypto.subtle.timingSafeEqual) {
+    return crypto.subtle.timingSafeEqual(a, b);
+  }
+
+  // Fallback: constant-time comparison
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a[i] ^ b[i];
+  }
+  return result === 0;
 }

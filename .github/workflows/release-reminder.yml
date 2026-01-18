@@ -163,8 +163,18 @@ jobs:
             }')
 
           # Send via Slack Web API (supports interactive buttons properly)
-          curl -f -X POST \
+          # Note: Slack returns HTTP 200 even for errors, with "ok": false in body
+          RESPONSE=$(curl -s -X POST \
             -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
             -H "Content-type: application/json; charset=utf-8" \
             --data "$PAYLOAD" \
-            "https://slack.com/api/chat.postMessage" || { echo "Failed to send Slack notification"; exit 1; }
+            "https://slack.com/api/chat.postMessage")
+
+          # Check if Slack API returned success
+          if ! echo "$RESPONSE" | jq -e '.ok == true' > /dev/null 2>&1; then
+            echo "Failed to send Slack notification"
+            echo "Response: $RESPONSE"
+            exit 1
+          fi
+
+          echo "Slack notification sent successfully"
