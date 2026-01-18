@@ -176,7 +176,7 @@ async function ensureDevBrowserServer(
   // Now start the server
   try {
     const skillsPath = getSkillsPath();
-    const serverScript = path.join(skillsPath, 'dev-browser', 'server.sh');
+    const serverScript = path.join(skillsPath, 'dev-browser', 'server.js');
 
     // Build environment with bundled Node.js in PATH
     const bundledPaths = getBundledNodePaths();
@@ -187,8 +187,11 @@ async function ensureDevBrowserServer(
       spawnEnv.NODE_BIN_PATH = bundledPaths.binDir;
     }
 
+    // Get node executable path
+    const nodeExe = bundledPaths?.nodePath || 'node';
+
     // Spawn server in background (detached, unref to not block)
-    const child = spawn('bash', [serverScript], {
+    const child = spawn(nodeExe, [serverScript], {
       detached: true,
       stdio: 'ignore',
       cwd: path.join(skillsPath, 'dev-browser'),
