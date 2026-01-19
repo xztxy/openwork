@@ -198,7 +198,7 @@ describe('OpenCode Config Generator Integration', () => {
       expect(filePermission.environment.PERMISSION_API_PORT).toBe('9999');
     });
 
-    it('should inject skills path into system prompt', async () => {
+    it('should not contain template placeholders', async () => {
       // Act
       const { generateOpenCodeConfig } = await import('@main/opencode/config-generator');
       const configPath = await generateOpenCodeConfig();
@@ -206,11 +206,10 @@ describe('OpenCode Config Generator Integration', () => {
       // Assert
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       const prompt = config.agent['accomplish'].prompt;
-      const skillsPath = path.join(tempAppDir, 'skills');
 
-      // Prompt should contain the actual skills path, not the template placeholder
-      expect(prompt).toContain(skillsPath);
-      expect(prompt).not.toContain('{{SKILLS_PATH}}');
+      // Prompt should not contain any template placeholders
+      expect(prompt).not.toContain('{{');
+      expect(prompt).not.toContain('}}');
     });
 
     it('should set OPENCODE_CONFIG environment variable after generation', async () => {
@@ -246,7 +245,7 @@ describe('OpenCode Config Generator Integration', () => {
   });
 
   describe('System Prompt Content', () => {
-    it('should include browser automation guidance', async () => {
+    it('should include identity section', async () => {
       // Act
       const { generateOpenCodeConfig } = await import('@main/opencode/config-generator');
       const configPath = await generateOpenCodeConfig();
@@ -255,11 +254,12 @@ describe('OpenCode Config Generator Integration', () => {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       const prompt = config.agent['accomplish'].prompt;
 
-      expect(prompt).toContain('browser');
-      expect(prompt.toLowerCase()).toContain('playwright');
+      expect(prompt).toContain('<identity>');
+      expect(prompt).toContain('Accomplish');
+      expect(prompt).toContain('browser automation assistant');
     });
 
-    it('should include file permission rules', async () => {
+    it('should include capabilities section', async () => {
       // Act
       const { generateOpenCodeConfig } = await import('@main/opencode/config-generator');
       const configPath = await generateOpenCodeConfig();
@@ -268,11 +268,12 @@ describe('OpenCode Config Generator Integration', () => {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       const prompt = config.agent['accomplish'].prompt;
 
-      expect(prompt).toContain('FILE PERMISSION WORKFLOW');
-      expect(prompt).toContain('request_file_permission');
+      expect(prompt).toContain('<capabilities>');
+      expect(prompt).toContain('Browser Automation');
+      expect(prompt).toContain('File Management');
     });
 
-    it('should include user communication guidance', async () => {
+    it('should include behavior section', async () => {
       // Act
       const { generateOpenCodeConfig } = await import('@main/opencode/config-generator');
       const configPath = await generateOpenCodeConfig();
@@ -281,8 +282,50 @@ describe('OpenCode Config Generator Integration', () => {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       const prompt = config.agent['accomplish'].prompt;
 
-      expect(prompt).toContain('user-communication');
-      expect(prompt).toContain('AskUserQuestion');
+      expect(prompt).toContain('<behavior>');
+      expect(prompt).toContain('small, focused scripts');
+    });
+
+    it('should NOT include file permission rules (moved to MCP)', async () => {
+      // Act
+      const { generateOpenCodeConfig } = await import('@main/opencode/config-generator');
+      const configPath = await generateOpenCodeConfig();
+
+      // Assert
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      const prompt = config.agent['accomplish'].prompt;
+
+      // These should NOT be in the system prompt anymore
+      expect(prompt).not.toContain('FILE PERMISSION WORKFLOW');
+      expect(prompt).not.toContain('request_file_permission');
+    });
+
+    it('should NOT include dev-browser skill (moved to separate PR)', async () => {
+      // Act
+      const { generateOpenCodeConfig } = await import('@main/opencode/config-generator');
+      const configPath = await generateOpenCodeConfig();
+
+      // Assert
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      const prompt = config.agent['accomplish'].prompt;
+
+      // These should NOT be in the system prompt anymore
+      expect(prompt).not.toContain('{{SKILLS_PATH}}');
+      expect(prompt).not.toContain('<skill name="dev-browser">');
+      expect(prompt).not.toContain('NODE_BIN_PATH');
+    });
+
+    it('should be minimal (under 50 lines)', async () => {
+      // Act
+      const { generateOpenCodeConfig } = await import('@main/opencode/config-generator');
+      const configPath = await generateOpenCodeConfig();
+
+      // Assert
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      const prompt = config.agent['accomplish'].prompt;
+      const lineCount = prompt.split('\n').length;
+
+      expect(lineCount).toBeLessThan(50);
     });
   });
 
