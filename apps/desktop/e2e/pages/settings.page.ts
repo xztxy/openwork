@@ -76,6 +76,64 @@ export class SettingsPage {
     return this.page.getByTestId('bedrock-save-button');
   }
 
+  // Tab buttons
+  get cloudProvidersTab() {
+    return this.page.getByRole('button', { name: 'Cloud Providers' });
+  }
+
+  get localModelsTab() {
+    return this.page.getByRole('button', { name: 'Local Models' });
+  }
+
+  get proxyPlatformsTab() {
+    return this.page.getByRole('button', { name: 'Proxy Platforms' });
+  }
+
+  // Proxy Platforms tab elements
+  get openrouterPlatformButton() {
+    return this.page.locator('button:has-text("OpenRouter")').first();
+  }
+
+  get litellmPlatformButton() {
+    return this.page.locator('button:has-text("LiteLLM"):not([disabled])');
+  }
+
+  get litellmUrlInput() {
+    return this.page.locator('[data-testid="litellm-url-input"]');
+  }
+
+  get litellmApiKeyInput() {
+    return this.page.locator('[data-testid="litellm-api-key-input"]');
+  }
+
+  get litellmTestConnectionButton() {
+    return this.page.locator('[data-testid="litellm-test-button"]');
+  }
+
+  get litellmModelSearch() {
+    return this.page.locator('[data-testid="litellm-search-input"]');
+  }
+
+  get litellmUseModelButton() {
+    return this.page.locator('[data-testid="litellm-save-button"]');
+  }
+
+  async selectLiteLLMPlatform() {
+    await this.litellmPlatformButton.click();
+  }
+
+  get fetchModelsButton() {
+    return this.page.getByRole('button', { name: /Fetch Models|Refresh/ });
+  }
+
+  get openrouterApiKeyInput() {
+    return this.page.getByPlaceholder('sk-or-...');
+  }
+
+  get saveOpenrouterApiKeyButton() {
+    return this.page.getByRole('button', { name: /Save API Key & Fetch Models/ });
+  }
+
   async navigateToSettings() {
     // Click the settings button in sidebar to navigate
     await this.sidebarSettingsButton.click();
@@ -130,5 +188,9 @@ export class SettingsPage {
 
   async selectBedrockProfileTab() {
     await this.bedrockProfileTab.click();
+  }
+
+  async selectProxyPlatformsTab() {
+    await this.proxyPlatformsTab.click();
   }
 }

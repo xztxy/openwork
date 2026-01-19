@@ -244,7 +244,9 @@ describe('secureStorage Integration', () => {
         xai: null,
         deepseek: null,
         zai: null,
+        openrouter: null,
         bedrock: null,
+        litellm: null,
         custom: null,
       });
     });
@@ -354,7 +356,9 @@ describe('secureStorage Integration', () => {
         xai: null,
         deepseek: null,
         zai: null,
+        openrouter: null,
         bedrock: null,
+        litellm: null,
         custom: null,
       });
     });

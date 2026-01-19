@@ -42,13 +42,18 @@ import {
   setOllamaConfig,
   getAzureFoundryConfig,
   setAzureFoundryConfig,
+  getLiteLLMConfig,
+  setLiteLLMConfig,
 } from '../store/appSettings';
 import { getDesktopConfig } from '../config';
 import {
   startPermissionApiServer,
+  startQuestionApiServer,
   initPermissionApi,
   resolvePermission,
+  resolveQuestion,
   isFilePermissionRequest,
+  isQuestionRequest,
 } from '../permission-api';
 import type {
   TaskConfig,
@@ -60,6 +65,7 @@ import type {
   SelectedModel,
   OllamaConfig,
   AzureFoundryConfig,
+  LiteLLMConfig,
 } from '@accomplish/shared';
 import { DEFAULT_PROVIDERS } from '@accomplish/shared';
 import {
@@ -79,7 +85,7 @@ import {
 } from '../test-utils/mock-task-flow';
 
 const MAX_TEXT_LENGTH = 8000;
-const ALLOWED_API_KEY_PROVIDERS = new Set(['anthropic', 'openai', 'google', 'xai', 'deepseek', 'zai', 'azure-foundry', 'custom', 'bedrock']);
+const ALLOWED_API_KEY_PROVIDERS = new Set(['anthropic', 'openai', 'openrouter', 'google', 'xai', 'deepseek', 'zai', 'azure-foundry', 'custom', 'bedrock', 'litellm']);
 const API_KEY_VALIDATION_TIMEOUT_MS = 15000;
 
 interface OllamaModel {
@@ -292,6 +298,7 @@ export function registerIPCHandlers(): void {
     if (!permissionApiInitialized) {
       initPermissionApi(window, () => taskManager.getActiveTaskId());
       startPermissionApiServer();
+      startQuestionApiServer();
       permissionApiInitialized = true;
     }
 
@@ -503,6 +510,22 @@ export function registerIPCHandlers(): void {
       }
       // If not found in pending, fall through to standard handling
       console.warn(`[IPC] File permission request ${requestId} not found in pending requests`);
+    }
+
+    // Check if this is a question request from the MCP server
+    if (requestId && isQuestionRequest(requestId)) {
+      const denied = decision === 'deny';
+      const resolved = resolveQuestion(requestId, {
+        selectedOptions: parsedResponse.selectedOptions,
+        customText: parsedResponse.customText,
+        denied,
+      });
+      if (resolved) {
+        console.log(`[IPC] Question request ${requestId} resolved: ${denied ? 'denied' : 'answered'}`);
+        return;
+      }
+      // If not found in pending, fall through to standard handling
+      console.warn(`[IPC] Question request ${requestId} not found in pending requests`);
     }
 
     // Check if the task is still active
@@ -861,6 +884,19 @@ export function registerIPCHandlers(): void {
         case 'openai':
           response = await fetchWithTimeout(
             'https://api.openai.com/v1/models',
+            {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${sanitizedKey}`,
+              },
+            },
+            API_KEY_VALIDATION_TIMEOUT_MS
+          );
+          break;
+
+        case 'openrouter':
+          response = await fetchWithTimeout(
+            'https://openrouter.ai/api/v1/models',
             {
               method: 'GET',
               headers: {
@@ -1303,6 +1339,220 @@ export function registerIPCHandlers(): void {
     }
     setAzureFoundryConfig(config);
     console.log('[Azure Foundry] Config saved:', config);
+  });
+
+  // OpenRouter: Fetch available models
+  handle('openrouter:fetch-models', async (_event: IpcMainInvokeEvent) => {
+    const apiKey = getApiKey('openrouter');
+    if (!apiKey) {
+      return { success: false, error: 'No OpenRouter API key configured' };
+    }
+
+    try {
+      const response = await fetchWithTimeout(
+        'https://openrouter.ai/api/v1/models',
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+          },
+        },
+        API_KEY_VALIDATION_TIMEOUT_MS
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = (errorData as { error?: { message?: string } })?.error?.message || `API returned status ${response.status}`;
+        return { success: false, error: errorMessage };
+      }
+
+      const data = await response.json() as { data?: Array<{ id: string; name: string; context_length?: number }> };
+      const models = (data.data || []).map((m) => {
+        // Extract provider from model ID (e.g., "anthropic/claude-3.5-sonnet" -> "anthropic")
+        const provider = m.id.split('/')[0] || 'unknown';
+        return {
+          id: m.id,
+          name: m.name || m.id,
+          provider,
+          contextLength: m.context_length || 0,
+        };
+      });
+
+      console.log(`[OpenRouter] Fetched ${models.length} models`);
+      return { success: true, models };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch models';
+      console.warn('[OpenRouter] Fetch failed:', message);
+
+      if (error instanceof Error && error.name === 'AbortError') {
+        return { success: false, error: 'Request timed out. Check your internet connection.' };
+      }
+      return { success: false, error: `Failed to fetch models: ${message}` };
+    }
+  });
+
+  // LiteLLM: Test connection and fetch models
+  handle('litellm:test-connection', async (_event: IpcMainInvokeEvent, url: string, apiKey?: string) => {
+    const sanitizedUrl = sanitizeString(url, 'litellmUrl', 256);
+    const sanitizedApiKey = apiKey ? sanitizeString(apiKey, 'apiKey', 256) : undefined;
+
+    // Validate URL format and protocol
+    try {
+      const parsed = new URL(sanitizedUrl);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return { success: false, error: 'Only http and https URLs are allowed' };
+      }
+    } catch {
+      return { success: false, error: 'Invalid URL format' };
+    }
+
+    try {
+      const headers: Record<string, string> = {};
+      if (sanitizedApiKey) {
+        headers['Authorization'] = `Bearer ${sanitizedApiKey}`;
+      }
+
+      const response = await fetchWithTimeout(
+        `${sanitizedUrl}/v1/models`,
+        { method: 'GET', headers },
+        API_KEY_VALIDATION_TIMEOUT_MS
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = (errorData as { error?: { message?: string } })?.error?.message || `API returned status ${response.status}`;
+        return { success: false, error: errorMessage };
+      }
+
+      const data = await response.json() as { data?: Array<{ id: string; object: string; created?: number; owned_by?: string }> };
+      const models = (data.data || []).map((m) => {
+        // Extract provider from model ID (e.g., "openai/gpt-4" -> "openai")
+        const provider = m.id.split('/')[0] || m.owned_by || 'unknown';
+        return {
+          id: m.id,
+          name: m.id, // LiteLLM uses id as name
+          provider,
+          contextLength: 0, // LiteLLM doesn't provide this in /v1/models
+        };
+      });
+
+      console.log(`[LiteLLM] Connection successful, found ${models.length} models`);
+      return { success: true, models };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Connection failed';
+      console.warn('[LiteLLM] Connection failed:', message);
+
+      if (error instanceof Error && error.name === 'AbortError') {
+        return { success: false, error: 'Connection timed out. Make sure LiteLLM proxy is running.' };
+      }
+      return { success: false, error: `Cannot connect to LiteLLM: ${message}` };
+    }
+  });
+
+  // LiteLLM: Fetch models from configured proxy
+  handle('litellm:fetch-models', async (_event: IpcMainInvokeEvent) => {
+    const config = getLiteLLMConfig();
+    if (!config || !config.baseUrl) {
+      return { success: false, error: 'No LiteLLM proxy configured' };
+    }
+
+    const apiKey = getApiKey('litellm');
+
+    try {
+      const headers: Record<string, string> = {};
+      if (apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+      }
+
+      const response = await fetchWithTimeout(
+        `${config.baseUrl}/v1/models`,
+        { method: 'GET', headers },
+        API_KEY_VALIDATION_TIMEOUT_MS
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = (errorData as { error?: { message?: string } })?.error?.message || `API returned status ${response.status}`;
+        return { success: false, error: errorMessage };
+      }
+
+      const data = await response.json() as { data?: Array<{ id: string; object: string; created?: number; owned_by?: string }> };
+      const models = (data.data || []).map((m) => {
+        // Extract provider from model ID (e.g., "anthropic/claude-sonnet" -> "anthropic")
+        const parts = m.id.split('/');
+        const provider = parts.length > 1 ? parts[0] : (m.owned_by !== 'openai' ? m.owned_by : 'unknown') || 'unknown';
+
+        // Generate display name (e.g., "anthropic/claude-sonnet" -> "Anthropic: Claude Sonnet")
+        const modelPart = parts.length > 1 ? parts.slice(1).join('/') : m.id;
+        const providerDisplay = provider.charAt(0).toUpperCase() + provider.slice(1);
+        const modelDisplay = modelPart
+          .split('-')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+        const displayName = parts.length > 1 ? `${providerDisplay}: ${modelDisplay}` : modelDisplay;
+
+        return {
+          id: m.id,
+          name: displayName,
+          provider,
+          contextLength: 0,
+        };
+      });
+
+      console.log(`[LiteLLM] Fetched ${models.length} models`);
+      return { success: true, models };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to fetch models';
+      console.warn('[LiteLLM] Fetch failed:', message);
+
+      if (error instanceof Error && error.name === 'AbortError') {
+        return { success: false, error: 'Request timed out. Check your LiteLLM proxy.' };
+      }
+      return { success: false, error: `Failed to fetch models: ${message}` };
+    }
+  });
+
+  // LiteLLM: Get stored config
+  handle('litellm:get-config', async (_event: IpcMainInvokeEvent) => {
+    return getLiteLLMConfig();
+  });
+
+  // LiteLLM: Set config
+  handle('litellm:set-config', async (_event: IpcMainInvokeEvent, config: LiteLLMConfig | null) => {
+    if (config !== null) {
+      if (typeof config.baseUrl !== 'string' || typeof config.enabled !== 'boolean') {
+        throw new Error('Invalid LiteLLM configuration');
+      }
+      // Validate URL format and protocol
+      try {
+        const parsed = new URL(config.baseUrl);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          throw new Error('Only http and https URLs are allowed');
+        }
+      } catch (e) {
+        if (e instanceof Error && e.message.includes('http')) {
+          throw e; // Re-throw our protocol error
+        }
+        throw new Error('Invalid base URL format');
+      }
+      // Validate optional lastValidated if present
+      if (config.lastValidated !== undefined && typeof config.lastValidated !== 'number') {
+        throw new Error('Invalid LiteLLM configuration');
+      }
+      // Validate optional models array if present
+      if (config.models !== undefined) {
+        if (!Array.isArray(config.models)) {
+          throw new Error('Invalid LiteLLM configuration: models must be an array');
+        }
+        for (const model of config.models) {
+          if (typeof model.id !== 'string' || typeof model.name !== 'string' || typeof model.provider !== 'string') {
+            throw new Error('Invalid LiteLLM configuration: invalid model format');
+          }
+        }
+      }
+    }
+    setLiteLLMConfig(config);
+    console.log('[LiteLLM] Config saved:', config);
   });
 
   // API Keys: Get all API keys (with masked values)

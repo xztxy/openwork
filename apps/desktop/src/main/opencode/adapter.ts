@@ -410,6 +410,10 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       env.ZAI_API_KEY = apiKeys.zai;
       console.log('[OpenCode CLI] Using Z.AI API key from settings');
     }
+    if (apiKeys.openrouter) {
+      env.OPENROUTER_API_KEY = apiKeys.openrouter;
+      console.log('[OpenCode CLI] Using OpenRouter API key from settings');
+    }
 
     // Set Bedrock credentials if configured
     const bedrockCredentials = getBedrockCredentials();
@@ -477,6 +481,10 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
         // DeepSeek uses 'deepseek' provider in OpenCode CLI
         const modelId = selectedModel.model.split('/').pop();
         args.push('--model', `deepseek/${modelId}`);
+      } else if (selectedModel.provider === 'openrouter') {
+        // OpenRouter models use format: openrouter/provider/model
+        // The fullId is already in the correct format (e.g., openrouter/anthropic/claude-opus-4-5)
+        args.push('--model', selectedModel.model);
       } else {
         args.push('--model', selectedModel.model);
       }
@@ -792,4 +800,3 @@ export function getOpenCodeAdapter(): OpenCodeAdapter {
   }
   return adapterInstance;
 }
-

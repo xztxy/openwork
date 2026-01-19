@@ -1,5 +1,5 @@
 import Store from 'electron-store';
-import type { SelectedModel, OllamaConfig, AzureFoundryConfig } from '@accomplish/shared';
+import type { SelectedModel, OllamaConfig, AzureFoundryConfig, LiteLLMConfig } from '@accomplish/shared';
 
 /**
  * App settings schema
@@ -15,6 +15,8 @@ interface AppSettingsSchema {
   ollamaConfig: OllamaConfig | null;
   /** Azure Foundry configuration */
   azureFoundryConfig: AzureFoundryConfig | null;
+  /** LiteLLM proxy configuration */
+  litellmConfig: LiteLLMConfig | null;
 }
 
 const appSettingsStore = new Store<AppSettingsSchema>({
@@ -28,6 +30,7 @@ const appSettingsStore = new Store<AppSettingsSchema>({
     },
     ollamaConfig: null,
     azureFoundryConfig: null,
+    litellmConfig: null,
   },
 });
 
@@ -102,6 +105,20 @@ export function setAzureFoundryConfig(config: AzureFoundryConfig | null): void {
 }
 
 /**
+ * Get LiteLLM configuration
+ */
+export function getLiteLLMConfig(): LiteLLMConfig | null {
+  return appSettingsStore.get('litellmConfig');
+}
+
+/**
+ * Set LiteLLM configuration
+ */
+export function setLiteLLMConfig(config: LiteLLMConfig | null): void {
+  appSettingsStore.set('litellmConfig', config);
+}
+
+/**
  * Get all app settings
  */
 export function getAppSettings(): AppSettingsSchema {
@@ -111,6 +128,7 @@ export function getAppSettings(): AppSettingsSchema {
     selectedModel: appSettingsStore.get('selectedModel'),
     ollamaConfig: appSettingsStore.get('ollamaConfig') ?? null,
     azureFoundryConfig: appSettingsStore.get('azureFoundryConfig') ?? null,
+    litellmConfig: appSettingsStore.get('litellmConfig') ?? null,
   };
 }
 
