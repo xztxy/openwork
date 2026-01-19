@@ -272,6 +272,7 @@ export default function SettingsDialog({ open, onOpenChange, onApiKeySaved }: Se
           {selectedProvider && (
             <section>
               <ProviderSettingsPanel
+                key={selectedProvider} // Key ensures clean state reset when switching providers
                 providerId={selectedProvider}
                 connectedProvider={settings?.connectedProviders?.[selectedProvider]}
                 onConnect={handleConnect}
