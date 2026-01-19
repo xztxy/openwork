@@ -162,19 +162,31 @@ describe('OpenCode CLI Path Module', () => {
     });
 
     describe('Packaged Mode', () => {
+      // Helper to get platform-specific package info
+      const getPlatformInfo = () => {
+        if (process.platform === 'win32') {
+          return { pkg: 'opencode-windows-x64', binary: 'opencode.exe' };
+        } else if (process.platform === 'darwin') {
+          return { pkg: process.arch === 'arm64' ? 'opencode-darwin-arm64' : 'opencode-darwin-x64', binary: 'opencode' };
+        } else {
+          return { pkg: process.arch === 'arm64' ? 'opencode-linux-arm64' : 'opencode-linux-x64', binary: 'opencode' };
+        }
+      };
+
       it('should return unpacked asar path when packaged', async () => {
         // Arrange
         mockApp.isPackaged = true;
         const resourcesPath = '/Applications/Accomplish.app/Contents/Resources';
         (process as NodeJS.Process & { resourcesPath: string }).resourcesPath = resourcesPath;
 
+        const { pkg, binary } = getPlatformInfo();
         const expectedPath = path.join(
           resourcesPath,
           'app.asar.unpacked',
           'node_modules',
-          'opencode-ai',
+          pkg,
           'bin',
-          'opencode'
+          binary
         );
 
         mockFs.existsSync.mockImplementation((p: string) => {
@@ -287,19 +299,31 @@ describe('OpenCode CLI Path Module', () => {
     });
 
     describe('Packaged Mode', () => {
+      // Helper to get platform-specific package info
+      const getPlatformInfo = () => {
+        if (process.platform === 'win32') {
+          return { pkg: 'opencode-windows-x64', binary: 'opencode.exe' };
+        } else if (process.platform === 'darwin') {
+          return { pkg: process.arch === 'arm64' ? 'opencode-darwin-arm64' : 'opencode-darwin-x64', binary: 'opencode' };
+        } else {
+          return { pkg: process.arch === 'arm64' ? 'opencode-linux-arm64' : 'opencode-linux-x64', binary: 'opencode' };
+        }
+      };
+
       it('should return true when bundled CLI exists in unpacked asar', async () => {
         // Arrange
         mockApp.isPackaged = true;
         const resourcesPath = '/Applications/Accomplish.app/Contents/Resources';
         (process as NodeJS.Process & { resourcesPath: string }).resourcesPath = resourcesPath;
 
+        const { pkg, binary } = getPlatformInfo();
         const cliPath = path.join(
           resourcesPath,
           'app.asar.unpacked',
           'node_modules',
-          'opencode-ai',
+          pkg,
           'bin',
-          'opencode'
+          binary
         );
 
         mockFs.existsSync.mockImplementation((p: string) => {
@@ -334,6 +358,17 @@ describe('OpenCode CLI Path Module', () => {
   });
 
   describe('getBundledOpenCodeVersion()', () => {
+    // Helper to get platform-specific package name
+    const getPlatformPackageName = () => {
+      if (process.platform === 'win32') {
+        return 'opencode-windows-x64';
+      } else if (process.platform === 'darwin') {
+        return process.arch === 'arm64' ? 'opencode-darwin-arm64' : 'opencode-darwin-x64';
+      } else {
+        return process.arch === 'arm64' ? 'opencode-linux-arm64' : 'opencode-linux-x64';
+      }
+    };
+
     describe('Packaged Mode', () => {
       it('should read version from package.json in unpacked asar', async () => {
         // Arrange
@@ -345,7 +380,7 @@ describe('OpenCode CLI Path Module', () => {
           resourcesPath,
           'app.asar.unpacked',
           'node_modules',
-          'opencode-ai',
+          getPlatformPackageName(),
           'package.json'
         );
 
