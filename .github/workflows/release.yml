@@ -99,6 +99,7 @@ jobs:
       - name: Create release PR and merge
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPROVER_TOKEN: ${{ secrets.RELEASE_APPROVER_TOKEN }}
         run: |
           VERSION="${{ steps.bump.outputs.new_version }}"
           BRANCH="release/v${VERSION}"
@@ -127,6 +128,10 @@ jobs:
               --base main \
               --head "$BRANCH")
             echo "Created PR: $PR_URL"
+
+            # Approve PR with separate token (can't self-approve)
+            echo "Approving PR..."
+            GH_TOKEN="$APPROVER_TOKEN" gh pr review "$BRANCH" --approve
 
             # Enable auto-merge (squash)
             gh pr merge "$BRANCH" --squash --auto --delete-branch
