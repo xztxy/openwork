@@ -256,6 +256,10 @@ Browser automation using MCP tools. Use these tools directly for web automation 
 **browser_tabs(action, index?, timeout?, page_name?)** - Manage tabs/popups
 - action: "list" | "switch" | "close" | "wait_for_new"
 - Use "wait_for_new" before clicking links that open popups
+
+**browser_canvas_type(text, position?, page_name?)** - Type into canvas apps (Google Docs, Sheets, Figma)
+- Clicks in document, jumps to start, then types - all in one call
+- position: "start" (default) jumps to beginning, "current" types at cursor
 </tools>
 
 <workflow>
@@ -284,18 +288,19 @@ The accessibility tree won't expose editable areas, and element refs often fail 
 - New Slides: docs.google.com/presentation/create
 - New Form: docs.google.com/forms/create
 
-**How to handle canvas apps:**
-1. browser_snapshot() will show: "⚠️ CANVAS APP DETECTED" with viewport info
-2. Use \`browser_click(position="center-lower")\` to click the content area (avoids overlays)
-3. Use \`browser_keyboard(action="type", text="your content")\` to type (NOT browser_type)
+**PREFERRED: Use browser_canvas_type for typing into canvas apps:**
+\`browser_canvas_type(text="your content")\` - Clicks, jumps to start, and types in one call
 
 <example name="create-doc-with-text">
 User: "Create a Google Doc with the text 'hello world'"
 1. browser_navigate(url="docs.google.com/document/create") -> Direct URL, skip Drive menus!
-2. browser_click(position="center-lower") -> Click document body (avoids AI suggestions overlay)
-3. browser_keyboard(action="type", text="hello world")
-4. browser_screenshot() -> verify text appeared and auto-saved
+2. browser_canvas_type(text="hello world") -> Clicks, jumps to doc start, types text
+3. browser_screenshot() -> verify text appeared and auto-saved
 </example>
+
+**Manual alternative (if you need more control):**
+1. \`browser_click(position="center-lower")\` to click content area
+2. \`browser_keyboard(action="type", text="...")\` to type
 </canvas-apps>
 
 <login-pages>
@@ -331,7 +336,7 @@ See the ask-user-question skill for full documentation and examples.
 
 <behavior>
 - Use AskUserQuestion tool for clarifying questions before starting ambiguous tasks
-- Use MCP tools directly - browser_navigate, browser_snapshot, browser_click, browser_type, browser_keyboard, browser_screenshot, browser_scroll, browser_hover, browser_select, browser_wait, browser_file_upload, browser_drag, browser_get_text, browser_iframe, browser_tabs, browser_sequence
+- Use MCP tools directly - browser_navigate, browser_snapshot, browser_click, browser_type, browser_keyboard, browser_screenshot, browser_scroll, browser_hover, browser_select, browser_wait, browser_file_upload, browser_drag, browser_get_text, browser_iframe, browser_tabs, browser_canvas_type, browser_sequence
 
 **BROWSER ACTION VERBOSITY - Be descriptive about web interactions:**
 - Before each browser action, briefly explain what you're about to do in user terms
@@ -657,13 +662,21 @@ export async function generateOpenCodeConfig(): Promise<string> {
       'dev-browser-mcp': {
         type: 'local',
         // Must cd to the skill directory first so npx tsx can find node_modules
-        command: [
-          'bash',
-          '-c',
-          `cd "${path.join(skillsPath, 'dev-browser-mcp')}" && npx tsx src/index.ts`,
-        ],
+        // Use platform-specific shell: cmd on Windows, bash on Unix
+        command:
+          process.platform === 'win32'
+            ? [
+                'cmd',
+                '/c',
+                `cd /d "${path.join(skillsPath, 'dev-browser-mcp')}" && npx tsx src/index.ts`,
+              ]
+            : [
+                'bash',
+                '-c',
+                `cd "${path.join(skillsPath, 'dev-browser-mcp')}" && npx tsx src/index.ts`,
+              ],
         enabled: true,
-        timeout: 30000,  // Longer timeout for browser operations
+        timeout: 30000, // Longer timeout for browser operations
       },
     },
   };

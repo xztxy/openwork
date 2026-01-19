@@ -1221,6 +1221,12 @@ interface BrowserTabsInput {
   page_name?: string;
 }
 
+interface BrowserCanvasTypeInput {
+  text: string;
+  position?: 'start' | 'current';
+  page_name?: string;
+}
+
 // Create MCP server
 const server = new Server(
   { name: 'dev-browser-mcp', version: '1.0.0' },
@@ -1721,6 +1727,29 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
         },
         required: ['action'],
+      },
+    },
+    {
+      name: 'browser_canvas_type',
+      description: 'Type text into canvas apps like Google Docs, Sheets, Figma. Clicks in the document, optionally jumps to start, then types.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          text: {
+            type: 'string',
+            description: 'The text to type',
+          },
+          position: {
+            type: 'string',
+            enum: ['start', 'current'],
+            description: '"start" jumps to document beginning first (Cmd/Ctrl+Home), "current" types at current cursor position (default: "start")',
+          },
+          page_name: {
+            type: 'string',
+            description: 'Optional page name (default: "main")',
+          },
+        },
+        required: ['text'],
       },
     },
   ],
@@ -2724,6 +2753,37 @@ server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToo
         return {
           content: [{ type: 'text', text: `Error: Unknown tabs action "${action}"` }],
           isError: true,
+        };
+      }
+
+      case 'browser_canvas_type': {
+        const { text, position, page_name } = args as BrowserCanvasTypeInput;
+        const page = await getPage(page_name);
+        const jumpToStart = position !== 'current'; // Default to 'start'
+
+        // Step 1: Click in the document area (center-lower to avoid overlays)
+        const viewport = page.viewportSize();
+        const clickX = (viewport?.width || 1280) / 2;
+        const clickY = (viewport?.height || 720) * 2 / 3;
+        await page.mouse.click(clickX, clickY);
+
+        // Small delay to ensure focus
+        await page.waitForTimeout(100);
+
+        // Step 2: Jump to document start if requested
+        if (jumpToStart) {
+          const isMac = process.platform === 'darwin';
+          const modifier = isMac ? 'Meta' : 'Control';
+          await page.keyboard.press(`${modifier}+Home`);
+          await page.waitForTimeout(50);
+        }
+
+        // Step 3: Type the text
+        await page.keyboard.type(text);
+
+        const positionDesc = jumpToStart ? 'at document start' : 'at current position';
+        return {
+          content: [{ type: 'text', text: `Typed "${text.length > 50 ? text.slice(0, 50) + '...' : text}" ${positionDesc}` }],
         };
       }
 
