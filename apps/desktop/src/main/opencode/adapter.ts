@@ -147,9 +147,11 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       const fullCommand = [command, ...allArgs].map(arg => {
         // Escape single quotes in arguments for shell (Unix) or handle Windows quoting
         if (process.platform === 'win32') {
-          // Windows: use double quotes for arguments with spaces
+          // Windows/PowerShell: use double quotes for arguments with spaces
+          // PowerShell uses doubled quotes ("") to escape quotes inside double-quoted strings
+          // (backslash escaping does NOT work in PowerShell)
           if (arg.includes(' ') || arg.includes('"')) {
-            return `"${arg.replace(/"/g, '\\"')}"`;
+            return `"${arg.replace(/"/g, '""')}"`;
           }
           return arg;
         } else {
@@ -186,7 +188,11 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       // Handle PTY data (combines stdout/stderr)
       this.ptyProcess.onData((data: string) => {
         // Filter out ANSI escape codes and control characters for cleaner parsing
-        const cleanData = data.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
+        // Enhanced to handle Windows PowerShell sequences (cursor visibility, window titles)
+        const cleanData = data
+          .replace(/\x1B\[[0-9;?]*[a-zA-Z]/g, '')  // CSI sequences (added ? for DEC modes like cursor hide)
+          .replace(/\x1B\][^\x07]*\x07/g, '')       // OSC sequences with BEL terminator (window titles)
+          .replace(/\x1B\][^\x1B]*\x1B\\/g, '');    // OSC sequences with ST terminator
         if (cleanData.trim()) {
           // Truncate for console.log to avoid flooding terminal
           const truncated = cleanData.substring(0, 500) + (cleanData.length > 500 ? '...' : '');
@@ -268,6 +274,17 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     // Send Ctrl+C (ASCII 0x03) to the PTY to interrupt current operation
     this.ptyProcess.write('\x03');
     console.log('[OpenCode CLI] Sent Ctrl+C interrupt signal');
+
+    // On Windows, batch files (.cmd) prompt "Terminate batch job (Y/N)?" after Ctrl+C.
+    // We need to send "Y" to confirm termination, otherwise the process hangs.
+    if (process.platform === 'win32') {
+      setTimeout(() => {
+        if (this.ptyProcess) {
+          this.ptyProcess.write('Y\n');
+          console.log('[OpenCode CLI] Sent Y to confirm batch termination');
+        }
+      }, 100);
+    }
   }
 
   /**
@@ -758,8 +775,11 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
    */
   private getShellArgs(command: string): string[] {
     if (process.platform === 'win32') {
-      // PowerShell: -NoProfile for faster startup, -Command to run the command
-      return ['-NoProfile', '-Command', command];
+      // PowerShell: Use -EncodedCommand with Base64-encoded UTF-16LE to avoid
+      // all escaping/parsing issues. This is the most reliable way to pass
+      // complex commands with quotes, special characters, etc. to PowerShell.
+      const encodedCommand = Buffer.from(command, 'utf16le').toString('base64');
+      return ['-NoProfile', '-EncodedCommand', encodedCommand];
     } else {
       // Unix shells: -c to run command (no -l to avoid profile loading)
       return ['-c', command];
