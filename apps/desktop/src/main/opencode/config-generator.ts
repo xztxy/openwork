@@ -425,6 +425,56 @@ interface OpenCodeConfig {
 }
 
 /**
+ * Build Azure Foundry provider configuration for OpenCode CLI
+ * Shared helper to avoid duplication between new settings and legacy paths
+ */
+function buildAzureFoundryProviderConfig(
+  endpoint: string,
+  deploymentName: string,
+  authMethod: 'api-key' | 'entra-id',
+  azureFoundryToken?: string
+): AzureFoundryProviderConfig | null {
+  const baseUrl = endpoint.replace(/\/$/, '');
+
+  // Extract resource name from URL if standard Azure OpenAI format
+  const resourceMatch = baseUrl.match(/https?:\/\/([^.]+)\.openai\.azure\.com/i);
+  const resourceName = resourceMatch ? resourceMatch[1] : undefined;
+
+  // Build options for @ai-sdk/azure provider
+  const azureOptions: AzureFoundryProviderConfig['options'] = {};
+  if (resourceName) {
+    azureOptions.resourceName = resourceName;
+  } else {
+    azureOptions.baseURL = baseUrl;
+  }
+
+  // Set API key or Entra ID token
+  if (authMethod === 'api-key') {
+    const azureApiKey = getApiKey('azure-foundry');
+    if (azureApiKey) {
+      azureOptions.apiKey = azureApiKey;
+    }
+  } else if (authMethod === 'entra-id' && azureFoundryToken) {
+    azureOptions.apiKey = '';
+    azureOptions.headers = {
+      'Authorization': `Bearer ${azureFoundryToken}`,
+    };
+  }
+
+  return {
+    npm: '@ai-sdk/azure',
+    name: 'Azure AI Foundry',
+    options: azureOptions,
+    models: {
+      [deploymentName]: {
+        name: `Azure Foundry (${deploymentName})`,
+        tools: true,
+      },
+    },
+  };
+}
+
+/**
  * Generate OpenCode configuration file
  * OpenCode reads config from .opencode.json in the working directory or
  * from ~/.config/opencode/opencode.json
@@ -654,110 +704,50 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
   const azureFoundryProvider = providerSettings.connectedProviders['azure-foundry'];
   if (azureFoundryProvider?.connectionStatus === 'connected' && azureFoundryProvider.credentials.type === 'azure-foundry') {
     const creds = azureFoundryProvider.credentials;
-    const baseUrl = creds.endpoint.replace(/\/$/, '');
-    const deploymentName = creds.deploymentName;
+    const config = buildAzureFoundryProviderConfig(
+      creds.endpoint,
+      creds.deploymentName,
+      creds.authMethod,
+      azureFoundryToken
+    );
 
-    // Extract resource name from URL if standard Azure OpenAI format
-    const resourceMatch = baseUrl.match(/https?:\/\/([^.]+)\.openai\.azure\.com/i);
-    const resourceName = resourceMatch ? resourceMatch[1] : undefined;
-
-    // Build options for @ai-sdk/azure provider
-    const azureOptions: AzureFoundryProviderConfig['options'] = {};
-    if (resourceName) {
-      azureOptions.resourceName = resourceName;
-    } else {
-      azureOptions.baseURL = baseUrl;
-    }
-
-    // Set API key or Entra ID token
-    if (creds.authMethod === 'api-key') {
-      const azureApiKey = getApiKey('azure-foundry');
-      if (azureApiKey) {
-        azureOptions.apiKey = azureApiKey;
-      }
-    } else if (creds.authMethod === 'entra-id' && azureFoundryToken) {
-      // Use placeholder - actual token is passed via env or headers
-      azureOptions.apiKey = '';
-      azureOptions.headers = {
-        'Authorization': `Bearer ${azureFoundryToken}`,
-      };
-    }
-
-    // Build model ID (Azure uses deployment name)
-    const modelId = `azure-foundry/${deploymentName}`;
-
-    providerConfig['azure-foundry'] = {
-      npm: '@ai-sdk/azure',
-      name: 'Azure AI Foundry',
-      options: azureOptions,
-      models: {
-        [deploymentName]: {
-          name: `Azure Foundry (${deploymentName})`,
-          tools: true,
-        },
-      },
-    };
-
-    // Add to enabled providers if not already
-    if (!enabledProviders.includes('azure-foundry')) {
-      enabledProviders.push('azure-foundry');
-    }
-
-    console.log('[OpenCode Config] Azure Foundry configured from new settings:', {
-      resourceName,
-      deployment: deploymentName,
-      authMethod: creds.authMethod,
-    });
-  } else {
-    // Legacy fallback: use old Azure Foundry config
-    const { getAzureFoundryConfig } = await import('../store/appSettings');
-    const azureFoundryConfig = getAzureFoundryConfig();
-    if (azureFoundryConfig?.enabled && activeModel?.provider === 'azure-foundry') {
-      const baseUrl = azureFoundryConfig.baseUrl.replace(/\/$/, '');
-      const resourceMatch = baseUrl.match(/https?:\/\/([^.]+)\.openai\.azure\.com/i);
-      const resourceName = resourceMatch ? resourceMatch[1] : undefined;
-      const deploymentName = azureFoundryConfig.deploymentName || 'default';
-
-      const azureOptions: AzureFoundryProviderConfig['options'] = {};
-      if (resourceName) {
-        azureOptions.resourceName = resourceName;
-      } else {
-        azureOptions.baseURL = baseUrl;
-      }
-
-      if (azureFoundryConfig.authType === 'api-key') {
-        const azureApiKey = getApiKey('azure-foundry');
-        if (azureApiKey) {
-          azureOptions.apiKey = azureApiKey;
-        }
-      } else if (azureFoundryConfig.authType === 'entra-id' && azureFoundryToken) {
-        azureOptions.apiKey = '';
-        azureOptions.headers = {
-          'Authorization': `Bearer ${azureFoundryToken}`,
-        };
-      }
-
-      providerConfig['azure-foundry'] = {
-        npm: '@ai-sdk/azure',
-        name: 'Azure AI Foundry',
-        options: azureOptions,
-        models: {
-          [deploymentName]: {
-            name: `Azure Foundry (${deploymentName})`,
-            tools: true,
-          },
-        },
-      };
+    if (config) {
+      providerConfig['azure-foundry'] = config;
 
       if (!enabledProviders.includes('azure-foundry')) {
         enabledProviders.push('azure-foundry');
       }
 
-      console.log('[OpenCode Config] Azure Foundry configured from legacy settings:', {
-        resourceName,
-        deployment: deploymentName,
-        authType: azureFoundryConfig.authType,
+      console.log('[OpenCode Config] Azure Foundry configured from new settings:', {
+        deployment: creds.deploymentName,
+        authMethod: creds.authMethod,
       });
+    }
+  } else {
+    // TODO: Remove legacy Azure Foundry config support in v0.4.0
+    // Legacy fallback: use old Azure Foundry config
+    const { getAzureFoundryConfig } = await import('../store/appSettings');
+    const azureFoundryConfig = getAzureFoundryConfig();
+    if (azureFoundryConfig?.enabled && activeModel?.provider === 'azure-foundry') {
+      const config = buildAzureFoundryProviderConfig(
+        azureFoundryConfig.baseUrl,
+        azureFoundryConfig.deploymentName || 'default',
+        azureFoundryConfig.authType,
+        azureFoundryToken
+      );
+
+      if (config) {
+        providerConfig['azure-foundry'] = config;
+
+        if (!enabledProviders.includes('azure-foundry')) {
+          enabledProviders.push('azure-foundry');
+        }
+
+        console.log('[OpenCode Config] Azure Foundry configured from legacy settings:', {
+          deployment: azureFoundryConfig.deploymentName,
+          authType: azureFoundryConfig.authType,
+        });
+      }
     }
   }
 
