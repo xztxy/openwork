@@ -41,8 +41,34 @@ try {
     signal: AbortSignal.timeout(1000),
   });
   if (res.ok) {
-    console.log(`Server already running on port ${ACCOMPLISH_HTTP_PORT}`);
-    process.exit(0);
+    const info = await res.json() as { mode?: string };
+
+    // If it's a relay/extension server, kill it - we need launch mode
+    if (info.mode === "extension") {
+      console.log("Found relay server running, killing to start launch server...");
+      try {
+        if (process.platform === "win32") {
+          const output = execSync(`netstat -ano | findstr :${ACCOMPLISH_HTTP_PORT}`, { encoding: "utf-8" });
+          const match = output.match(/LISTENING\s+(\d+)/);
+          if (match) {
+            execSync(`taskkill /F /PID ${match[1]}`, { stdio: "ignore" });
+          }
+        } else {
+          const pid = execSync(`lsof -ti:${ACCOMPLISH_HTTP_PORT}`, { encoding: "utf-8" }).trim();
+          if (pid) {
+            execSync(`kill -9 ${pid}`);
+          }
+        }
+        // Give it a moment to release the port
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch {
+        // Failed to kill, continue anyway and let serve() fail with clear error
+      }
+    } else {
+      // Correct server type already running
+      console.log(`Launch server already running on port ${ACCOMPLISH_HTTP_PORT}`);
+      process.exit(0);
+    }
   }
 } catch {
   // Server not running, continue to start
