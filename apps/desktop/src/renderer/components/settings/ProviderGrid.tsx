@@ -92,23 +92,21 @@ export function ProviderGrid({
       </div>
 
       {/* Expanded providers (5-10) with staggered animation */}
-      <AnimatePresence>
+      <AnimatePresence mode="sync">
         {expanded && filteredProviders.length > 4 && (
           <motion.div
-            className="grid grid-cols-4 gap-3 mt-3 justify-items-center"
+            className="grid grid-cols-4 gap-3 mt-3 justify-items-center overflow-hidden"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            transition={settingsTransitions.enter}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
           >
             {filteredProviders.slice(4).map((providerId, index) => (
               <motion.div
                 key={providerId}
-                variants={settingsVariants.gridStagger}
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                transition={settingsTransitions.stagger(index)}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.15, delay: index * 0.03 }}
               >
                 <ProviderCard
                   providerId={providerId}
