@@ -1291,6 +1291,24 @@ interface BrowserGetTextInput {
   page_name?: string;
 }
 
+interface BrowserIsVisibleInput {
+  ref?: string;
+  selector?: string;
+  page_name?: string;
+}
+
+interface BrowserIsEnabledInput {
+  ref?: string;
+  selector?: string;
+  page_name?: string;
+}
+
+interface BrowserIsCheckedInput {
+  ref?: string;
+  selector?: string;
+  page_name?: string;
+}
+
 interface BrowserIframeInput {
   action: 'enter' | 'exit';
   ref?: string;
@@ -1762,6 +1780,69 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: 'browser_get_text',
       description: 'Get text content or input value from an element. Faster than browser_snapshot when you just need one element\'s text.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          ref: {
+            type: 'string',
+            description: 'Element ref from browser_snapshot',
+          },
+          selector: {
+            type: 'string',
+            description: 'CSS selector',
+          },
+          page_name: {
+            type: 'string',
+            description: 'Optional page name (default: "main")',
+          },
+        },
+      },
+    },
+    {
+      name: 'browser_is_visible',
+      description: 'Check if an element is visible on the page. Returns true/false. Use this to verify actions succeeded before proceeding.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          ref: {
+            type: 'string',
+            description: 'Element ref from browser_snapshot',
+          },
+          selector: {
+            type: 'string',
+            description: 'CSS selector',
+          },
+          page_name: {
+            type: 'string',
+            description: 'Optional page name (default: "main")',
+          },
+        },
+      },
+    },
+    {
+      name: 'browser_is_enabled',
+      description: 'Check if an element is enabled (not disabled). Returns true/false. Use to verify buttons/inputs are interactive.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          ref: {
+            type: 'string',
+            description: 'Element ref from browser_snapshot',
+          },
+          selector: {
+            type: 'string',
+            description: 'CSS selector',
+          },
+          page_name: {
+            type: 'string',
+            description: 'Optional page name (default: "main")',
+          },
+        },
+      },
+    },
+    {
+      name: 'browser_is_checked',
+      description: 'Check if a checkbox or radio button is checked. Returns true/false. Use to verify form state.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -2771,6 +2852,135 @@ The page has loaded. Use browser_snapshot() to see the page elements and find in
         return {
           content: [{ type: 'text', text: `${target} ${value.type}: "${value.text}"` }],
         };
+      }
+
+      case 'browser_is_visible': {
+        const { ref, selector, page_name } = args as BrowserIsVisibleInput;
+        const page = await getPage(page_name);
+
+        try {
+          if (ref) {
+            const element = await selectSnapshotRef(page, ref);
+            if (!element) {
+              return {
+                content: [{ type: 'text', text: `false (element [ref=${ref}] not found - run browser_snapshot() to get updated refs)` }],
+              };
+            }
+            const isVisible = await element.isVisible();
+            return {
+              content: [{ type: 'text', text: `${isVisible}` }],
+            };
+          } else if (selector) {
+            const element = await page.$(selector);
+            if (!element) {
+              return {
+                content: [{ type: 'text', text: `false (element "${selector}" not found)` }],
+              };
+            }
+            const isVisible = await element.isVisible();
+            return {
+              content: [{ type: 'text', text: `${isVisible}` }],
+            };
+          } else {
+            return {
+              content: [{ type: 'text', text: 'Error: Provide ref or selector' }],
+              isError: true,
+            };
+          }
+        } catch (err) {
+          const targetDesc = ref ? `[ref=${ref}]` : selector || 'element';
+          const friendlyError = toAIFriendlyError(err, targetDesc);
+          return {
+            content: [{ type: 'text', text: friendlyError.message }],
+            isError: true,
+          };
+        }
+      }
+
+      case 'browser_is_enabled': {
+        const { ref, selector, page_name } = args as BrowserIsEnabledInput;
+        const page = await getPage(page_name);
+
+        try {
+          if (ref) {
+            const element = await selectSnapshotRef(page, ref);
+            if (!element) {
+              return {
+                content: [{ type: 'text', text: `false (element [ref=${ref}] not found - run browser_snapshot() to get updated refs)` }],
+              };
+            }
+            const isEnabled = await element.isEnabled();
+            return {
+              content: [{ type: 'text', text: `${isEnabled}` }],
+            };
+          } else if (selector) {
+            const element = await page.$(selector);
+            if (!element) {
+              return {
+                content: [{ type: 'text', text: `false (element "${selector}" not found)` }],
+              };
+            }
+            const isEnabled = await element.isEnabled();
+            return {
+              content: [{ type: 'text', text: `${isEnabled}` }],
+            };
+          } else {
+            return {
+              content: [{ type: 'text', text: 'Error: Provide ref or selector' }],
+              isError: true,
+            };
+          }
+        } catch (err) {
+          const targetDesc = ref ? `[ref=${ref}]` : selector || 'element';
+          const friendlyError = toAIFriendlyError(err, targetDesc);
+          return {
+            content: [{ type: 'text', text: friendlyError.message }],
+            isError: true,
+          };
+        }
+      }
+
+      case 'browser_is_checked': {
+        const { ref, selector, page_name } = args as BrowserIsCheckedInput;
+        const page = await getPage(page_name);
+
+        try {
+          if (ref) {
+            const element = await selectSnapshotRef(page, ref);
+            if (!element) {
+              return {
+                content: [{ type: 'text', text: `false (element [ref=${ref}] not found - run browser_snapshot() to get updated refs)` }],
+              };
+            }
+            const isChecked = await element.isChecked();
+            return {
+              content: [{ type: 'text', text: `${isChecked}` }],
+            };
+          } else if (selector) {
+            const element = await page.$(selector);
+            if (!element) {
+              return {
+                content: [{ type: 'text', text: `false (element "${selector}" not found)` }],
+              };
+            }
+            const isChecked = await element.isChecked();
+            return {
+              content: [{ type: 'text', text: `${isChecked}` }],
+            };
+          } else {
+            return {
+              content: [{ type: 'text', text: 'Error: Provide ref or selector' }],
+              isError: true,
+            };
+          }
+        } catch (err) {
+          const targetDesc = ref ? `[ref=${ref}]` : selector || 'element';
+          const friendlyError = toAIFriendlyError(err, targetDesc);
+          return {
+            content: [{ type: 'text', text: friendlyError.message }],
+            isError: true,
+          };
+        }
       }
 
       case 'browser_iframe': {
