@@ -571,6 +571,12 @@ export async function generateOpenCodeConfig(): Promise<string> {
         enabled: true,
         timeout: 30000,  // Longer timeout for browser operations
       },
+      'complete-task': {
+        type: 'local',
+        command: ['npx', 'tsx', path.join(skillsPath, 'complete-task', 'src', 'index.ts')],
+        enabled: true,
+        timeout: 5000,
+      },
     },
   };
 
