@@ -588,15 +588,6 @@ export async function generateOpenCodeConfig(): Promise<string> {
         },
         timeout: 10000,
       },
-      'agent-browser-mcp': {
-        type: 'local',
-        command: ['npx', 'tsx', path.join(skillsPath, 'agent-browser-mcp', 'src', 'index.ts')],
-        enabled: true,
-        environment: {
-          ACCOMPLISH_TASK_ID: '${TASK_ID}',
-        },
-        timeout: 30000,  // Longer timeout for browser operations
-      },
     },
   };
 
