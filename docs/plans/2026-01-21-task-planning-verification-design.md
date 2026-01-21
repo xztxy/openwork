@@ -90,12 +90,65 @@ Works with existing systems:
 - **`complete_task` enforcement** - Still functions as safety net if agent stops without completing
 - **`complete_task` tool schema** - Already has `original_request_summary` and `remaining_work` fields for verification
 - **Continuation prompt** - Still triggers if agent stops without calling `complete_task`
+- **Screenshot verification** - New verification step when agent claims success (see below)
 
-## No Changes Required
+## Screenshot-Based Verification (New)
 
-- `adapter.ts` - Existing `complete_task` detection works
+When the agent calls `complete_task` with `status="success"`, the system does not immediately accept the completion. Instead:
+
+1. **Capture args** - Store the agent's claimed `summary` and `original_request_summary`
+2. **Resume session** - Start a verification session with a prompt asking the agent to:
+   - Take a screenshot of the current browser state
+   - Review the plan's completion criteria
+   - Compare the screenshot against each criterion
+3. **Re-confirm or continue** - Agent must either:
+   - Call `complete_task` again with `status="success"` if ALL criteria are visually confirmed
+   - Continue working if any criteria are NOT met
+
+### Verification Prompt
+
+```
+VERIFICATION REQUIRED.
+
+You claimed to have completed the task with this summary:
+"[agent's claimed summary]"
+
+The original request was:
+"[original request summary]"
+
+Before I accept completion, you MUST verify your work:
+
+1. Take a screenshot of the current browser state using the browser tool
+2. Review your plan's completion criteria
+3. Compare the screenshot against each criterion
+
+Then either:
+- If ALL criteria are met: Call complete_task again with status="success"
+- If ANY criteria are NOT met: Continue working to complete them
+
+Do NOT call complete_task with success unless the screenshot proves the task is done.
+```
+
+### Implementation in adapter.ts
+
+New state variables:
+- `pendingVerification: boolean` - Flag to trigger verification after process exit
+- `awaitingVerification: boolean` - Tracks if we're in verification mode
+- `completeTaskArgs` - Stores the arguments from the `complete_task` call
+
+Flow:
+1. Agent calls `complete_task` with `status="success"`
+2. `completeTaskCalled = true`, args stored, `pendingVerification = true`, `awaitingVerification = true`
+3. On process exit, `startVerificationTask()` is called instead of completing
+4. Verification session resumes with the verification prompt
+5. If agent calls `complete_task` again with success → task completes
+6. If agent continues working → loop continues with continuation mechanism
+
+## Changes Required
+
+- `adapter.ts` - Added screenshot-based verification mechanism
+- `config-generator.ts` - Added task planning behavior
 - `complete-task` MCP tool - Schema unchanged
-- Continuation mechanism - Works as backup
 
 ## Testing
 
@@ -103,7 +156,10 @@ Works with existing systems:
 2. Verify agent outputs plan before taking actions
 3. Verify agent references plan criteria in `complete_task` summary
 4. Verify partial completion correctly identifies incomplete steps
+5. **Verify screenshot verification triggers when agent claims success**
+6. **Verify agent takes screenshot and compares against criteria before re-confirming**
 
 ## Rollback
 
-Remove the `<behavior name="task-planning">` section from the system prompt.
+- Remove the `<behavior name="task-planning">` section from the system prompt
+- Remove verification logic from `adapter.ts` (revert `pendingVerification`, `awaitingVerification`, `completeTaskArgs`, and `startVerificationTask`)
