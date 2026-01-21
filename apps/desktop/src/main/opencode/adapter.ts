@@ -78,6 +78,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   private pendingContinuation: boolean = false;
   private pendingVerification: boolean = false;
   private awaitingVerification: boolean = false;
+  private inVerificationMode: boolean = false;
   private completeTaskArgs: {
     status: string;
     summary: string;
@@ -173,6 +174,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.pendingContinuation = false;
     this.pendingVerification = false;
     this.awaitingVerification = false;
+    this.inVerificationMode = false;
     this.completeTaskArgs = null;
     this.lastWorkingDirectory = config.workingDirectory;
 
@@ -220,24 +222,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     // Always use PTY for proper terminal emulation
     // We spawn via shell because posix_spawnp doesn't interpret shebangs
     {
-      const fullCommand = [command, ...allArgs].map(arg => {
-        // Escape single quotes in arguments for shell (Unix) or handle Windows quoting
-        if (process.platform === 'win32') {
-          // Windows/PowerShell: use double quotes for arguments with spaces
-          // PowerShell uses doubled quotes ("") to escape quotes inside double-quoted strings
-          // (backslash escaping does NOT work in PowerShell)
-          if (arg.includes(' ') || arg.includes('"')) {
-            return `"${arg.replace(/"/g, '""')}"`;
-          }
-          return arg;
-        } else {
-          // Unix: use single quotes
-          if (arg.includes("'") || arg.includes(' ') || arg.includes('"')) {
-            return `'${arg.replace(/'/g, "'\\''")}'`;
-          }
-          return arg;
-        }
-      }).join(' ');
+      const fullCommand = this.buildShellCommand(command, allArgs);
 
       const shellCmdMsg = `Full shell command: ${fullCommand}`;
       console.log('[OpenCode CLI]', shellCmdMsg);
@@ -652,27 +637,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
         // Track if complete_task was called (tool name may be prefixed with MCP server name)
         if (toolName === 'complete_task' || toolName.endsWith('_complete_task')) {
-          this.completeTaskCalled = true;
-          const args = toolInput as {
-            status?: string;
-            summary?: string;
-            original_request_summary?: string;
-            remaining_work?: string;
-          };
-          this.completeTaskArgs = {
-            status: args?.status || 'unknown',
-            summary: args?.summary || '',
-            original_request_summary: args?.original_request_summary || '',
-            remaining_work: args?.remaining_work,
-          };
-          console.log('[OpenCode Adapter] complete_task tool called with status:', this.completeTaskArgs.status);
-
-          // If status is success and we're not already verifying, trigger verification
-          if (this.completeTaskArgs.status === 'success' && !this.awaitingVerification) {
-            console.log('[OpenCode Adapter] Scheduling verification for complete_task success');
-            this.pendingVerification = true;
-            this.awaitingVerification = true;
-          }
+          this.handleCompleteTaskDetection(toolInput);
         }
 
         this.emit('tool-use', toolName, toolInput);
@@ -696,27 +661,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
         // Track if complete_task was called (tool name may be prefixed with MCP server name)
         if (toolUseName === 'complete_task' || toolUseName.endsWith('_complete_task')) {
-          this.completeTaskCalled = true;
-          const args = toolUseInput as {
-            status?: string;
-            summary?: string;
-            original_request_summary?: string;
-            remaining_work?: string;
-          };
-          this.completeTaskArgs = {
-            status: args?.status || 'unknown',
-            summary: args?.summary || '',
-            original_request_summary: args?.original_request_summary || '',
-            remaining_work: args?.remaining_work,
-          };
-          console.log('[OpenCode Adapter] complete_task tool called (via tool_use) with status:', this.completeTaskArgs.status);
-
-          // If status is success and we're not already verifying, trigger verification
-          if (this.completeTaskArgs.status === 'success' && !this.awaitingVerification) {
-            console.log('[OpenCode Adapter] Scheduling verification for complete_task success (via tool_use)');
-            this.pendingVerification = true;
-            this.awaitingVerification = true;
-          }
+          this.handleCompleteTaskDetection(toolUseInput);
         }
 
         // For models that don't emit text messages (like Gemini), emit the tool description
@@ -788,6 +733,20 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
           // Check if agent stopped without calling complete_task
           if (!this.completeTaskCalled && this.continuationAttempts < this.maxContinuationAttempts) {
+            // If we're in verification mode and agent stops without re-calling complete_task,
+            // it means they found issues and are continuing to work - don't send continuation prompt
+            if (this.inVerificationMode) {
+              console.log('[OpenCode Adapter] Agent stopped during verification to continue working');
+              this.emit('debug', {
+                type: 'verification',
+                message: 'Agent continuing work after verification check',
+              });
+              // Reset verification mode since agent is now working on fixes
+              this.inVerificationMode = false;
+              this.awaitingVerification = false;
+              return; // Let process exit naturally, agent will continue
+            }
+
             this.continuationAttempts++;
             console.log(`[OpenCode Adapter] Agent stopped without complete_task, scheduling continuation (attempt ${this.continuationAttempts}/${this.maxContinuationAttempts})`);
             // Set flag to trigger continuation after process exits
@@ -856,6 +815,64 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     };
 
     this.emit('permission-request', permissionRequest);
+  }
+
+  /**
+   * Handle complete_task tool detection from either tool_call or tool_use events.
+   * Consolidates logic to avoid race conditions from duplicate handling.
+   */
+  private handleCompleteTaskDetection(toolInput: unknown): void {
+    // Already processed this call
+    if (this.completeTaskCalled) {
+      return;
+    }
+
+    this.completeTaskCalled = true;
+    const args = toolInput as {
+      status?: string;
+      summary?: string;
+      original_request_summary?: string;
+      remaining_work?: string;
+    };
+    this.completeTaskArgs = {
+      status: args?.status || 'unknown',
+      summary: args?.summary || '',
+      original_request_summary: args?.original_request_summary || '',
+      remaining_work: args?.remaining_work,
+    };
+    console.log('[OpenCode Adapter] complete_task detected with status:', this.completeTaskArgs.status);
+
+    // If status is success and we're not already verifying, trigger verification
+    if (this.completeTaskArgs.status === 'success' && !this.awaitingVerification) {
+      console.log('[OpenCode Adapter] Scheduling verification for complete_task success');
+      this.pendingVerification = true;
+      this.awaitingVerification = true;
+    }
+  }
+
+  /**
+   * Escape a shell argument for safe execution.
+   */
+  private escapeShellArg(arg: string): string {
+    if (process.platform === 'win32') {
+      if (arg.includes(' ') || arg.includes('"')) {
+        return `"${arg.replace(/"/g, '""')}"`;
+      }
+      return arg;
+    } else {
+      const needsEscaping = ["'", ' ', '$', '`', '\\', '"', '\n'].some(c => arg.includes(c));
+      if (needsEscaping) {
+        return `'${arg.replace(/'/g, "'\\''")}'`;
+      }
+      return arg;
+    }
+  }
+
+  /**
+   * Build a shell command string with properly escaped arguments.
+   */
+  private buildShellCommand(command: string, args: string[]): string {
+    return [command, ...args].map(arg => this.escapeShellArg(arg)).join(' ');
   }
 
   private handleProcessExit(code: number | null): void {
@@ -964,19 +981,7 @@ Do not respond with text. Just call the tool immediately.`;
     const safeCwd = config.workingDirectory || app.getPath('temp');
 
     // Start new PTY process for continuation
-    const fullCommand = [command, ...allArgs].map(arg => {
-      if (process.platform === 'win32') {
-        if (arg.includes(' ') || arg.includes('"')) {
-          return `"${arg.replace(/"/g, '""')}"`;
-        }
-        return arg;
-      } else {
-        if (arg.includes("'") || arg.includes(' ') || arg.includes('$') || arg.includes('`') || arg.includes('\\') || arg.includes('"') || arg.includes('\n')) {
-          return `'${arg.replace(/'/g, "'\\''")}'`;
-        }
-        return arg;
-      }
-    }).join(' ');
+    const fullCommand = this.buildShellCommand(command, allArgs);
 
     const shellCmd = this.getPlatformShell();
     const shellArgs = this.getShellArgs(fullCommand);
@@ -1045,6 +1050,9 @@ Do NOT call complete_task with success unless the screenshot proves the task is 
     // Reset completeTaskCalled so we can detect the re-confirmation
     this.completeTaskCalled = false;
 
+    // Mark that we're in verification mode
+    this.inVerificationMode = true;
+
     // Build args for verification - reuse same model/settings
     const config: TaskConfig = {
       prompt: verificationPrompt,
@@ -1065,19 +1073,7 @@ Do NOT call complete_task with success unless the screenshot proves the task is 
     const safeCwd = config.workingDirectory || app.getPath('temp');
 
     // Start new PTY process for verification
-    const fullCommand = [command, ...allArgs].map(arg => {
-      if (process.platform === 'win32') {
-        if (arg.includes(' ') || arg.includes('"')) {
-          return `"${arg.replace(/"/g, '""')}"`;
-        }
-        return arg;
-      } else {
-        if (arg.includes("'") || arg.includes(' ') || arg.includes('$') || arg.includes('`') || arg.includes('\\') || arg.includes('"') || arg.includes('\n')) {
-          return `'${arg.replace(/'/g, "'\\''")}'`;
-        }
-        return arg;
-      }
-    }).join(' ');
+    const fullCommand = this.buildShellCommand(command, allArgs);
 
     const shellCmd = this.getPlatformShell();
     const shellArgs = this.getShellArgs(fullCommand);
