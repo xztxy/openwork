@@ -4,6 +4,7 @@ import { app } from 'electron';
 import fs from 'fs';
 import { StreamParser } from './stream-parser';
 import { OpenCodeLogWatcher, createLogWatcher, OpenCodeLogError } from './log-watcher';
+import { CompletionEnforcer, CompletionEnforcerCallbacks } from './completion';
 import {
   getOpenCodeCliPath,
   isOpenCodeBundled,
@@ -72,19 +73,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   private hasCompleted: boolean = false;
   private isDisposed: boolean = false;
   private wasInterrupted: boolean = false;
-  private completeTaskCalled: boolean = false;
-  private continuationAttempts: number = 0;
-  private readonly maxContinuationAttempts: number = 20;
-  private pendingContinuation: boolean = false;
-  private pendingVerification: boolean = false;
-  private awaitingVerification: boolean = false;
-  private inVerificationMode: boolean = false;
-  private completeTaskArgs: {
-    status: string;
-    summary: string;
-    original_request_summary: string;
-    remaining_work?: string;
-  } | null = null;
+  private completionEnforcer: CompletionEnforcer;
   private lastWorkingDirectory: string | undefined;
 
   /**
@@ -95,8 +84,34 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     super();
     this.currentTaskId = taskId || null;
     this.streamParser = new StreamParser();
+    this.completionEnforcer = this.createCompletionEnforcer();
     this.setupStreamParsing();
     this.setupLogWatcher();
+  }
+
+  /**
+   * Create the CompletionEnforcer with callbacks that delegate to adapter methods.
+   */
+  private createCompletionEnforcer(): CompletionEnforcer {
+    const callbacks: CompletionEnforcerCallbacks = {
+      onStartVerification: async (prompt: string) => {
+        await this.spawnSessionResumption(prompt);
+      },
+      onStartContinuation: async (prompt: string) => {
+        await this.spawnSessionResumption(prompt);
+      },
+      onComplete: () => {
+        this.hasCompleted = true;
+        this.emit('complete', {
+          status: 'success',
+          sessionId: this.currentSessionId || undefined,
+        });
+      },
+      onDebug: (type: string, message: string, data?: unknown) => {
+        this.emit('debug', { type, message, data });
+      },
+    };
+    return new CompletionEnforcer(callbacks);
   }
 
   /**
@@ -169,13 +184,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.streamParser.reset();
     this.hasCompleted = false;
     this.wasInterrupted = false;
-    this.completeTaskCalled = false;
-    this.continuationAttempts = 0;
-    this.pendingContinuation = false;
-    this.pendingVerification = false;
-    this.awaitingVerification = false;
-    this.inVerificationMode = false;
-    this.completeTaskArgs = null;
+    this.completionEnforcer.reset();
     this.lastWorkingDirectory = config.workingDirectory;
 
     // Start the log watcher to detect errors that aren't output as JSON
@@ -637,7 +646,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
         // Track if complete_task was called (tool name may be prefixed with MCP server name)
         if (toolName === 'complete_task' || toolName.endsWith('_complete_task')) {
-          this.handleCompleteTaskDetection(toolInput);
+          this.completionEnforcer.handleCompleteTaskDetection(toolInput);
         }
 
         this.emit('tool-use', toolName, toolInput);
@@ -661,7 +670,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
         // Track if complete_task was called (tool name may be prefixed with MCP server name)
         if (toolUseName === 'complete_task' || toolUseName.endsWith('_complete_task')) {
-          this.handleCompleteTaskDetection(toolUseInput);
+          this.completionEnforcer.handleCompleteTaskDetection(toolUseInput);
         }
 
         // For models that don't emit text messages (like Gemini), emit the tool description
@@ -717,67 +726,28 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
       // Step finish event
       case 'step_finish':
-        // Only complete if reason is 'stop' or 'end_turn' (final completion)
-        // 'tool_use' means there are more steps coming
-        if (message.part.reason === 'stop' || message.part.reason === 'end_turn') {
-          // Check if verification is needed (complete_task called with success, not yet verified)
-          if (this.pendingVerification) {
-            console.log('[OpenCode Adapter] Scheduling verification task for complete_task success');
-            this.emit('debug', {
-              type: 'verification',
-              message: 'Scheduling verification for completion claim',
-              data: { summary: this.completeTaskArgs?.summary },
-            });
-            return; // Don't emit complete yet, let handleProcessExit handle verification
-          }
-
-          // Check if agent stopped without calling complete_task
-          if (!this.completeTaskCalled && this.continuationAttempts < this.maxContinuationAttempts) {
-            // If we're in verification mode and agent stops without re-calling complete_task,
-            // it means they found issues and are continuing to work - don't send continuation prompt
-            if (this.inVerificationMode) {
-              console.log('[OpenCode Adapter] Agent stopped during verification to continue working');
-              this.emit('debug', {
-                type: 'verification',
-                message: 'Agent continuing work after verification check',
-              });
-              // Reset verification mode since agent is now working on fixes
-              this.inVerificationMode = false;
-              this.awaitingVerification = false;
-              return; // Let process exit naturally, agent will continue
-            }
-
-            this.continuationAttempts++;
-            console.log(`[OpenCode Adapter] Agent stopped without complete_task, scheduling continuation (attempt ${this.continuationAttempts}/${this.maxContinuationAttempts})`);
-            // Set flag to trigger continuation after process exits
-            // We can't inject via stdin because the CLI exits after step_finish
-            this.pendingContinuation = true;
-            this.emit('debug', {
-              type: 'continuation',
-              message: `Scheduled continuation prompt (attempt ${this.continuationAttempts})`,
-            });
-            return; // Don't emit complete yet, let handleProcessExit handle continuation
-          }
-
-          // Either complete_task was called (and verified), or we've exhausted retries
-          if (!this.completeTaskCalled) {
-            console.warn('[OpenCode Adapter] Agent stopped without complete_task after max attempts');
-          }
-
-          this.hasCompleted = true;
-          this.emit('complete', {
-            status: 'success',
-            sessionId: this.currentSessionId || undefined,
-          });
-        } else if (message.part.reason === 'error') {
+        if (message.part.reason === 'error') {
           this.hasCompleted = true;
           this.emit('complete', {
             status: 'error',
             sessionId: this.currentSessionId || undefined,
             error: 'Task failed',
           });
+          break;
         }
-        // 'tool_use' reason means agent is continuing, don't emit complete
+
+        // Delegate to completion enforcer for stop/end_turn handling
+        const action = this.completionEnforcer.handleStepFinish(message.part.reason);
+        console.log(`[OpenCode Adapter] step_finish action: ${action}`);
+
+        if (action === 'complete') {
+          this.hasCompleted = true;
+          this.emit('complete', {
+            status: 'success',
+            sessionId: this.currentSessionId || undefined,
+          });
+        }
+        // 'pending' and 'continue' - don't emit complete, let handleProcessExit handle it
         break;
 
       // Error event
@@ -818,39 +788,6 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   }
 
   /**
-   * Handle complete_task tool detection from either tool_call or tool_use events.
-   * Consolidates logic to avoid race conditions from duplicate handling.
-   */
-  private handleCompleteTaskDetection(toolInput: unknown): void {
-    // Already processed this call
-    if (this.completeTaskCalled) {
-      return;
-    }
-
-    this.completeTaskCalled = true;
-    const args = toolInput as {
-      status?: string;
-      summary?: string;
-      original_request_summary?: string;
-      remaining_work?: string;
-    };
-    this.completeTaskArgs = {
-      status: args?.status || 'unknown',
-      summary: args?.summary || '',
-      original_request_summary: args?.original_request_summary || '',
-      remaining_work: args?.remaining_work,
-    };
-    console.log('[OpenCode Adapter] complete_task detected with status:', this.completeTaskArgs.status);
-
-    // If status is success and we're not already verifying, trigger verification
-    if (this.completeTaskArgs.status === 'success' && !this.awaitingVerification) {
-      console.log('[OpenCode Adapter] Scheduling verification for complete_task success');
-      this.pendingVerification = true;
-      this.awaitingVerification = true;
-    }
-  }
-
-  /**
    * Escape a shell argument for safe execution.
    */
   private escapeShellArg(arg: string): string {
@@ -879,38 +816,18 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     // Clean up PTY process reference
     this.ptyProcess = null;
 
-    // Check if we need to verify a completion claim
-    if (this.pendingVerification && code === 0 && !this.hasCompleted) {
-      console.log('[OpenCode Adapter] Process exited, starting verification task');
-      this.pendingVerification = false;
-      // Start verification task asynchronously
-      this.startVerificationTask().catch((error) => {
-        console.error('[OpenCode Adapter] Failed to start verification task:', error);
+    // Delegate to completion enforcer for verification/continuation handling
+    if (code === 0 && !this.hasCompleted) {
+      this.completionEnforcer.handleProcessExit(code).catch((error) => {
+        console.error('[OpenCode Adapter] Completion enforcer error:', error);
         this.hasCompleted = true;
         this.emit('complete', {
           status: 'error',
           sessionId: this.currentSessionId || undefined,
-          error: `Failed to verify: ${error.message}`,
+          error: `Failed to complete: ${error.message}`,
         });
       });
-      return; // Don't emit complete yet, verification task will handle it
-    }
-
-    // Check if we need to continue with a continuation prompt
-    if (this.pendingContinuation && code === 0 && !this.hasCompleted) {
-      console.log('[OpenCode Adapter] Process exited, starting continuation task');
-      this.pendingContinuation = false;
-      // Start continuation task asynchronously
-      this.startContinuationTask().catch((error) => {
-        console.error('[OpenCode Adapter] Failed to start continuation task:', error);
-        this.hasCompleted = true;
-        this.emit('complete', {
-          status: 'error',
-          sessionId: this.currentSessionId || undefined,
-          error: `Failed to continue: ${error.message}`,
-        });
-      });
-      return; // Don't emit complete yet, continuation task will handle it
+      return; // Let completion enforcer handle next steps
     }
 
     // Only emit complete/error if we haven't already received a result message
@@ -938,32 +855,23 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   }
 
   /**
-   * Start a continuation task when agent stops without calling complete_task.
-   * Uses session resumption to continue the conversation.
+   * Spawn a session resumption task with the given prompt.
+   * Used by CompletionEnforcer callbacks for continuation and verification.
    */
-  private async startContinuationTask(): Promise<void> {
+  private async spawnSessionResumption(prompt: string): Promise<void> {
     const sessionId = this.currentSessionId;
     if (!sessionId) {
-      throw new Error('No session ID available for continuation');
+      throw new Error('No session ID available for session resumption');
     }
 
-    const continuationPrompt = `STOP. You MUST call the complete_task tool before you can finish.
-
-Call complete_task NOW with:
-- status: "success" if you finished everything the user asked
-- status: "blocked" if you hit a problem and cannot continue
-- status: "partial" if you completed some parts but not all
-
-Do not respond with text. Just call the tool immediately.`;
-
-    console.log(`[OpenCode Adapter] Starting continuation task with session ${sessionId} (attempt ${this.continuationAttempts})`);
+    console.log(`[OpenCode Adapter] Starting session resumption with session ${sessionId}`);
 
     // Reset stream parser for new process but preserve other state
     this.streamParser.reset();
 
-    // Build args for continuation - reuse same model/settings
+    // Build args for resumption - reuse same model/settings
     const config: TaskConfig = {
-      prompt: continuationPrompt,
+      prompt,
       sessionId: sessionId,
       workingDirectory: this.lastWorkingDirectory,
     };
@@ -972,7 +880,7 @@ Do not respond with text. Just call the tool immediately.`;
 
     // Get the bundled CLI path
     const { command, args: baseArgs } = getOpenCodeCliPath();
-    console.log('[OpenCode Adapter] Continuation command:', command, [...baseArgs, ...cliArgs].join(' '));
+    console.log('[OpenCode Adapter] Session resumption command:', command, [...baseArgs, ...cliArgs].join(' '));
 
     // Build environment
     const env = await this.buildEnvironment();
@@ -980,7 +888,7 @@ Do not respond with text. Just call the tool immediately.`;
     const allArgs = [...baseArgs, ...cliArgs];
     const safeCwd = config.workingDirectory || app.getPath('temp');
 
-    // Start new PTY process for continuation
+    // Start new PTY process for session resumption
     const fullCommand = this.buildShellCommand(command, allArgs);
 
     const shellCmd = this.getPlatformShell();
@@ -1001,104 +909,6 @@ Do not respond with text. Just call the tool immediately.`;
 
     this.ptyProcess.onExit(({ exitCode }) => {
       this.handleProcessExit(exitCode);
-    });
-
-    this.emit('debug', {
-      type: 'continuation',
-      message: `Started continuation task (attempt ${this.continuationAttempts})`,
-    });
-  }
-
-  /**
-   * Start a verification task when agent calls complete_task with status="success".
-   * Uses session resumption to verify the task was actually completed.
-   */
-  private async startVerificationTask(): Promise<void> {
-    const sessionId = this.currentSessionId;
-    if (!sessionId) {
-      throw new Error('No session ID available for verification');
-    }
-
-    const claimedSummary = this.completeTaskArgs?.summary || 'No summary provided';
-    const originalRequest = this.completeTaskArgs?.original_request_summary || 'Unknown request';
-
-    const verificationPrompt = `VERIFICATION REQUIRED.
-
-You claimed to have completed the task with this summary:
-"${claimedSummary}"
-
-The original request was:
-"${originalRequest}"
-
-Before I accept completion, you MUST verify your work:
-
-1. Take a screenshot of the current browser state using the browser tool
-2. Review your plan's completion criteria
-3. Compare the screenshot against each criterion
-
-Then either:
-- If ALL criteria are met: Call complete_task again with status="success"
-- If ANY criteria are NOT met: Continue working to complete them
-
-Do NOT call complete_task with success unless the screenshot proves the task is done.`;
-
-    console.log(`[OpenCode Adapter] Starting verification task with session ${sessionId}`);
-
-    // Reset stream parser for new process but preserve other state
-    this.streamParser.reset();
-
-    // Reset completeTaskCalled so we can detect the re-confirmation
-    this.completeTaskCalled = false;
-
-    // Mark that we're in verification mode
-    this.inVerificationMode = true;
-
-    // Build args for verification - reuse same model/settings
-    const config: TaskConfig = {
-      prompt: verificationPrompt,
-      sessionId: sessionId,
-      workingDirectory: this.lastWorkingDirectory,
-    };
-
-    const cliArgs = await this.buildCliArgs(config);
-
-    // Get the bundled CLI path
-    const { command, args: baseArgs } = getOpenCodeCliPath();
-    console.log('[OpenCode Adapter] Verification command:', command, [...baseArgs, ...cliArgs].join(' '));
-
-    // Build environment
-    const env = await this.buildEnvironment();
-
-    const allArgs = [...baseArgs, ...cliArgs];
-    const safeCwd = config.workingDirectory || app.getPath('temp');
-
-    // Start new PTY process for verification
-    const fullCommand = this.buildShellCommand(command, allArgs);
-
-    const shellCmd = this.getPlatformShell();
-    const shellArgs = this.getShellArgs(fullCommand);
-
-    this.ptyProcess = pty.spawn(shellCmd, shellArgs, {
-      name: 'xterm-256color',
-      cols: 200,
-      rows: 30,
-      cwd: safeCwd,
-      env: env as { [key: string]: string },
-    });
-
-    // Set up event handlers for new process
-    this.ptyProcess.onData((data: string) => {
-      this.streamParser.feed(data);
-    });
-
-    this.ptyProcess.onExit(({ exitCode }) => {
-      this.handleProcessExit(exitCode);
-    });
-
-    this.emit('debug', {
-      type: 'verification',
-      message: 'Started verification task',
-      data: { claimedSummary, originalRequest },
     });
   }
 
