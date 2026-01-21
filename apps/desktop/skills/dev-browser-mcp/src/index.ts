@@ -1958,51 +1958,59 @@ The page has loaded. Use browser_snapshot() to see the page elements and find in
         else if (button === 'middle') descParts.push('middle-click');
         const clickDesc = descParts.length > 0 ? ` (${descParts.join(', ')})` : '';
 
-        // Position-based click (e.g., center for canvas apps)
-        if (position === 'center' || position === 'center-lower') {
-          const viewport = page.viewportSize();
-          const clickX = (viewport?.width || 1280) / 2;
-          // center-lower clicks 2/3 down to avoid UI overlays (like Google Docs AI suggestions)
-          const clickY = position === 'center-lower'
-            ? (viewport?.height || 720) * 2 / 3
-            : (viewport?.height || 720) / 2;
-          await page.mouse.click(clickX, clickY, clickOptions);
-          await waitForPageLoad(page);
-          const positionName = position === 'center-lower' ? 'center-lower (2/3 down)' : 'center';
-          return {
-            content: [{ type: 'text', text: `Clicked viewport ${positionName} (${Math.round(clickX)}, ${Math.round(clickY)})${clickDesc}` }],
-          };
-        }
-
-        // Explicit x/y coordinates
-        if (x !== undefined && y !== undefined) {
-          await page.mouse.click(x, y, clickOptions);
-          await waitForPageLoad(page);
-          return {
-            content: [{ type: 'text', text: `Clicked at coordinates (${x}, ${y})${clickDesc}` }],
-          };
-        } else if (ref) {
-          const element = await selectSnapshotRef(page, ref);
-          if (!element) {
+        try {
+          // Position-based click (e.g., center for canvas apps)
+          if (position === 'center' || position === 'center-lower') {
+            const viewport = page.viewportSize();
+            const clickX = (viewport?.width || 1280) / 2;
+            const clickY = position === 'center-lower'
+              ? (viewport?.height || 720) * 2 / 3
+              : (viewport?.height || 720) / 2;
+            await page.mouse.click(clickX, clickY, clickOptions);
+            await waitForPageLoad(page);
+            const positionName = position === 'center-lower' ? 'center-lower (2/3 down)' : 'center';
             return {
-              content: [{ type: 'text', text: `Error: Could not find element with ref "${ref}"` }],
+              content: [{ type: 'text', text: `Clicked viewport ${positionName} (${Math.round(clickX)}, ${Math.round(clickY)})${clickDesc}` }],
+            };
+          }
+
+          // Explicit x/y coordinates
+          if (x !== undefined && y !== undefined) {
+            await page.mouse.click(x, y, clickOptions);
+            await waitForPageLoad(page);
+            return {
+              content: [{ type: 'text', text: `Clicked at coordinates (${x}, ${y})${clickDesc}` }],
+            };
+          } else if (ref) {
+            const element = await selectSnapshotRef(page, ref);
+            if (!element) {
+              return {
+                content: [{ type: 'text', text: `Element [ref=${ref}] not found. Run browser_snapshot() to get updated refs - the page may have changed.` }],
+                isError: true,
+              };
+            }
+            await element.click(clickOptions);
+            await waitForPageLoad(page);
+            return {
+              content: [{ type: 'text', text: `Clicked element [ref=${ref}]${clickDesc}` }],
+            };
+          } else if (selector) {
+            await page.click(selector, clickOptions);
+            await waitForPageLoad(page);
+            return {
+              content: [{ type: 'text', text: `Clicked element matching "${selector}"${clickDesc}` }],
+            };
+          } else {
+            return {
+              content: [{ type: 'text', text: 'Error: Provide x/y coordinates, ref, selector, or position' }],
               isError: true,
             };
           }
-          await element.click(clickOptions);
-          await waitForPageLoad(page);
+        } catch (err) {
+          const targetDesc = ref ? `[ref=${ref}]` : selector ? `"${selector}"` : `(${x}, ${y})`;
+          const friendlyError = toAIFriendlyError(err, targetDesc);
           return {
-            content: [{ type: 'text', text: `Clicked element [ref=${ref}]${clickDesc}` }],
-          };
-        } else if (selector) {
-          await page.click(selector, clickOptions);
-          await waitForPageLoad(page);
-          return {
-            content: [{ type: 'text', text: `Clicked element matching "${selector}"${clickDesc}` }],
-          };
-        } else {
-          return {
-            content: [{ type: 'text', text: 'Error: Provide x/y coordinates, ref, selector, or position' }],
+            content: [{ type: 'text', text: friendlyError.message }],
             isError: true,
           };
         }
