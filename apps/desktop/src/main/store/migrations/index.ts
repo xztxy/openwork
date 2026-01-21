@@ -9,13 +9,14 @@ export interface Migration {
 }
 
 // Import migrations - will be added as we create them
+import './v001-initial';
 const migrations: Migration[] = [];
 
 /**
  * Current schema version supported by this app.
  * Increment this when adding new migrations.
  */
-export const CURRENT_VERSION = 0; // Will be 1 after v001-initial is added
+export const CURRENT_VERSION = 1;
 
 /**
  * Get the stored schema version from the database.
