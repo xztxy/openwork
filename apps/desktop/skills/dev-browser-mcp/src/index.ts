@@ -21,6 +21,7 @@ import {
   type CallToolResult,
 } from '@modelcontextprotocol/sdk/types.js';
 import { chromium, type Browser, type Page, type ElementHandle } from 'playwright';
+import { getSnapshotManager, resetSnapshotManager } from './snapshot/index.js';
 
 console.error('[dev-browser-mcp] All imports completed successfully');
 
@@ -2023,11 +2024,12 @@ The page has loaded. Use browser_snapshot() to see the page elements and find in
       }
 
       case 'browser_snapshot': {
-        const { page_name, interactive_only } = args as BrowserSnapshotInput;
+        const { page_name, interactive_only, full_snapshot } = args as BrowserSnapshotInput;
         const page = await getPage(page_name);
-        const snapshot = await getAISnapshot(page, { interactiveOnly: interactive_only });
+        const rawSnapshot = await getAISnapshot(page, { interactiveOnly: interactive_only ?? true });
         const viewport = page.viewportSize();
         const url = page.url();
+        const title = await page.title();
 
         // Detect canvas-based apps that need special handling
         const canvasApps = [
@@ -2040,11 +2042,21 @@ The page has loaded. Use browser_snapshot() to see the page elements and find in
         ];
         const detectedApp = canvasApps.find(app => app.pattern.test(url));
 
+        // Process through snapshot manager for diffing
+        const manager = getSnapshotManager();
+        const result = manager.processSnapshot(rawSnapshot, url, title, {
+          fullSnapshot: full_snapshot,
+          interactiveOnly: interactive_only ?? true,
+        });
+
         // Build output with metadata header
         let output = `# Page Info\n`;
         output += `URL: ${url}\n`;
         output += `Viewport: ${viewport?.width || 1280}x${viewport?.height || 720} (center: ${Math.round((viewport?.width || 1280) / 2)}, ${Math.round((viewport?.height || 720) / 2)})\n`;
-        if (interactive_only) {
+
+        if (result.type === 'diff') {
+          output += `Mode: Diff (showing changes since last snapshot)\n`;
+        } else if (interactive_only ?? true) {
           output += `Mode: Interactive elements only (buttons, links, inputs)\n`;
         }
 
@@ -2055,7 +2067,11 @@ The page has loaded. Use browser_snapshot() to see the page elements and find in
           output += `(center-lower avoids UI overlays like Google Docs AI suggestions)\n`;
         }
 
-        output += `\n# Accessibility Tree\n${snapshot}`;
+        if (result.type === 'diff') {
+          output += `\n# Changes Since Last Snapshot\n${result.content}`;
+        } else {
+          output += `\n# Accessibility Tree\n${result.content}`;
+        }
 
         return {
           content: [{
