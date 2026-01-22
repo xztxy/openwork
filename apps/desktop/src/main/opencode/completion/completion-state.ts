@@ -58,7 +58,7 @@ export class CompletionState {
   private completeTaskArgs: CompleteTaskArgs | null = null;
   private readonly maxContinuationAttempts: number;
 
-  constructor(maxContinuationAttempts: number = 20) {
+  constructor(maxContinuationAttempts: number = 50) {
     this.maxContinuationAttempts = maxContinuationAttempts;
   }
 
@@ -153,10 +153,15 @@ export class CompletionState {
   }
 
   scheduleContinuation(): boolean {
-    // Can schedule continuation from IDLE (agent never called complete_task)
-    // or from VERIFICATION_CONTINUING (agent found issues and is fixing them)
+    // Can schedule continuation from:
+    // - IDLE: agent never called complete_task
+    // - VERIFICATION_CONTINUING: agent found issues and is fixing them
+    // - CONTINUATION_PENDING: previous continuation was scheduled but process didn't exit
+    //   (OpenCode CLI's auto-continue keeps process alive, so handleProcessExit/startContinuation
+    //   is never called to reset state to IDLE)
     if (this.state !== CompletionFlowState.IDLE &&
-        this.state !== CompletionFlowState.VERIFICATION_CONTINUING) {
+        this.state !== CompletionFlowState.VERIFICATION_CONTINUING &&
+        this.state !== CompletionFlowState.CONTINUATION_PENDING) {
       return false;
     }
 

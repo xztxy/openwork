@@ -11,7 +11,7 @@
  *    - Agent sometimes stops mid-task (API limits, confusion, etc.)
  *    - We detect this on step_finish with reason='stop' but no complete_task call
  *    - Spawn a session resumption with a firm reminder to call complete_task
- *    - Retry up to 20 times before giving up
+ *    - Retry up to 50 times before giving up
  *
  * 2. VERIFICATION (if agent claims status="success"):
  *    - Agent may claim success without actually verifying work is done
@@ -140,8 +140,8 @@ export class CompletionEnforcer {
         return 'pending'; // Let handleProcessExit start continuation
       }
 
-      // Max retries reached
-      console.warn('[CompletionEnforcer] Agent stopped without complete_task after max attempts');
+      // Max retries reached or invalid state
+      console.warn(`[CompletionEnforcer] Agent stopped without complete_task. State: ${CompletionFlowState[this.state.getState()]}, attempts: ${this.state.getContinuationAttempts()}/${this.state.getMaxContinuationAttempts()}`);
     }
 
     // Task is complete (either complete_task called and verified, or max retries)
