@@ -543,12 +543,18 @@ export async function generateOpenCodeConfig(): Promise<string> {
   const litellmProvider = providerSettings.connectedProviders.litellm;
   if (litellmProvider?.connectionStatus === 'connected' && litellmProvider.credentials.type === 'litellm') {
     if (litellmProvider.selectedModelId) {
+      // Get API key if available
+      const litellmApiKey = getApiKey('litellm');
+      const litellmOptions: LiteLLMProviderConfig['options'] = {
+        baseURL: `${litellmProvider.credentials.serverUrl}/v1`,
+      };
+      if (litellmApiKey) {
+        litellmOptions.apiKey = litellmApiKey;
+      }
       providerConfig.litellm = {
         npm: '@ai-sdk/openai-compatible',
         name: 'LiteLLM',
-        options: {
-          baseURL: `${litellmProvider.credentials.serverUrl}/v1`,
-        },
+        options: litellmOptions,
         models: {
           [litellmProvider.selectedModelId]: {
             name: litellmProvider.selectedModelId,
@@ -556,7 +562,7 @@ export async function generateOpenCodeConfig(): Promise<string> {
           },
         },
       };
-      console.log('[OpenCode Config] LiteLLM configured:', litellmProvider.selectedModelId);
+      console.log('[OpenCode Config] LiteLLM configured:', litellmProvider.selectedModelId, litellmApiKey ? '(with API key)' : '(no API key)');
     }
   }
 
@@ -640,9 +646,14 @@ export async function generateOpenCodeConfig(): Promise<string> {
   const configJson = JSON.stringify(config, null, 2);
   fs.writeFileSync(configPath, configJson);
 
-  // Set environment variables for OpenCode to find the config and skills
+  // Set environment variables for OpenCode to find the config
   process.env.OPENCODE_CONFIG = configPath;
-  process.env.OPENCODE_CONFIG_DIR = openCodeConfigDir;
+
+  // Set OPENCODE_CONFIG_DIR to the writable config directory, not resourcesPath
+  // resourcesPath is read-only on mounted DMGs (macOS) and protected on Windows (Program Files).
+  // This causes EROFS/EPERM errors when OpenCode tries to write package.json there.
+  // MCP servers are configured with explicit paths, so we don't need skills discovery via OPENCODE_CONFIG_DIR.
+  process.env.OPENCODE_CONFIG_DIR = configDir;
 
   console.log('[OpenCode Config] Generated config at:', configPath);
   console.log('[OpenCode Config] Full config:', configJson);

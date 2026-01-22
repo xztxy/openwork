@@ -24,8 +24,8 @@ import { chromium, type Browser, type Page, type ElementHandle } from 'playwrigh
 
 console.error('[dev-browser-mcp] All imports completed successfully');
 
-// Port must match DEV_BROWSER_PORT in @accomplish/shared/constants.ts
-const DEV_BROWSER_PORT = 9224;
+// Port can be overridden via environment variable for isolated testing
+const DEV_BROWSER_PORT = parseInt(process.env.DEV_BROWSER_PORT || '9224', 10);
 const DEV_BROWSER_URL = `http://localhost:${DEV_BROWSER_PORT}`;
 
 // Task ID for page name prefixing (supports parallel tasks)

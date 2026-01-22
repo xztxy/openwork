@@ -1,6 +1,6 @@
 {
   "name": "@accomplish/desktop",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "description": "Accomplish Desktop App",
@@ -36,7 +36,8 @@
     "test:e2e:native:ui": "playwright test --config=e2e/playwright.config.ts --ui",
     "test:e2e:native:debug": "playwright test --config=e2e/playwright.config.ts --debug",
     "test:e2e:native:fast": "playwright test --config=e2e/playwright.config.ts --project=electron-fast",
-    "test:e2e:native:integration": "playwright test --config=e2e/playwright.config.ts --project=electron-integration"
+    "test:e2e:native:integration": "playwright test --config=e2e/playwright.config.ts --project=electron-integration",
+    "test:local-agent": "npx tsx scripts/test-local-agent-cli.ts"
   },
   "dependencies": {
     "@accomplish/shared": "workspace:*",
