@@ -1999,6 +1999,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToo
           fullUrl = 'https://' + fullUrl;
         }
 
+        // Reset snapshot state - we're navigating to a new page
+        resetSnapshotManager();
+
         const page = await getPage(page_name);
         await page.goto(fullUrl);
         await waitForPageLoad(page);
