@@ -94,7 +94,7 @@ import {
 } from '../test-utils/mock-task-flow';
 
 const MAX_TEXT_LENGTH = 8000;
-const ALLOWED_API_KEY_PROVIDERS = new Set(['anthropic', 'openai', 'openrouter', 'google', 'xai', 'deepseek', 'zai', 'custom', 'bedrock', 'litellm']);
+const ALLOWED_API_KEY_PROVIDERS = new Set(['anthropic', 'openai', 'openrouter', 'google', 'xai', 'deepseek', 'zai', 'custom', 'bedrock', 'litellm', 'huggingface']);
 const API_KEY_VALIDATION_TIMEOUT_MS = 15000;
 
 interface OllamaModel {
@@ -1242,6 +1242,80 @@ export function registerIPCHandlers(): void {
     }
     setOllamaConfig(config);
     console.log('[Ollama] Config saved:', config);
+  });
+
+  // HuggingFace handlers
+  handle('huggingface:validate', async (_event: IpcMainInvokeEvent, token: string) => {
+    if (!token?.trim()) {
+      return { valid: false, error: 'Token is required' };
+    }
+
+    try {
+      const response = await fetchWithTimeout(
+        'https://huggingface.co/api/whoami',
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token.trim()}`,
+          },
+        },
+        API_KEY_VALIDATION_TIMEOUT_MS
+      );
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          return { valid: false, error: 'Invalid token' };
+        }
+        return { valid: false, error: `API returned status ${response.status}` };
+      }
+
+      return { valid: true };
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return { valid: false, error: 'Request timed out' };
+      }
+      return { valid: false, error: error instanceof Error ? error.message : 'Validation failed' };
+    }
+  });
+
+  handle('huggingface:fetch-models', async (_event: IpcMainInvokeEvent) => {
+    const apiKey = getApiKey('huggingface');
+    if (!apiKey) {
+      return { success: false, error: 'No HuggingFace token configured' };
+    }
+
+    try {
+      // Fetch text-generation models with active inference, sorted by downloads
+      const response = await fetchWithTimeout(
+        'https://huggingface.co/api/models?pipeline_tag=text-generation&inference=warm&sort=downloads&direction=-1&limit=200',
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+          },
+        },
+        API_KEY_VALIDATION_TIMEOUT_MS
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = (errorData as { error?: string })?.error || `API returned status ${response.status}`;
+        return { success: false, error: errorMessage };
+      }
+
+      const data = await response.json() as Array<{ id: string; pipeline_tag?: string }>;
+      const models = data.map((m) => ({
+        id: m.id,
+        name: m.id,
+      }));
+
+      return { success: true, models };
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return { success: false, error: 'Request timed out' };
+      }
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch models' };
+    }
   });
 
   // OpenRouter: Fetch available models

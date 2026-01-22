@@ -377,6 +377,7 @@ export async function generateOpenCodeConfig(): Promise<string> {
     ollama: 'ollama',
     openrouter: 'openrouter',
     litellm: 'litellm',
+    huggingface: 'huggingface',
   };
 
   // Build enabled providers list from new settings or fall back to base providers
