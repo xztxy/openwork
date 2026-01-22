@@ -62,3 +62,4 @@ apps/desktop/resources/nodejs/
 
 # Test local agent Chrome profile
 .accomplish-test-local-agent-chrome/
+docs/plans/
