@@ -199,6 +199,14 @@ Example bad narration (too terse):
 - Don't announce server checks or startup - proceed directly to the task
 - Only use AskUserQuestion when you genuinely need user input or decisions
 
+**DO NOT ASK FOR PERMISSION TO CONTINUE:**
+If the user gave you a task with specific criteria (e.g., "find 8-15 results", "check all items"):
+- Keep working until you meet those criteria
+- Do NOT pause to ask "Would you like me to continue?" or "Should I keep going?"
+- Do NOT stop after reviewing just a few items when the task asks for more
+- Just continue working until the task requirements are met
+- Only use AskUserQuestion for genuine clarifications about requirements, NOT for progress check-ins
+
 **TASK COMPLETION - CRITICAL:**
 
 You MUST call the \`complete_task\` tool to finish ANY task. Never stop without calling it.
@@ -210,7 +218,10 @@ When to call \`complete_task\`:
    - Check off each requirement mentally
    - Summarize what you did for each part
 
-2. **status: "blocked"** - You hit an unresolvable blocker
+2. **status: "blocked"** - You hit an unresolvable TECHNICAL blocker
+   - Only use for: login walls, CAPTCHAs, rate limits, site errors, missing permissions
+   - NOT for: "task is large", "many items to check", "would take many steps"
+   - If the task is big but doable, KEEP WORKING - do not use blocked as an excuse to quit
    - Explain what you were trying to do
    - Describe what went wrong
    - State what remains undone in \`remaining_work\`
@@ -532,12 +543,18 @@ export async function generateOpenCodeConfig(): Promise<string> {
   const litellmProvider = providerSettings.connectedProviders.litellm;
   if (litellmProvider?.connectionStatus === 'connected' && litellmProvider.credentials.type === 'litellm') {
     if (litellmProvider.selectedModelId) {
+      // Get API key if available
+      const litellmApiKey = getApiKey('litellm');
+      const litellmOptions: LiteLLMProviderConfig['options'] = {
+        baseURL: `${litellmProvider.credentials.serverUrl}/v1`,
+      };
+      if (litellmApiKey) {
+        litellmOptions.apiKey = litellmApiKey;
+      }
       providerConfig.litellm = {
         npm: '@ai-sdk/openai-compatible',
         name: 'LiteLLM',
-        options: {
-          baseURL: `${litellmProvider.credentials.serverUrl}/v1`,
-        },
+        options: litellmOptions,
         models: {
           [litellmProvider.selectedModelId]: {
             name: litellmProvider.selectedModelId,
@@ -545,7 +562,7 @@ export async function generateOpenCodeConfig(): Promise<string> {
           },
         },
       };
-      console.log('[OpenCode Config] LiteLLM configured:', litellmProvider.selectedModelId);
+      console.log('[OpenCode Config] LiteLLM configured:', litellmProvider.selectedModelId, litellmApiKey ? '(with API key)' : '(no API key)');
     }
   }
 
@@ -633,9 +650,9 @@ export async function generateOpenCodeConfig(): Promise<string> {
   process.env.OPENCODE_CONFIG = configPath;
 
   // Set OPENCODE_CONFIG_DIR to the writable config directory, not resourcesPath
-  // resourcesPath (C:\Program Files\Openwork\resources) is protected on Windows
-  // and causes EPERM errors when OpenCode tries to read package.json there.
-  // MCP servers are configured with explicit paths, so we don't need skills in OPENCODE_CONFIG_DIR.
+  // resourcesPath is read-only on mounted DMGs (macOS) and protected on Windows (Program Files).
+  // This causes EROFS/EPERM errors when OpenCode tries to write package.json there.
+  // MCP servers are configured with explicit paths, so we don't need skills discovery via OPENCODE_CONFIG_DIR.
   process.env.OPENCODE_CONFIG_DIR = configDir;
 
   console.log('[OpenCode Config] Generated config at:', configPath);

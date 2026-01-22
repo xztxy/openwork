@@ -1,6 +1,6 @@
 {
   "name": "@accomplish/desktop",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "description": "Accomplish Desktop App",
@@ -36,7 +36,8 @@
     "test:e2e:native:ui": "playwright test --config=e2e/playwright.config.ts --ui",
     "test:e2e:native:debug": "playwright test --config=e2e/playwright.config.ts --debug",
     "test:e2e:native:fast": "playwright test --config=e2e/playwright.config.ts --project=electron-fast",
-    "test:e2e:native:integration": "playwright test --config=e2e/playwright.config.ts --project=electron-integration"
+    "test:e2e:native:integration": "playwright test --config=e2e/playwright.config.ts --project=electron-integration",
+    "test:local-agent": "npx tsx scripts/test-local-agent-cli.ts"
   },
   "dependencies": {
     "@accomplish/shared": "workspace:*",
@@ -51,6 +52,7 @@
     "@radix-ui/react-separator": "^1.1.1",
     "@radix-ui/react-slot": "^1.1.1",
     "@radix-ui/react-tooltip": "^1.1.6",
+    "better-sqlite3": "^12.6.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",
@@ -74,6 +76,7 @@
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "6.6.3",
     "@testing-library/react": "^16.3.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
@@ -126,6 +129,8 @@
       "node_modules/opencode-windows-x64-baseline/package.json",
       "node_modules/node-pty/build/**/*.node",
       "node_modules/node-pty/package.json",
+      "node_modules/better-sqlite3/build/**/*.node",
+      "node_modules/better-sqlite3/package.json",
       "dist-electron/main/mcp/*.js"
     ],
     "afterPack": "./scripts/after-pack.cjs",

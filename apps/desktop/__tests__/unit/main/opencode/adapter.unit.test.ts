@@ -119,6 +119,16 @@ vi.mock('@main/store/appSettings', () => ({
   getSelectedModel: vi.fn(() => ({ model: 'claude-3-opus-20240229' })),
 }));
 
+// Mock provider settings (uses SQLite which isn't available in tests)
+vi.mock('@main/store/providerSettings', () => ({
+  getActiveProviderModel: vi.fn(() => null),
+  getProviderSettings: vi.fn(() => ({
+    activeProviderId: null,
+    connectedProviders: {},
+    debugMode: false,
+  })),
+}));
+
 // Mock config generator
 vi.mock('@main/opencode/config-generator', () => ({
   generateOpenCodeConfig: vi.fn(() => Promise.resolve('/mock/config/path')),
