@@ -19,4 +19,7 @@ export { evaluateHealth, performHealthCheck } from './health.js';
 
 export { getPlatformDataDir, getProfileDir, ensureProfileDir } from './profile.js';
 
+export { detectPackageManager, isChromiumInstalled, installChromium } from './installer.js';
+export type { PackageManager } from './installer.js';
+
 // BrowserManager will be added in Task 8
