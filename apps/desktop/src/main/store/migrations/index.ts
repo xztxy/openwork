@@ -10,10 +10,12 @@ export interface Migration {
 
 // Import migrations
 import { migration as v001 } from './v001-initial';
+import { migration as v002 } from './v002-azure-foundry';
 
 // Migrations array
 const migrations: Migration[] = [
   v001,
+  v002,
 ];
 
 /**
@@ -29,7 +31,7 @@ export function registerMigration(migration: Migration): void {
  * Current schema version supported by this app.
  * Increment this when adding new migrations.
  */
-export const CURRENT_VERSION = 1;
+export const CURRENT_VERSION = 2;
 
 /**
  * Get the stored schema version from the database.
