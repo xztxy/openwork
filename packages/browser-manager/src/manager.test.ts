@@ -34,4 +34,47 @@ describe('BrowserManager', () => {
 
     expect(states).toContain('launching');
   });
+
+  it('unsubscribe removes subscriber', () => {
+    const states: string[] = [];
+    const unsubscribe = manager.subscribe(() => states.push('called'));
+
+    unsubscribe();
+    const newState: BrowserState = { status: 'launching', port: 9224 };
+    (manager as unknown as { setState: (s: BrowserState) => void }).setState(newState);
+
+    expect(states).toHaveLength(0);
+  });
+
+  it('handles multiple subscribers', () => {
+    const states1: string[] = [];
+    const states2: string[] = [];
+
+    manager.subscribe((s) => states1.push(s.status));
+    manager.subscribe((s) => states2.push(s.status));
+
+    const newState: BrowserState = { status: 'launching', port: 9224 };
+    (manager as unknown as { setState: (s: BrowserState) => void }).setState(newState);
+
+    expect(states1).toContain('launching');
+    expect(states2).toContain('launching');
+  });
+
+  it('isolates subscriber errors', () => {
+    const states: string[] = [];
+
+    // Bad subscriber that throws
+    manager.subscribe(() => {
+      throw new Error('bad subscriber');
+    });
+
+    // Good subscriber
+    manager.subscribe((s) => states.push(s.status));
+
+    const newState: BrowserState = { status: 'launching', port: 9224 };
+    (manager as unknown as { setState: (s: BrowserState) => void }).setState(newState);
+
+    // Good subscriber should still work
+    expect(states).toContain('launching');
+  });
 });

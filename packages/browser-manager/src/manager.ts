@@ -10,7 +10,7 @@ import type {
 import { DEFAULT_CONFIG } from './types.js';
 import { findAvailablePorts, PortExhaustedError, checkPortStatus } from './port-finder.js';
 import { performHealthCheck, evaluateHealth } from './health.js';
-import { LaunchModeLauncher, type LaunchResult } from './launcher.js';
+import { LaunchModeLauncher } from './launcher.js';
 
 export class BrowserManager {
   private state: BrowserState = { status: 'idle' };
@@ -20,8 +20,14 @@ export class BrowserManager {
   private browser: Browser | null = null;
   private healthCheckInterval: ReturnType<typeof setInterval> | null = null;
   private currentPorts: { http: number; cdp: number } | null = null;
-  private launchResult: LaunchResult | null = null;
   private reconnectAttempts = 0;
+  private degradedSince: number | null = null;
+  private readonly DEGRADED_WARNING_THRESHOLD_MS = 120000; // 2 minutes
+
+  // Guards against concurrent operations
+  private acquirePromise: Promise<Browser> | null = null;
+  private reconnecting = false;
+  private disconnectHandler: (() => void) | null = null;
 
   constructor(config: BrowserManagerConfig = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -48,6 +54,19 @@ export class BrowserManager {
   }
 
   async acquire(options: AcquireOptions = {}): Promise<Browser> {
+    // Prevent concurrent acquire() calls - return existing promise if one is in progress
+    if (this.acquirePromise) {
+      return this.acquirePromise;
+    }
+
+    this.acquirePromise = this.doAcquire(options).finally(() => {
+      this.acquirePromise = null;
+    });
+
+    return this.acquirePromise;
+  }
+
+  private async doAcquire(options: AcquireOptions): Promise<Browser> {
     const { preferExisting = false, headless = false } = options;
 
     try {
@@ -87,11 +106,16 @@ export class BrowserManager {
 
             // Get WebSocket endpoint
             const cdpResponse = await fetch(`http://127.0.0.1:${ports.cdp}/json/version`);
+            if (!cdpResponse.ok) {
+              throw new Error(`CDP endpoint returned ${cdpResponse.status}`);
+            }
             const cdpInfo = (await cdpResponse.json()) as { webSocketDebuggerUrl: string };
             const wsEndpoint = cdpInfo.webSocketDebuggerUrl;
+            if (!wsEndpoint) {
+              throw new Error('CDP endpoint did not return webSocketDebuggerUrl');
+            }
 
-            // Determine mode (we can check if this is from our HTTP server)
-            const mode: BrowserMode = 'launch'; // For now, assume launch mode
+            const mode: BrowserMode = 'launch';
 
             this.setState({
               status: 'healthy',
@@ -125,7 +149,6 @@ export class BrowserManager {
         },
       });
 
-      this.launchResult = result;
       this.context = result.context;
 
       // Connect to the browser via CDP for monitoring
@@ -149,6 +172,9 @@ export class BrowserManager {
 
       return this.browser;
     } catch (err) {
+      // Clean up any partially created resources
+      await this.cleanupResources();
+
       if (err instanceof PortExhaustedError) {
         throw err; // Already set state above
       }
@@ -164,9 +190,24 @@ export class BrowserManager {
   private setupDisconnectHandler(): void {
     if (!this.browser) return;
 
-    this.browser.on('disconnected', () => {
+    // Remove old handler if exists to prevent memory leaks
+    if (this.disconnectHandler && this.browser) {
+      this.browser.off('disconnected', this.disconnectHandler);
+    }
+
+    // Create new handler
+    this.disconnectHandler = () => {
       void this.handleDisconnect();
-    });
+    };
+
+    this.browser.on('disconnected', this.disconnectHandler);
+  }
+
+  private removeDisconnectHandler(): void {
+    if (this.browser && this.disconnectHandler) {
+      this.browser.off('disconnected', this.disconnectHandler);
+    }
+    this.disconnectHandler = null;
   }
 
   private startHealthMonitoring(): void {
@@ -182,15 +223,20 @@ export class BrowserManager {
 
   private async performPeriodicHealthCheck(): Promise<void> {
     if (!this.currentPorts) return;
-    if (this.state.status !== 'healthy' && this.state.status !== 'degraded') return;
+
+    // Capture and validate state once at start
+    const currentState = this.state;
+    if (currentState.status !== 'healthy' && currentState.status !== 'degraded') return;
 
     const check = await performHealthCheck(this.currentPorts.http, this.currentPorts.cdp);
     const healthResult = evaluateHealth(check, this.config.degradedThresholdMs);
 
-    const currentState = this.state;
-    if (currentState.status !== 'healthy' && currentState.status !== 'degraded') return;
+    // Check state hasn't changed during the async operation
+    if (this.state.status !== 'healthy' && this.state.status !== 'degraded') return;
 
     if (healthResult.status === 'healthy') {
+      // Reset degraded timer on recovery
+      this.degradedSince = null;
       if (this.state.status === 'degraded') {
         // Recovered from degraded
         this.setState({
@@ -202,6 +248,12 @@ export class BrowserManager {
         });
       }
     } else if (healthResult.status === 'degraded') {
+      // Track how long we've been degraded
+      if (!this.degradedSince) {
+        this.degradedSince = Date.now();
+      } else if (Date.now() - this.degradedSince > this.DEGRADED_WARNING_THRESHOLD_MS) {
+        console.warn('Browser has been degraded for >2 minutes');
+      }
       this.setState({
         status: 'degraded',
         port: currentState.port,
@@ -217,78 +269,96 @@ export class BrowserManager {
   }
 
   private async handleDisconnect(): Promise<void> {
-    if (!this.currentPorts) return;
-
-    // Stop health monitoring during reconnection
-    if (this.healthCheckInterval) {
-      clearInterval(this.healthCheckInterval);
-      this.healthCheckInterval = null;
+    // Guard against concurrent reconnection attempts
+    if (this.reconnecting) {
+      return;
     }
+    this.reconnecting = true;
 
-    // Start reconnection attempts
-    for (let attempt = 0; attempt < this.config.reconnectMaxAttempts; attempt++) {
-      this.reconnectAttempts = attempt + 1;
-      this.setState({
-        status: 'reconnecting',
-        port: this.currentPorts.http,
-        attempt: attempt + 1,
-        maxAttempts: this.config.reconnectMaxAttempts,
-      });
+    try {
+      if (!this.currentPorts) return;
 
-      // Wait for backoff period
-      const backoffMs = this.config.reconnectBackoffMs[attempt] || 4000;
-      await new Promise(resolve => setTimeout(resolve, backoffMs));
-
-      // Try to reconnect
-      try {
-        const check = await performHealthCheck(this.currentPorts.http, this.currentPorts.cdp);
-        const healthResult = evaluateHealth(check, this.config.degradedThresholdMs);
-
-        if (healthResult.status === 'healthy' || healthResult.status === 'degraded') {
-          // Reconnect successful
-          this.browser = await chromium.connectOverCDP(`http://localhost:${this.currentPorts.cdp}`, {
-            timeout: 5000,
-          });
-
-          const cdpResponse = await fetch(`http://127.0.0.1:${this.currentPorts.cdp}/json/version`);
-          const cdpInfo = (await cdpResponse.json()) as { webSocketDebuggerUrl: string };
-          const wsEndpoint = cdpInfo.webSocketDebuggerUrl;
-
-          const mode: BrowserMode = 'launch';
-
-          this.setState({
-            status: 'healthy',
-            port: this.currentPorts.http,
-            cdpPort: this.currentPorts.cdp,
-            mode,
-            wsEndpoint,
-          });
-
-          this.reconnectAttempts = 0;
-          this.startHealthMonitoring();
-          this.setupDisconnectHandler();
-          return;
-        }
-      } catch {
-        // Continue to next attempt
-        continue;
+      // Stop health monitoring during reconnection
+      if (this.healthCheckInterval) {
+        clearInterval(this.healthCheckInterval);
+        this.healthCheckInterval = null;
       }
-    }
 
-    // All reconnection attempts failed
-    this.setState({
-      status: 'failed_crashed',
-      error: `Browser crashed after ${this.config.reconnectMaxAttempts} reconnection attempts`,
-    });
-    this.reconnectAttempts = 0;
+      // Remove old disconnect handler
+      this.removeDisconnectHandler();
+
+      // Start reconnection attempts
+      for (let attempt = 0; attempt < this.config.reconnectMaxAttempts; attempt++) {
+        this.reconnectAttempts = attempt + 1;
+        this.setState({
+          status: 'reconnecting',
+          port: this.currentPorts.http,
+          attempt: attempt + 1,
+          maxAttempts: this.config.reconnectMaxAttempts,
+        });
+
+        // Wait for backoff period
+        const backoffMs = this.config.reconnectBackoffMs[attempt] || 4000;
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+
+        // Try to reconnect
+        try {
+          const check = await performHealthCheck(this.currentPorts.http, this.currentPorts.cdp);
+          const healthResult = evaluateHealth(check, this.config.degradedThresholdMs);
+
+          if (healthResult.status === 'healthy' || healthResult.status === 'degraded') {
+            // Reconnect successful
+            this.browser = await chromium.connectOverCDP(`http://localhost:${this.currentPorts.cdp}`, {
+              timeout: 5000,
+            });
+
+            const cdpResponse = await fetch(`http://127.0.0.1:${this.currentPorts.cdp}/json/version`);
+            const cdpInfo = (await cdpResponse.json()) as { webSocketDebuggerUrl: string };
+            const wsEndpoint = cdpInfo.webSocketDebuggerUrl;
+
+            const mode: BrowserMode = 'launch';
+
+            this.setState({
+              status: 'healthy',
+              port: this.currentPorts.http,
+              cdpPort: this.currentPorts.cdp,
+              mode,
+              wsEndpoint,
+            });
+
+            this.reconnectAttempts = 0;
+            this.startHealthMonitoring();
+            this.setupDisconnectHandler();
+            return;
+          }
+        } catch (err) {
+          // Log error for debugging
+          console.warn(`Reconnection attempt ${attempt + 1} failed:`, err);
+          // Continue to next attempt
+          continue;
+        }
+      }
+
+      // All reconnection attempts failed
+      this.setState({
+        status: 'failed_crashed',
+        error: `Browser crashed after ${this.config.reconnectMaxAttempts} reconnection attempts`,
+      });
+      this.reconnectAttempts = 0;
+    } finally {
+      this.reconnecting = false;
+    }
   }
 
-  async stop(): Promise<void> {
+  private async cleanupResources(): Promise<void> {
     // Clear health monitoring
     if (this.healthCheckInterval) {
       clearInterval(this.healthCheckInterval);
       this.healthCheckInterval = null;
     }
+
+    // Remove disconnect handler
+    this.removeDisconnectHandler();
 
     // Close browser connection
     if (this.browser) {
@@ -310,10 +380,14 @@ export class BrowserManager {
       this.context = null;
     }
 
-    // Reset state
     this.currentPorts = null;
-    this.launchResult = null;
+    this.degradedSince = null;
+  }
+
+  async stop(): Promise<void> {
+    await this.cleanupResources();
     this.reconnectAttempts = 0;
+    this.reconnecting = false;
     this.setState({ status: 'idle' });
   }
 }
