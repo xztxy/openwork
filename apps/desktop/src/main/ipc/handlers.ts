@@ -5,6 +5,7 @@ import {
   isOpenCodeCliInstalled,
   getOpenCodeCliVersion,
 } from '../opencode/adapter';
+import { getAzureEntraToken } from '../opencode/azure-token-manager';
 import {
   getTaskManager,
   disposeTaskManager,
@@ -995,14 +996,11 @@ export function registerIPCHandlers(): void {
           if (authType === 'entra-id') {
              // If we have options, we should try to validate connection using Entra ID (setup mode)
              if (options?.baseUrl && options?.deploymentName) {
-                 try {
-                     const { DefaultAzureCredential } = await import('@azure/identity');
-                     const credential = new DefaultAzureCredential();
-                     const tokenResponse = await credential.getToken('https://cognitiveservices.azure.com/.default');
-                     entraToken = tokenResponse.token;
-                 } catch (e) {
-                     return { valid: false, error: 'Failed to acquire Entra ID token: ' + (e instanceof Error ? e.message : String(e)) };
+                 const tokenResult = await getAzureEntraToken();
+                 if (!tokenResult.success) {
+                     return { valid: false, error: tokenResult.error };
                  }
+                 entraToken = tokenResult.token;
              } else {
                  // No options means validating existing config which is entra-id (background check)
                  // We skip actual validation here to avoid overhead
@@ -1438,16 +1436,12 @@ export function registerIPCHandlers(): void {
         }
         authHeader = apiKey;
       } else {
-        // Entra ID authentication
-        try {
-          const { DefaultAzureCredential } = await import('@azure/identity');
-          const credential = new DefaultAzureCredential();
-          const tokenResponse = await credential.getToken('https://cognitiveservices.azure.com/.default');
-          authHeader = `Bearer ${tokenResponse.token}`;
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Failed to get Entra ID token';
-          return { success: false, error: `Entra ID authentication failed: ${message}. Make sure you've run 'az login' first.` };
+        // Entra ID authentication - uses cached token with auto-refresh
+        const tokenResult = await getAzureEntraToken();
+        if (!tokenResult.success) {
+          return { success: false, error: tokenResult.error };
         }
+        authHeader = `Bearer ${tokenResult.token}`;
       }
 
       // Test connection with a minimal chat completion request

@@ -6,6 +6,7 @@ import { FutureSchemaError, MigrationError } from './errors';
 export interface Migration {
   version: number;
   up: (db: Database) => void;
+  down?: (db: Database) => void;
 }
 
 // Import migrations

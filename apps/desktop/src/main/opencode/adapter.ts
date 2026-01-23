@@ -16,6 +16,7 @@ import { getSelectedModel, getAzureFoundryConfig } from '../store/appSettings';
 import { getActiveProviderModel, getConnectedProvider } from '../store/providerSettings';
 import type { AzureFoundryCredentials } from '@accomplish/shared';
 import { generateOpenCodeConfig, ACCOMPLISH_AGENT_NAME, syncApiKeysToOpenCodeAuth } from './config-generator';
+import { getAzureEntraToken } from './azure-token-manager';
 import { getExtendedNodePath } from '../utils/system-path';
 import { getBundledNodePaths, logBundledNodeInfo, getNpxPath } from '../utils/bundled-node';
 import { getModelDisplayName } from '../utils/model-display';
@@ -232,21 +233,13 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       (selectedModel?.provider === 'azure-foundry' && azureFoundryConfig?.authType === 'entra-id');
 
     if (isAzureFoundryEntraId) {
-      try {
-        const { DefaultAzureCredential } = await import('@azure/identity');
-        const credential = new DefaultAzureCredential();
-        const tokenResponse = await credential.getToken('https://cognitiveservices.azure.com/.default');
-        azureFoundryToken = tokenResponse.token;
-        console.log('[OpenCode CLI] Obtained Azure Entra ID token for config');
-      } catch (error) {
-        console.error('[OpenCode CLI] Failed to get Azure Entra ID token:', error);
-        const baseMessage =
-          'Failed to get Azure Entra ID token. Possible causes include not being logged into Azure (e.g., run `az login`), missing Azure CLI, insufficient Azure permissions, or network issues.';
-        if (error instanceof Error && error.message) {
-          throw new Error(`${baseMessage} Underlying error: ${error.message}`);
-        }
-        throw new Error(baseMessage);
+      const tokenResult = await getAzureEntraToken();
+      if (!tokenResult.success) {
+        console.error('[OpenCode CLI] Failed to get Azure Entra ID token:', tokenResult.error);
+        throw new Error(tokenResult.error);
       }
+      azureFoundryToken = tokenResult.token;
+      console.log('[OpenCode CLI] Obtained Azure Entra ID token for config');
     }
 
     // Generate OpenCode config file with MCP settings and agent
