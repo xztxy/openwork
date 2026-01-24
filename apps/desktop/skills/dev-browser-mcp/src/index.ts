@@ -126,18 +126,30 @@ function startGlowChecker(): void {
   if (glowCheckInterval) return; // Already running
   console.error('[dev-browser-mcp] Starting glow checker interval');
 
-  glowCheckInterval = setInterval(() => {
+  glowCheckInterval = setInterval(async () => {
     const elapsed = Date.now() - lastActivityTime;
     console.error(`[dev-browser-mcp] Glow check: elapsed=${elapsed}ms, timeout=${GLOW_TIMEOUT_MS}ms, hasPage=${!!glowingPage}, pageClosed=${glowingPage?.isClosed()}`);
 
-    if (glowingPage && !glowingPage.isClosed() && elapsed >= GLOW_TIMEOUT_MS) {
-      console.error(`[dev-browser-mcp] Inactivity threshold reached, removing glow...`);
-      const pageToRemove = glowingPage;
-      removeActiveTabGlow(pageToRemove).then(() => {
-        console.error('[dev-browser-mcp] Glow removed successfully');
-      }).catch(err => {
-        console.error('[dev-browser-mcp] Error removing glow:', err);
-      });
+    if (elapsed >= GLOW_TIMEOUT_MS) {
+      console.error(`[dev-browser-mcp] Inactivity threshold reached (${elapsed}ms >= ${GLOW_TIMEOUT_MS}ms)`);
+
+      // Stop the checker first to prevent multiple triggers
+      stopGlowChecker();
+
+      if (glowingPage && !glowingPage.isClosed()) {
+        console.error('[dev-browser-mcp] Removing glow from page...');
+        try {
+          await glowingPage.evaluate(() => {
+            document.getElementById('__dev-browser-active-glow')?.remove();
+            document.getElementById('__dev-browser-active-glow-style')?.remove();
+          });
+          console.error('[dev-browser-mcp] Glow elements removed');
+        } catch (err) {
+          console.error('[dev-browser-mcp] Error removing glow:', err);
+        }
+        glowingPage = null;
+      }
+      console.error('[dev-browser-mcp] Glow cleanup complete');
     }
   }, 2000); // Check every 2 seconds
 }
