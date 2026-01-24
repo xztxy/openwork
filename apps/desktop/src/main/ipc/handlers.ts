@@ -79,6 +79,7 @@ import type {
   OllamaConfig,
   AzureFoundryConfig,
   LiteLLMConfig,
+  TodoItem,
 } from '@accomplish/shared';
 import { DEFAULT_PROVIDERS } from '@accomplish/shared';
 import {
@@ -436,7 +437,7 @@ export function registerIPCHandlers(): void {
         updateTaskStatus(taskId, status, new Date().toISOString());
       },
 
-      onTodoUpdate: (todos: unknown) => {
+      onTodoUpdate: (todos: TodoItem[]) => {
         forwardToRenderer('todo:update', { taskId, todos });
       },
     };
@@ -692,7 +693,7 @@ export function registerIPCHandlers(): void {
         updateTaskStatus(taskId, status, new Date().toISOString());
       },
 
-      onTodoUpdate: (todos: unknown) => {
+      onTodoUpdate: (todos: TodoItem[]) => {
         forwardToRenderer('todo:update', { taskId, todos });
       },
     };

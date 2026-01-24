@@ -21,6 +21,7 @@ import {
   type TaskStatus,
   type OpenCodeMessage,
   type PermissionRequest,
+  type TodoItem,
 } from '@accomplish/shared';
 
 /**
@@ -349,7 +350,7 @@ export interface TaskCallbacks {
   onError: (error: Error) => void;
   onStatusChange?: (status: TaskStatus) => void;
   onDebug?: (log: { type: string; message: string; data?: unknown }) => void;
-  onTodoUpdate?: (todos: unknown) => void;
+  onTodoUpdate?: (todos: TodoItem[]) => void;
 }
 
 /**
@@ -510,7 +511,7 @@ export class TaskManager {
       callbacks.onDebug?.(log);
     };
 
-    const onTodoUpdate = (todos: unknown) => {
+    const onTodoUpdate = (todos: TodoItem[]) => {
       callbacks.onTodoUpdate?.(todos);
     };
 
