@@ -152,20 +152,17 @@ function stopGlowChecker(): void {
   }
 }
 
+// Track pages with navigation listeners to avoid duplicates
+const pagesWithGlowListeners = new WeakSet<Page>();
+
 /**
- * Inject active tab glow effect into a page
+ * Inject the glow CSS/DOM into the page
  */
-async function injectActiveTabGlow(page: Page): Promise<void> {
-  // Remove glow from previous page if different
-  if (glowingPage && glowingPage !== page && !glowingPage.isClosed()) {
-    await removeActiveTabGlow(glowingPage);
-  }
+async function injectGlowElements(page: Page): Promise<void> {
+  if (page.isClosed()) return;
 
-  glowingPage = page;
-  recordActivity();
-  startGlowChecker();
-
-  await page.evaluate(() => {
+  try {
+    await page.evaluate(() => {
     // Remove existing glow if any
     document.getElementById('__dev-browser-active-glow')?.remove();
     document.getElementById('__dev-browser-active-glow-style')?.remove();
@@ -225,6 +222,40 @@ async function injectActiveTabGlow(page: Page): Promise<void> {
     `;
     document.body.appendChild(overlay);
   });
+  } catch (err) {
+    console.error('[dev-browser-mcp] Error injecting glow elements:', err);
+  }
+}
+
+/**
+ * Inject active tab glow effect into a page (with navigation listener)
+ */
+async function injectActiveTabGlow(page: Page): Promise<void> {
+  // Remove glow from previous page if different
+  if (glowingPage && glowingPage !== page && !glowingPage.isClosed()) {
+    await removeActiveTabGlow(glowingPage);
+  }
+
+  glowingPage = page;
+  recordActivity();
+  startGlowChecker();
+
+  // Inject glow elements now
+  await injectGlowElements(page);
+
+  // Set up listener to re-inject glow after navigation (only once per page)
+  if (!pagesWithGlowListeners.has(page)) {
+    pagesWithGlowListeners.add(page);
+
+    page.on('load', async () => {
+      // Re-inject glow if this page is still the active glowing page
+      if (glowingPage === page && !page.isClosed()) {
+        console.error('[dev-browser-mcp] Page navigated, re-injecting glow...');
+        await injectGlowElements(page);
+        recordActivity();
+      }
+    });
+  }
 }
 
 /**
