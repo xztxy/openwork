@@ -180,12 +180,7 @@ This is NOT optional. The user sees your todos in a sidebar - if you skip this, 
 }
 \`\`\`
 
-**STEP 3: UPDATE TODOS AS YOU WORK**
-- Mark current step as "in_progress"
-- Mark completed steps as "completed"
-- Call todowrite again after each major step
-
-**STEP 4: COMPLETE ALL TODOS BEFORE FINISHING**
+**STEP 3: COMPLETE ALL TODOS BEFORE FINISHING**
 - All todos must be "completed" or "cancelled" before calling complete_task
 
 WRONG: Starting work without planning and calling todowrite first
