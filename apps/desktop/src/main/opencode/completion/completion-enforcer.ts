@@ -31,6 +31,7 @@
 
 import { CompletionState, CompletionFlowState, CompleteTaskArgs } from './completion-state';
 import { getContinuationPrompt, getVerificationPrompt, getPartialContinuationPrompt } from './prompts';
+import type { TodoItem } from '@accomplish/shared';
 
 export interface CompletionEnforcerCallbacks {
   onStartVerification: (prompt: string) => Promise<void>;
@@ -44,10 +45,23 @@ export type StepFinishAction = 'continue' | 'pending' | 'complete';
 export class CompletionEnforcer {
   private state: CompletionState;
   private callbacks: CompletionEnforcerCallbacks;
+  private currentTodos: TodoItem[] = [];
 
   constructor(callbacks: CompletionEnforcerCallbacks, maxContinuationAttempts: number = 20) {
     this.callbacks = callbacks;
     this.state = new CompletionState(maxContinuationAttempts);
+  }
+
+  /**
+   * Update current todos from todowrite tool.
+   */
+  updateTodos(todos: TodoItem[]): void {
+    this.currentTodos = todos;
+    this.callbacks.onDebug(
+      'todo_update',
+      `Todo list updated: ${todos.length} items`,
+      { todos }
+    );
   }
 
   /**
@@ -75,6 +89,17 @@ export class CompletionEnforcer {
     };
 
     this.state.recordCompleteTaskCall(completeTaskArgs);
+
+    // If claiming success but have incomplete todos, treat as needing continuation
+    if (completeTaskArgs.status === 'success' && this.hasIncompleteTodos()) {
+      this.callbacks.onDebug(
+        'incomplete_todos',
+        'Agent claimed success but has incomplete todos',
+        { incompleteTodos: this.getIncompleteTodosSummary() }
+      );
+      // Override to trigger continuation
+      completeTaskArgs.remaining_work = this.getIncompleteTodosSummary();
+    }
 
     this.callbacks.onDebug(
       'complete_task',
@@ -238,6 +263,20 @@ export class CompletionEnforcer {
    */
   reset(): void {
     this.state.reset();
+    this.currentTodos = [];
+  }
+
+  private hasIncompleteTodos(): boolean {
+    return this.currentTodos.some(
+      t => t.status === 'pending' || t.status === 'in_progress'
+    );
+  }
+
+  private getIncompleteTodosSummary(): string {
+    const incomplete = this.currentTodos.filter(
+      t => t.status === 'pending' || t.status === 'in_progress'
+    );
+    return incomplete.map(t => `- ${t.content}`).join('\n');
   }
 
   /**

@@ -145,35 +145,36 @@ See the ask-user-question skill for full documentation and examples.
 </important>
 
 <behavior name="task-planning">
-**TASK PLANNING - REQUIRED FOR EVERY TASK**
+##############################################################################
+# CRITICAL: YOU MUST USE TODOWRITE - THIS IS MANDATORY
+##############################################################################
 
-Before taking ANY action, you MUST first output a plan:
+**BEFORE starting ANY task, you MUST call the \`todowrite\` tool** to create your task list.
+This is NOT optional. The user sees your todos in a sidebar - if you skip this, they see nothing.
 
-1. **State the goal** - What the user wants accomplished
-2. **List steps with verification** - Numbered steps, each with a completion criterion
+**Step 1: IMMEDIATELY call todowrite with your planned steps:**
+\`\`\`json
+{
+  "todos": [
+    {"id": "1", "content": "First step description", "status": "in_progress", "priority": "high"},
+    {"id": "2", "content": "Second step description", "status": "pending", "priority": "medium"},
+    {"id": "3", "content": "Third step description", "status": "pending", "priority": "medium"}
+  ]
+}
+\`\`\`
 
-Format:
-**Plan:**
-Goal: [what user asked for]
+**Step 2: Update todos as you work:**
+- Mark current step as "in_progress"
+- Mark completed steps as "completed"
+- Call todowrite again after each major step
 
-Steps:
-1. [Action] → verify: [how to confirm it's done]
-2. [Action] → verify: [how to confirm it's done]
-...
+**Step 3: Complete all todos before finishing:**
+- All todos must be "completed" or "cancelled" before calling complete_task
 
-Then execute the steps. When calling \`complete_task\`:
-- Review each step's verification criterion
-- Only use status "success" if ALL criteria are met
-- Use "partial" if some steps incomplete, list which ones in \`remaining_work\`
+WRONG: Starting work without calling todowrite first
+CORRECT: Call todowrite FIRST, then start working
 
-**Example:**
-Goal: Extract analytics data from a website
-
-Steps:
-1. Navigate to URL → verify: page title contains expected text
-2. Locate data section → verify: can see the target metrics
-3. Extract values → verify: have captured specific numbers
-4. Report findings → verify: summary includes all extracted data
+##############################################################################
 </behavior>
 
 <behavior>
@@ -722,7 +723,11 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
     // Auto-allow all tool permissions - the system prompt instructs the agent to use
     // AskUserQuestion for user confirmations, which shows in the UI as an interactive modal.
     // CLI-level permission prompts don't show in the UI and would block task execution.
-    permission: 'allow',
+    // Note: todowrite is disabled by default and must be explicitly enabled.
+    permission: {
+      '*': 'allow',
+      todowrite: 'allow',
+    },
     provider: Object.keys(providerConfig).length > 0 ? providerConfig : undefined,
     agent: {
       [ACCOMPLISH_AGENT_NAME]: {
