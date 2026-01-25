@@ -1393,6 +1393,7 @@ interface SnapshotOptions {
   maxElements?: number;
   viewportOnly?: boolean;
   maxTokens?: number;
+  fullSnapshot?: boolean;
 }
 
 /**
@@ -1406,18 +1407,19 @@ const DEFAULT_SNAPSHOT_OPTIONS: SnapshotOptions = {
 };
 
 /**
- * Get a snapshot with session history header.
+ * Get a snapshot with session history header and diff support.
  * Used by browser_script to include Tier 3 context management.
+ * Behaves like browser_snapshot - returns diff when on same page with few changes.
  */
 async function getSnapshotWithHistory(page: Page, options: SnapshotOptions = {}): Promise<string> {
   const rawSnapshot = await getAISnapshot(page, options);
   const url = page.url();
   const title = await page.title();
 
-  // Record navigation in session history
+  // Process through snapshot manager for diffing (same as browser_snapshot)
   const manager = getSnapshotManager();
-  manager.processSnapshot(rawSnapshot, url, title, {
-    fullSnapshot: false,
+  const result = manager.processSnapshot(rawSnapshot, url, title, {
+    fullSnapshot: options.fullSnapshot ?? false,
     interactiveOnly: options.interactiveOnly ?? true,
   });
 
@@ -1427,7 +1429,13 @@ async function getSnapshotWithHistory(page: Page, options: SnapshotOptions = {})
   if (sessionSummary.history) {
     output += `# ${sessionSummary.history}\n\n`;
   }
-  output += rawSnapshot;
+
+  // Use diff result when available, otherwise full snapshot
+  if (result.type === 'diff') {
+    output += `# Changes Since Last Snapshot\n${result.content}`;
+  } else {
+    output += result.content;
+  }
 
   return output;
 }
