@@ -161,7 +161,7 @@ export const BrowserScriptCard = memo(function BrowserScriptCard({
       {/* Header */}
       <div className="flex items-center gap-2 mb-2">
         <Globe className="h-4 w-4 text-primary" />
-        <span className="text-sm font-medium text-primary">Browser Script</span>
+        <span className="text-sm font-medium text-primary">Browser Actions</span>
         {isRunning && <SpinningIcon className="h-3.5 w-3.5 ml-auto" />}
       </div>
 
