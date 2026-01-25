@@ -970,7 +970,7 @@ export default function ExecutionPage() {
                             }}
                             placeholder="Enter a different option..."
                             aria-label="Custom response"
-                            rows={3}
+                            rows={1}
                             onKeyDown={(e) => {
                               // Ignore Enter during IME composition (Chinese/Japanese input)
                               if (e.nativeEvent.isComposing || e.keyCode === 229) return;
