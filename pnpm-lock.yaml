@@ -193,12 +193,6 @@ importers:
         specifier: ^5.0.0
         version: 5.9.3
 
-  apps/desktop/skills/complete-task:
-    dependencies:
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.0.0
-        version: 1.25.3(hono@4.11.5)(zod@3.25.76)
-
   apps/desktop/skills/dev-browser:
     dependencies:
       '@accomplish/browser-manager':
