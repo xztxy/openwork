@@ -770,6 +770,50 @@ function truncateToLimit(elements, maxElements) {
   };
 }
 
+/**
+ * Truncate elements respecting both element count and token budget.
+ */
+function truncateWithBudget(elements, maxElements, maxTokens) {
+  var totalElements = elements.length;
+
+  // Sort by priority first
+  var sorted = elements.slice().sort(function(a, b) { return b.score - a.score; });
+
+  var included = [];
+  var tokenCount = 0;
+  var truncationReason = null;
+
+  for (var i = 0; i < sorted.length; i++) {
+    var element = sorted[i];
+
+    // Check element limit
+    if (included.length >= maxElements) {
+      truncationReason = 'maxElements';
+      break;
+    }
+
+    // Estimate tokens for this element (rough estimate)
+    var elementTokens = 15; // Average tokens per element
+
+    // Check token budget
+    if (maxTokens && tokenCount + elementTokens > maxTokens) {
+      truncationReason = 'maxTokens';
+      break;
+    }
+
+    included.push(element);
+    tokenCount += elementTokens;
+  }
+
+  return {
+    elements: included,
+    totalElements: totalElements,
+    estimatedTokens: tokenCount,
+    truncated: included.length < totalElements,
+    truncationReason: truncationReason
+  };
+}
+
 var CHARS_PER_TOKEN = 4;
 
 /**
@@ -938,6 +982,7 @@ function hasPointerCursor(ariaNode) { return ariaNode.box.cursor === "pointer"; 
 function renderAriaTree(ariaSnapshot, snapshotOptions) {
   snapshotOptions = snapshotOptions || {};
   var maxElements = snapshotOptions.maxElements || 300;
+  var maxTokens = snapshotOptions.maxTokens || 8000;
   var options = { visibility: "ariaOrVisible", refs: "interactable", refPrefix: "", includeGenericRole: true, renderActive: true, renderCursorPointer: true };
   var lines = [];
   var nodesToRender = ariaSnapshot.root.role === "fragment" ? ariaSnapshot.root.children : [ariaSnapshot.root];
@@ -945,8 +990,8 @@ function renderAriaTree(ariaSnapshot, snapshotOptions) {
   // Collect and score all elements
   var scoredElements = collectScoredElements(ariaSnapshot.root, snapshotOptions);
 
-  // Truncate if needed
-  var truncateResult = truncateToLimit(scoredElements, maxElements);
+  // Truncate with token budget
+  var truncateResult = truncateWithBudget(scoredElements, maxElements, maxTokens);
 
   // Build set of refs to include
   var includedRefs = {};
@@ -957,9 +1002,11 @@ function renderAriaTree(ariaSnapshot, snapshotOptions) {
     }
   }
 
-  // Add metadata header if truncated
+  // Add header with truncation info
   if (truncateResult.truncated) {
-    lines.push("# Elements: " + truncateResult.elements.length + " of " + truncateResult.totalElements + " (prioritized by interactivity)");
+    var reason = truncateResult.truncationReason === 'maxTokens' ? 'token budget' : 'element limit';
+    lines.push("# Elements: " + truncateResult.elements.length + " of " + truncateResult.totalElements + " (truncated: " + reason + ")");
+    lines.push("# Tokens: ~" + truncateResult.estimatedTokens);
   }
 
   var visitText = function(text, indent) {
