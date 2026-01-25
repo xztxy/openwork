@@ -135,9 +135,17 @@ class LogFileWriter {
   private updateCurrentFile(): void {
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     if (today !== this.currentDate) {
-      // Flush any buffered entries to old file first
-      if (this.currentDate && this.buffer.length > 0) {
-        this.flush();
+      // Write any buffered entries to old file directly (don't call flush to avoid recursion)
+      if (this.currentDate && this.buffer.length > 0 && this.currentFilePath) {
+        const lines = this.buffer.map((entry) =>
+          `[${entry.timestamp}] [${entry.level}] [${entry.source}] ${entry.message}`
+        );
+        try {
+          fs.appendFileSync(this.currentFilePath, lines.join('\n') + '\n');
+        } catch (error) {
+          console.error('[LogFileWriter] Failed to write logs on date change:', error);
+        }
+        this.buffer = [];
       }
       this.currentDate = today;
       this.currentFilePath = path.join(this.logDir, `app-${today}.log`);
