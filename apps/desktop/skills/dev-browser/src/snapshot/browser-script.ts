@@ -648,6 +648,108 @@ function isInViewport(box) {
   );
 }
 
+/**
+ * Priority scores by ARIA role (matches server-side scoring).
+ */
+const ROLE_PRIORITIES = {
+  button: 100,
+  textbox: 95,
+  searchbox: 95,
+  checkbox: 90,
+  radio: 90,
+  switch: 90,
+  combobox: 85,
+  listbox: 85,
+  slider: 85,
+  spinbutton: 85,
+  link: 80,
+  tab: 75,
+  menuitem: 70,
+  menuitemcheckbox: 70,
+  menuitemradio: 70,
+  option: 70,
+  navigation: 60,
+  menu: 60,
+  tablist: 55,
+  form: 50,
+  dialog: 50,
+  alertdialog: 50,
+};
+
+const VIEWPORT_BONUS = 50;
+const DEFAULT_PRIORITY = 50;
+
+/**
+ * Calculate priority score for element truncation.
+ */
+function getElementPriority(role, inViewport) {
+  const basePriority = ROLE_PRIORITIES[role] || DEFAULT_PRIORITY;
+  return inViewport ? basePriority + VIEWPORT_BONUS : basePriority;
+}
+
+/**
+ * List of interactive ARIA roles.
+ */
+const INTERACTIVE_ROLES = [
+  'button', 'link', 'textbox', 'searchbox', 'checkbox', 'radio', 'switch',
+  'combobox', 'listbox', 'option', 'slider', 'spinbutton', 'tab', 'menuitem',
+  'menuitemcheckbox', 'menuitemradio'
+];
+
+/**
+ * Collect all elements with priority scores.
+ */
+function collectScoredElements(root, options) {
+  var elements = [];
+  var interactiveOnly = options.interactiveOnly !== false;
+  var viewportOnlyOpt = options.viewportOnly === true;
+
+  function visit(node) {
+    // Skip non-interactive if interactiveOnly
+    var isInteractive = INTERACTIVE_ROLES.indexOf(node.role) >= 0;
+    if (interactiveOnly && !isInteractive) {
+      // Still visit children
+      if (node.children) {
+        for (var i = 0; i < node.children.length; i++) {
+          var child = node.children[i];
+          if (typeof child !== 'string') visit(child);
+        }
+      }
+      return;
+    }
+
+    // Check viewport
+    var inViewport = isInViewport(node.box);
+
+    // Skip if viewportOnly and not in viewport
+    if (viewportOnlyOpt && !inViewport) {
+      // Still visit children (they might be in viewport)
+      if (node.children) {
+        for (var i = 0; i < node.children.length; i++) {
+          var child = node.children[i];
+          if (typeof child !== 'string') visit(child);
+        }
+      }
+      return;
+    }
+
+    // Score and collect
+    var score = getElementPriority(node.role, inViewport);
+    elements.push({ node: node, score: score, inViewport: inViewport });
+
+    // Visit children
+    if (node.children) {
+      for (var i = 0; i < node.children.length; i++) {
+        var child = node.children[i];
+        if (typeof child !== 'string') visit(child);
+      }
+    }
+  }
+
+  visit(root);
+  return elements;
+}
+
 function generateAriaTree(rootElement) {
   const options = { visibility: "ariaOrVisible", refs: "interactable", refPrefix: "", includeGenericRole: true, renderActive: true, renderCursorPointer: true };
   const visited = new Set();
