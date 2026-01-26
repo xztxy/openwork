@@ -250,7 +250,7 @@ export default function ExecutionPage() {
     const threshold = 150; // pixels from bottom to consider "at bottom" - larger value means button only appears after scrolling up more
     const atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - threshold;
     setIsAtBottom(atBottom);
-  }, []);
+  }, [setIsAtBottom]);
 
   // Load debug mode setting on mount and subscribe to changes
   useEffect(() => {
