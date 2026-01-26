@@ -25,13 +25,15 @@ const SKILLS = [
     entry: 'src/index.ts',
     // Note: start-server.ts is NOT bundled - we create server-launcher.cjs manually
     // because start-server.ts uses top-level await which requires ESM but express needs CJS
-    // Keep playwright external - it has native bindings
-    external: ['playwright', 'rebrowser-playwright'],
+    // Playwright must be external - it has dynamic requires that can't be bundled
+    // node_modules/playwright is included via extraResources in package.json
+    external: ['playwright', 'rebrowser-playwright', 'playwright-core', 'rebrowser-playwright-core'],
   },
   {
     name: 'dev-browser-mcp',
     entry: 'src/index.ts',
-    external: ['playwright', 'rebrowser-playwright'],
+    // Playwright must be external - included via extraResources
+    external: ['playwright', 'rebrowser-playwright', 'playwright-core', 'rebrowser-playwright-core'],
   },
   {
     name: 'file-permission',
