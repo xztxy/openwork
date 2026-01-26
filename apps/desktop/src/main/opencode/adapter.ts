@@ -4,7 +4,8 @@ import { app } from 'electron';
 import fs from 'fs';
 import { StreamParser } from './stream-parser';
 import { OpenCodeLogWatcher, createLogWatcher, OpenCodeLogError } from './log-watcher';
-import { CompletionEnforcer, CompletionEnforcerCallbacks } from './completion';
+import { ProgressEvaluator, ConversationBuffer } from './evaluator';
+import type { EvaluationResult } from './evaluator';
 import {
   getOpenCodeCliPath,
   isOpenCodeBundled,
@@ -80,7 +81,11 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   private hasCompleted: boolean = false;
   private isDisposed: boolean = false;
   private wasInterrupted: boolean = false;
-  private completionEnforcer: CompletionEnforcer;
+  private evaluator: ProgressEvaluator;
+  private conversationBuffer: ConversationBuffer;
+  private originalRequest: string = '';
+  private lastTodoState: TodoItem[] | null = null;
+  private isEvaluating: boolean = false;
   private lastWorkingDirectory: string | undefined;
   /** Current model ID for display name */
   private currentModelId: string | null = null;
@@ -97,34 +102,10 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     super();
     this.currentTaskId = taskId || null;
     this.streamParser = new StreamParser();
-    this.completionEnforcer = this.createCompletionEnforcer();
+    this.evaluator = new ProgressEvaluator();
+    this.conversationBuffer = new ConversationBuffer();
     this.setupStreamParsing();
     this.setupLogWatcher();
-  }
-
-  /**
-   * Create the CompletionEnforcer with callbacks that delegate to adapter methods.
-   */
-  private createCompletionEnforcer(): CompletionEnforcer {
-    const callbacks: CompletionEnforcerCallbacks = {
-      onStartVerification: async (prompt: string) => {
-        await this.spawnSessionResumption(prompt);
-      },
-      onStartContinuation: async (prompt: string) => {
-        await this.spawnSessionResumption(prompt);
-      },
-      onComplete: () => {
-        this.hasCompleted = true;
-        this.emit('complete', {
-          status: 'success',
-          sessionId: this.currentSessionId || undefined,
-        });
-      },
-      onDebug: (type: string, message: string, data?: unknown) => {
-        this.emit('debug', { type, message, data });
-      },
-    };
-    return new CompletionEnforcer(callbacks);
   }
 
   /**
@@ -197,9 +178,13 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.streamParser.reset();
     this.hasCompleted = false;
     this.wasInterrupted = false;
-    this.completionEnforcer.reset();
     this.lastWorkingDirectory = config.workingDirectory;
     this.hasReceivedFirstTool = false;
+    this.originalRequest = config.prompt;
+    this.lastTodoState = null;
+    this.isEvaluating = false;
+    this.evaluator.reset();
+    this.conversationBuffer.reset();
     // Clear any existing waiting transition timer
     if (this.waitingTransitionTimer) {
       clearTimeout(this.waitingTransitionTimer);
@@ -480,6 +465,11 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.currentTaskId = null;
     this.messages = [];
     this.hasCompleted = true;
+    this.evaluator.dispose();
+    this.conversationBuffer.reset();
+    this.originalRequest = '';
+    this.lastTodoState = null;
+    this.isEvaluating = false;
     this.currentModelId = null;
     this.hasReceivedFirstTool = false;
 
@@ -776,6 +766,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   private setupStreamParsing(): void {
     this.streamParser.on('message', (message: OpenCodeMessage) => {
       this.handleMessage(message);
+      this.conversationBuffer.addMessage(message);
     });
 
     // Handle parse errors gracefully to prevent crashes from non-JSON output
@@ -848,13 +839,6 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
           }
         }
 
-        // COMPLETION ENFORCEMENT: Track complete_task tool calls
-        // Tool name may be prefixed with MCP server name (e.g., "complete-task_complete_task")
-        // so we use endsWith() for fuzzy matching
-        if (toolName === 'complete_task' || toolName.endsWith('_complete_task')) {
-          this.completionEnforcer.handleCompleteTaskDetection(toolInput);
-        }
-
         // Detect todowrite tool calls and emit todo state
         // Built-in tool name is 'todowrite', MCP-prefixed would be '*_todowrite'
         if (toolName === 'todowrite' || toolName.endsWith('_todowrite')) {
@@ -862,8 +846,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
           // Only emit if we have actual todos (ignore empty arrays to prevent accidental clearing)
           if (input?.todos && Array.isArray(input.todos) && input.todos.length > 0) {
             this.emit('todo:update', input.todos);
-            // Also update completion enforcer
-            this.completionEnforcer.updateTodos(input.todos);
+            this.lastTodoState = input.todos;
           }
         }
 
@@ -895,11 +878,6 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
           }
         }
 
-        // Track if complete_task was called (tool name may be prefixed with MCP server name)
-        if (toolUseName === 'complete_task' || toolUseName.endsWith('_complete_task')) {
-          this.completionEnforcer.handleCompleteTaskDetection(toolUseInput);
-        }
-
         // Detect todowrite tool calls and emit todo state
         // Built-in tool name is 'todowrite', MCP-prefixed would be '*_todowrite'
         if (toolUseName === 'todowrite' || toolUseName.endsWith('_todowrite')) {
@@ -907,8 +885,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
           // Only emit if we have actual todos (ignore empty arrays to prevent accidental clearing)
           if (input?.todos && Array.isArray(input.todos) && input.todos.length > 0) {
             this.emit('todo:update', input.todos);
-            // Also update completion enforcer
-            this.completionEnforcer.updateTodos(input.todos);
+            this.lastTodoState = input.todos;
           }
         }
 
@@ -963,12 +940,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
         this.emit('tool-result', toolOutput);
         break;
 
-      // Step finish event
-      // COMPLETION ENFORCEMENT: Previously emitted 'complete' immediately on stop/end_turn.
-      // Now we delegate to CompletionEnforcer which may:
-      // - Return 'complete' if complete_task was called and verified
-      // - Return 'pending' if verification or continuation is needed (handled on process exit)
-      // - Return 'continue' if more tool calls are expected (reason='tool_use')
+      // Step finish event - agent stopped
       case 'step_finish':
         if (message.part.reason === 'error') {
           if (!this.hasCompleted) {
@@ -981,19 +953,8 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
           }
           break;
         }
-
-        // Delegate to completion enforcer for stop/end_turn handling
-        const action = this.completionEnforcer.handleStepFinish(message.part.reason);
-        console.log(`[OpenCode Adapter] step_finish action: ${action}`);
-
-        if (action === 'complete' && !this.hasCompleted) {
-          this.hasCompleted = true;
-          this.emit('complete', {
-            status: 'success',
-            sessionId: this.currentSessionId || undefined,
-          });
-        }
-        // 'pending' and 'continue' - don't emit complete, let handleProcessExit handle it
+        // stop/end_turn: evaluator runs on process exit
+        // tool_use: agent is continuing, do nothing
         break;
 
       // Error event
@@ -1070,23 +1031,19 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   }
 
   /**
-   * COMPLETION ENFORCEMENT: Process exit handler
+   * PROGRESS EVALUATOR: Process exit handler
    *
    * When the CLI process exits with code 0 and we haven't already completed:
-   * 1. Delegate to CompletionEnforcer.handleProcessExit()
-   * 2. Enforcer checks if verification or continuation is pending
-   * 3. If so, it spawns a session resumption via callbacks
-   * 4. If not, it calls onComplete() to emit the 'complete' event
-   *
-   * This allows the enforcer to chain multiple CLI invocations (verification,
-   * continuation retries) while maintaining the same session context.
+   * 1. Trigger the evaluator to assess task completion
+   * 2. If done: emit 'complete'
+   * 3. If stuck or max cycles: emit 'complete' with partial summary
+   * 4. If not done: spawn session resumption with continuation prompt
    */
   private handleProcessExit(code: number | null): void {
     // Clean up PTY process reference
     this.ptyProcess = null;
 
-    // Handle interrupted tasks immediately (before completion enforcer)
-    // This ensures user interrupts are respected regardless of completion state
+    // Handle interrupted tasks immediately
     if (this.wasInterrupted && code === 0 && !this.hasCompleted) {
       console.log('[OpenCode CLI] Task was interrupted by user');
       this.hasCompleted = true;
@@ -1098,24 +1055,23 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       return;
     }
 
-    // Delegate to completion enforcer for verification/continuation handling
-    if (code === 0 && !this.hasCompleted) {
-      this.completionEnforcer.handleProcessExit(code).catch((error) => {
-        console.error('[OpenCode Adapter] Completion enforcer error:', error);
+    // Trigger evaluation when process exits cleanly
+    if (code === 0 && !this.hasCompleted && !this.isEvaluating) {
+      this.runEvaluation().catch((error) => {
+        console.error('[OpenCode Adapter] Evaluation error:', error);
         this.hasCompleted = true;
         this.emit('complete', {
           status: 'error',
           sessionId: this.currentSessionId || undefined,
-          error: `Failed to complete: ${error.message}`,
+          error: `Evaluation failed: ${error.message}`,
         });
       });
-      return; // Let completion enforcer handle next steps
+      return;
     }
 
-    // Only emit complete/error if we haven't already received a result message
+    // Only emit error if we haven't already received a result message
     if (!this.hasCompleted) {
       if (code !== null && code !== 0) {
-        // Error exit
         this.emit('error', new Error(`OpenCode CLI exited with code ${code}`));
       }
     }
@@ -1124,8 +1080,70 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   }
 
   /**
+   * Run the progress evaluator to assess task completion.
+   * Called after the agent process exits cleanly.
+   */
+  private async runEvaluation(): Promise<void> {
+    if (this.isDisposed || this.hasCompleted) return;
+    this.isEvaluating = true;
+
+    this.emit('progress', { stage: 'evaluating', message: 'Evaluating progress...' });
+
+    try {
+      const context = {
+        originalRequest: this.originalRequest,
+        conversationLog: this.conversationBuffer.formatForEvaluation(),
+        todoState: this.lastTodoState,
+        previousEvaluations: [...this.evaluator.history],
+      };
+
+      console.log(`[OpenCode Adapter] Running evaluation cycle ${this.evaluator.cycleCount + 1}`);
+      const result = await this.evaluator.evaluate(context);
+      console.log(`[OpenCode Adapter] Evaluation: done=${result.done}, stuck=${result.is_stuck}, remaining=${result.remaining.length}`);
+      this.emit('debug', { type: 'evaluation', message: `done=${result.done}, stuck=${result.is_stuck}`, data: result });
+
+      if (result.done) {
+        this.hasCompleted = true;
+        this.isEvaluating = false;
+        this.emit('complete', {
+          status: 'success',
+          sessionId: this.currentSessionId || undefined,
+          summary: result.summary,
+        });
+        return;
+      }
+
+      if (result.is_stuck || this.evaluator.isMaxCyclesReached) {
+        this.hasCompleted = true;
+        this.isEvaluating = false;
+        const summary = result.summary + (result.remaining.length > 0 ? `\n\nRemaining: ${result.remaining.join(', ')}` : '');
+        this.emit('complete', {
+          status: 'success',
+          sessionId: this.currentSessionId || undefined,
+          summary,
+        });
+        return;
+      }
+
+      // Not done, not stuck — continue with the evaluator's prompt
+      this.isEvaluating = false;
+      await this.spawnSessionResumption(result.continuation_prompt);
+    } catch (error) {
+      this.isEvaluating = false;
+      console.error('[OpenCode Adapter] Evaluation error:', error);
+      // On evaluation failure, mark as complete rather than erroring out
+      this.hasCompleted = true;
+      this.emit('complete', {
+        status: 'success',
+        sessionId: this.currentSessionId || undefined,
+        summary: 'Task completed (evaluation unavailable)',
+      });
+    }
+  }
+
+  /**
    * Spawn a session resumption task with the given prompt.
-   * Used by CompletionEnforcer callbacks for continuation and verification.
+   * Used by ProgressEvaluator for continuation when task is not yet complete.
    *
    * WHY SESSION RESUMPTION (not PTY write):
    * - OpenCode CLI supports --session-id to continue an existing conversation

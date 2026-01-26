@@ -6,6 +6,7 @@ import { getOllamaConfig } from '../store/appSettings';
 import { getApiKey } from '../store/secureStorage';
 import { getProviderSettings, getActiveProviderModel, getConnectedProviderIds } from '../store/providerSettings';
 import { ensureAzureFoundryProxy } from './azure-foundry-proxy';
+import { EVALUATOR_SYSTEM_PROMPT } from './evaluator';
 import type { BedrockCredentials, ProviderId, AzureFoundryCredentials } from '@accomplish/shared';
 
 /**
@@ -145,112 +146,33 @@ See the ask-user-question skill for full documentation and examples.
 </important>
 
 <behavior name="task-planning">
-##############################################################################
-# CRITICAL: PLAN FIRST, THEN USE TODOWRITE - BOTH ARE MANDATORY
-##############################################################################
-
-**STEP 1: OUTPUT A PLAN (before any action)**
-
-Before taking ANY action, you MUST first output a plan:
-
+When starting a task:
 1. **State the goal** - What the user wants accomplished
 2. **List steps** - Numbered steps to achieve the goal
+3. **Call todowrite** - Create a task list so the user can see progress in the sidebar
 
-Format:
-**Plan:**
-Goal: [what user asked for]
-
-Steps:
-1. [First action]
-2. [Second action]
-...
-
-**STEP 2: IMMEDIATELY CALL TODOWRITE**
-
-After outputting your plan, you MUST call the \`todowrite\` tool to create your task list.
-This is NOT optional. The user sees your todos in a sidebar - if you skip this, they see nothing.
-
-\`\`\`json
-{
-  "todos": [
-    {"id": "1", "content": "First step description", "status": "in_progress", "priority": "high"},
-    {"id": "2", "content": "Second step description", "status": "pending", "priority": "medium"},
-    {"id": "3", "content": "Third step description", "status": "pending", "priority": "medium"}
-  ]
-}
-\`\`\`
-
-**STEP 3: COMPLETE ALL TODOS BEFORE FINISHING**
-- All todos must be "completed" or "cancelled" before calling complete_task
-
-WRONG: Starting work without planning and calling todowrite first
-CORRECT: Output plan FIRST, call todowrite SECOND, then start working
-
-##############################################################################
+Update todo status as you work. Mark items as completed when done.
 </behavior>
 
-<behavior>
+<behavior name="task-execution">
 - Use AskUserQuestion tool for clarifying questions before starting ambiguous tasks
-- **NEVER use shell commands (open, xdg-open, start, subprocess, webbrowser) to open browsers or URLs** - these open the user's default browser, not the automation-controlled Chrome. ALL browser operations MUST use browser_* MCP tools.
-- For multi-step browser workflows, prefer \`browser_script\` over individual tools - it's faster and auto-returns page state.
+- **NEVER use shell commands (open, xdg-open, start, subprocess, webbrowser) to open browsers or URLs** - ALL browser operations MUST use browser_* MCP tools.
+- For multi-step browser workflows, prefer \`browser_script\` over individual tools.
 
-**BROWSER ACTION VERBOSITY - Be descriptive about web interactions:**
-- Before each browser action, briefly explain what you're about to do in user terms
+**BROWSER ACTION VERBOSITY:**
+- Before each browser action, briefly explain what you're about to do
 - After navigation: mention the page title and what you see
-- After clicking: describe what you clicked and what happened (new page loaded, form appeared, etc.)
+- After clicking: describe what you clicked and what happened
 - After typing: confirm what you typed and where
-- When analyzing a snapshot: describe the key elements you found
-- If something unexpected happens, explain what you see and how you'll adapt
-
-Example good narration:
-"I'll navigate to Google... The search page is loaded. I can see the search box. Let me search for 'cute animals'... Typing in the search field and pressing Enter... The search results page is now showing with images and links about animals."
-
-Example bad narration (too terse):
-"Done." or "Navigated." or "Clicked."
-
-- After each action, evaluate the result before deciding next steps
-- Use browser_sequence for efficiency when you need to perform multiple actions in quick succession (e.g., filling a form with multiple fields)
-- Don't announce server checks or startup - proceed directly to the task
-- Only use AskUserQuestion when you genuinely need user input or decisions
 
 **DO NOT ASK FOR PERMISSION TO CONTINUE:**
-If the user gave you a task with specific criteria (e.g., "find 8-15 results", "check all items"):
-- Keep working until you meet those criteria
-- Do NOT pause to ask "Would you like me to continue?" or "Should I keep going?"
-- Do NOT stop after reviewing just a few items when the task asks for more
-- Just continue working until the task requirements are met
-- Only use AskUserQuestion for genuine clarifications about requirements, NOT for progress check-ins
+If the user gave you a task with specific criteria, keep working until you meet them.
 
-**TASK COMPLETION - CRITICAL:**
-
-You MUST call the \`complete_task\` tool to finish ANY task. Never stop without calling it.
-
-When to call \`complete_task\`:
-
-1. **status: "success"** - You verified EVERY part of the user's request is done
-   - Before calling, re-read the original request
-   - Check off each requirement mentally
-   - Summarize what you did for each part
-
-2. **status: "blocked"** - You hit an unresolvable TECHNICAL blocker
-   - Only use for: login walls, CAPTCHAs, rate limits, site errors, missing permissions
-   - NOT for: "task is large", "many items to check", "would take many steps"
-   - If the task is big but doable, KEEP WORKING - do not use blocked as an excuse to quit
-   - Explain what you were trying to do
-   - Describe what went wrong
-   - State what remains undone in \`remaining_work\`
-
-3. **status: "partial"** - AVOID THIS STATUS
-   - Only use if you are FORCED to stop mid-task (context limit approaching, etc.)
-   - The system will automatically continue you to finish the remaining work
-   - If you use partial, you MUST fill in remaining_work with specific next steps
-   - Do NOT use partial as a way to ask "should I continue?" - just keep working
-   - If you've done some work and can keep going, KEEP GOING - don't use partial
-
-**NEVER** just stop working. If you find yourself about to end without calling \`complete_task\`,
-ask yourself: "Did I actually finish what was asked?" If unsure, keep working.
-
-The \`original_request_summary\` field forces you to re-read the request - use this as a checklist.
+**TASK COMPLETION:**
+Work until the task is complete, then simply stop. The system will evaluate your progress.
+- If you finish all parts of the request, stop and the evaluator will confirm completion
+- If you hit a technical blocker (login wall, CAPTCHA, rate limit), describe what happened and stop
+- Do NOT worry about calling any special completion tool \u2014 just do the work and stop
 </behavior>
 `;
 
@@ -748,6 +670,10 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
         prompt: systemPrompt,
         mode: 'primary',
       },
+      evaluator: {
+        description: 'Task completion evaluator - returns JSON assessment',
+        prompt: EVALUATOR_SYSTEM_PROMPT,
+      },
     },
     // MCP servers for additional tools
     // Timeout set to 30000ms to handle slow npx startup on Windows
@@ -773,13 +699,6 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
       'dev-browser-mcp': {
         type: 'local',
         command: ['npx', 'tsx', path.join(skillsPath, 'dev-browser-mcp', 'src', 'index.ts')],
-        enabled: true,
-        timeout: 30000,
-      },
-      // Provides complete_task tool - agent must call to signal task completion
-      'complete-task': {
-        type: 'local',
-        command: ['npx', 'tsx', path.join(skillsPath, 'complete-task', 'src', 'index.ts')],
         enabled: true,
         timeout: 30000,
       },

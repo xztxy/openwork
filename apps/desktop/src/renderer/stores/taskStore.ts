@@ -552,7 +552,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 }));
 
 // Startup stages that should be tracked (before first tool runs)
-const STARTUP_STAGES = ['starting', 'browser', 'environment', 'loading', 'connecting', 'waiting'];
+const STARTUP_STAGES = ['starting', 'browser', 'environment', 'loading', 'connecting', 'waiting', 'evaluating'];
 
 // Global subscription to setup progress events (browser download, startup stages, etc.)
 // This runs when the module is loaded to catch early progress events

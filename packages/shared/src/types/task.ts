@@ -65,6 +65,7 @@ export interface TaskResult {
   sessionId?: string;
   durationMs?: number;
   error?: string;
+  summary?: string;
 }
 
 /**
