@@ -52,8 +52,11 @@ export class AppInitManager extends EventEmitter {
   }
 
   private getMCPEntryPath(mcpName: string): string {
-    // Skills are always TypeScript source files, run via `npx tsx` by OpenCode
-    // There is no build step that creates compiled JavaScript
+    if (app.isPackaged) {
+      // In packaged app, skills are pre-bundled to dist/index.mjs
+      return path.join(this.getSkillsDir(), mcpName, 'dist', 'index.mjs');
+    }
+    // Development: TypeScript source files, run via `npx tsx` by OpenCode
     return path.join(this.getSkillsDir(), mcpName, 'src', 'index.ts');
   }
 
