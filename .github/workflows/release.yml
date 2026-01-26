@@ -400,7 +400,7 @@ jobs:
           name: Openwork-Windows-x64
           path: ./build
 
-      - name: Extract and validate
+      - name: Install and validate
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -410,13 +410,23 @@ jobs:
             Get-ChildItem ./build
             exit 1
           }
-          Write-Host "Extracting installer: $($installer.FullName)"
-          $extractDir = "./extracted"
-          New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
-          & "C:\Program Files\7-Zip\7z.exe" x $installer.FullName -o"$extractDir" -y
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          Write-Host "Validating: $extractDir"
-          & ./apps/desktop/scripts/validate-package.ps1 -AppPath $extractDir
+
+          # Run NSIS installer silently (7-Zip can't extract NSIS app files)
+          Write-Host "Running installer silently: $($installer.FullName)"
+          $installDir = "$env:TEMP\openwork-validation"
+          if (Test-Path $installDir) { Remove-Item $installDir -Recurse -Force }
+
+          $process = Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$installDir" -Wait -PassThru -NoNewWindow
+          if ($process.ExitCode -ne 0) {
+            Write-Host "Error: Installer failed with exit code $($process.ExitCode)"
+            exit 1
+          }
+
+          Write-Host "Installed to: $installDir"
+          Get-ChildItem $installDir | ForEach-Object { Write-Host "  $($_.Name)" }
+
+          Write-Host "Validating: $installDir"
+          & ./apps/desktop/scripts/validate-package.ps1 -AppPath $installDir
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
   create-release:
