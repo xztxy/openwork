@@ -18,14 +18,18 @@ const skillsPath = path.join(__dirname, '..', 'skills');
 // Save symlink target for restoration
 let symlinkTarget = null;
 const sharedPath = path.join(accomplishPath, 'shared');
+const skillSymlinks = [];
 
-function materializeSymlink(entryPath) {
+function materializeSymlink(entryPath, symlinkTargetPath, collector) {
+  if (collector) {
+    collector.push({ path: entryPath, target: symlinkTargetPath });
+  }
   const realPath = fs.realpathSync(entryPath);
   fs.rmSync(entryPath, { recursive: true, force: true });
   fs.cpSync(realPath, entryPath, { recursive: true, dereference: true });
 }
 
-function materializeNodeModules(modulesPath) {
+function materializeNodeModules(modulesPath, collector) {
   if (!fs.existsSync(modulesPath)) {
     throw new Error(`Missing node_modules at ${modulesPath}. Run pnpm install before packaging.`);
   }
@@ -34,11 +38,12 @@ function materializeNodeModules(modulesPath) {
   for (const entry of entries) {
     const entryPath = path.join(modulesPath, entry.name);
     if (entry.isSymbolicLink()) {
-      materializeSymlink(entryPath);
+      const linkTarget = fs.readlinkSync(entryPath);
+      materializeSymlink(entryPath, linkTarget, collector);
       continue;
     }
     if (entry.isDirectory() && entry.name.startsWith('@')) {
-      materializeNodeModules(entryPath);
+      materializeNodeModules(entryPath, collector);
     }
   }
 }
@@ -57,7 +62,7 @@ function materializeSkillDependencies() {
 
     const nodeModulesDir = path.join(skillDir, 'node_modules');
     console.log('Materializing skill dependencies:', path.relative(skillsPath, skillDir));
-    materializeNodeModules(nodeModulesDir);
+    materializeNodeModules(nodeModulesDir, skillSymlinks);
   }
 }
 
@@ -98,6 +103,28 @@ try {
   execSync(command, { stdio: 'inherit', cwd: path.join(__dirname, '..') });
 
 } finally {
+  // Restore skill symlinks after packaging
+  if (skillSymlinks.length > 0) {
+    console.log('Restoring skill workspace symlinks');
+    for (const entry of skillSymlinks) {
+      try {
+        fs.rmSync(entry.path, { recursive: true, force: true });
+
+        const absoluteTarget = path.isAbsolute(entry.target)
+          ? entry.target
+          : path.resolve(path.dirname(entry.path), entry.target);
+
+        if (isWindows) {
+          fs.symlinkSync(absoluteTarget, entry.path, 'junction');
+        } else {
+          fs.symlinkSync(entry.target, entry.path);
+        }
+      } catch (error) {
+        console.warn('Failed to restore symlink:', entry.path, error.message);
+      }
+    }
+  }
+
   // Restore the symlink
   if (symlinkTarget) {
     console.log('Restoring workspace symlink');
