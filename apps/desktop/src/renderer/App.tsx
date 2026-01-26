@@ -140,7 +140,7 @@ export default function App() {
         </AnimatePresence>
       </main>
       <TaskLauncher />
-      <StatusBar />
+      {location.pathname === '/' && <StatusBar />}
     </div>
   );
 }
