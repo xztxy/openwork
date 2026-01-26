@@ -39,7 +39,13 @@ export const test = base.extend<SanityFixtures>({
   }, { option: true }],
 
   electronApp: async ({ currentModel }, use) => {
-    const mainPath = resolve(__dirname, '../../dist-electron/main/index.js');
+    // Pass the app directory (containing package.json) instead of the script file.
+    // When Electron receives a directory, it reads package.json → "main" field and
+    // app.getAppPath() returns the directory. This is critical because getSkillsPath()
+    // uses app.getAppPath() to find MCP server scripts at apps/desktop/skills/.
+    // Passing the script file directly causes app.getAppPath() to return dist-electron/main/
+    // where no skills directory exists, breaking all MCP servers (complete_task, etc.).
+    const appPath = resolve(__dirname, '../..');
     const apiKey = getApiKeyForModel(currentModel);
 
     // Build env object, filtering out undefined values
@@ -53,7 +59,7 @@ export const test = base.extend<SanityFixtures>({
     // Launch WITHOUT mock flags - real API calls
     const app = await electron.launch({
       args: [
-        mainPath,
+        appPath,
         '--e2e-skip-auth', // Skip onboarding UI but still use real keys
       ],
       env: {
