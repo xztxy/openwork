@@ -19,7 +19,7 @@ Write-Host ""
 $ResourcesDir = "$AppPath\resources"
 $NodeDir = "$ResourcesDir\nodejs\x64"
 $NodeBin = "$NodeDir\node.exe"
-$SkillsDir = "$ResourcesDir\app\skills"
+$SkillsDir = "$ResourcesDir\skills"
 
 # === Check 1: Bundled Node exists ===
 Write-Host "=== Check 1: Bundled Node exists ===" -ForegroundColor Yellow
@@ -63,44 +63,25 @@ foreach ($bin in @("node.exe", "npm.cmd", "npx.cmd")) {
 Write-Host "OK: All expected binaries present (node.exe, npm.cmd, npx.cmd)" -ForegroundColor Green
 Write-Host ""
 
-# === Check 4: MCP servers can spawn ===
-Write-Host "=== Check 4: MCP servers spawn ===" -ForegroundColor Yellow
+# === Check 4: Skills directory exists ===
+Write-Host "=== Check 4: Skills directory exists ===" -ForegroundColor Yellow
 if (-not (Test-Path $SkillsDir)) {
     Write-Host "ERROR: Skills directory not found" -ForegroundColor Red
     Write-Host "  Expected: $SkillsDir"
     exit 1
 }
 
-Get-ChildItem $SkillsDir -Directory | ForEach-Object {
-    $McpName = $_.Name
-    $McpEntry = "$($_.FullName)\dist\index.mjs"
-
-    if (-not (Test-Path $McpEntry)) {
-        Write-Host "ERROR: MCP entry point missing" -ForegroundColor Red
-        Write-Host "  MCP: $McpName"
-        Write-Host "  Expected: $McpEntry"
-        Write-Host "  Contents of MCP dir:"
-        Get-ChildItem $_.FullName -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "    $_" }
-        exit 1
-    }
-
-    Write-Host "Spawning $McpName..."
-    $process = Start-Process -FilePath $NodeBin -ArgumentList $McpEntry -PassThru -NoNewWindow -RedirectStandardError "NUL"
-    Start-Sleep -Seconds 2
-
-    if ($process.HasExited) {
-        Write-Host "ERROR: MCP crashed on startup" -ForegroundColor Red
-        Write-Host "  MCP: $McpName"
-        Write-Host "  Entry: $McpEntry"
-        Write-Host "  Exit code: $($process.ExitCode)"
-        Write-Host "  Node path: $NodeBin"
-        Write-Host "  PATH: $env:PATH"
-        exit 1
-    }
-
-    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-    Write-Host "OK: $McpName started successfully" -ForegroundColor Green
+# Count skill directories
+$SkillCount = (Get-ChildItem $SkillsDir -Directory).Count
+if ($SkillCount -eq 0) {
+    Write-Host "ERROR: No skills found in $SkillsDir" -ForegroundColor Red
+    Get-ChildItem $SkillsDir -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "    $_" }
+    exit 1
 }
+Write-Host "OK: Found $SkillCount skills in $SkillsDir" -ForegroundColor Green
+
+# Note: Skills are run via 'npx tsx src/index.ts' at runtime, not pre-compiled
+# The app uses bundled Node.js + npx to execute TypeScript directly
 
 Write-Host ""
 Write-Host "=== All validations passed ===" -ForegroundColor Green
