@@ -58,11 +58,11 @@ export interface SnapshotOptions {
   fullSnapshot?: boolean;
   /** Only include interactive elements. Default: true */
   interactiveOnly?: boolean;
-  /** Maximum number of elements to include. Default: 300, max: 1000 */
+  /** Maximum number of elements to include. Default: 200, max: 1000 */
   maxElements?: number;
   /** Only include elements visible in viewport. Default: false */
   viewportOnly?: boolean;
-  /** Maximum estimated tokens for output. Default: 8000, max: 50000 */
+  /** Maximum estimated tokens for output. Default: 6000, max: 50000 */
   maxTokens?: number;
   /** Include session navigation history in output. Default: true */
   includeHistory?: boolean;
@@ -72,9 +72,9 @@ export interface SnapshotOptions {
 export const DEFAULT_SNAPSHOT_OPTIONS: Required<SnapshotOptions> = {
   fullSnapshot: false,
   interactiveOnly: true,
-  maxElements: 300,
+  maxElements: 200,
   viewportOnly: false,
-  maxTokens: 8000,
+  maxTokens: 6000,
   includeHistory: true,
 };
 

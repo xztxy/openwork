@@ -1238,7 +1238,8 @@ const SNAPSHOT_SCRIPT = `
 
     for (const el of sorted) {
       if (included.length >= maxElements) { truncationReason = 'maxElements'; break; }
-      const elementTokens = 15; // Estimate per element
+      var nameLen = (el.node && el.node.name) ? el.node.name.length : 0;
+      var elementTokens = 15 + Math.min(Math.ceil(nameLen / 2), 50);
       if (maxTokens && tokenCount + elementTokens > maxTokens) { truncationReason = 'maxTokens'; break; }
       included.push(el);
       tokenCount += elementTokens;
@@ -1255,8 +1256,8 @@ const SNAPSHOT_SCRIPT = `
 
   function renderAriaTree(ariaSnapshot, snapshotOptions) {
     snapshotOptions = snapshotOptions || {};
-    const maxElements = snapshotOptions.maxElements || 300;
-    const maxTokens = snapshotOptions.maxTokens || 8000;
+    const maxElements = snapshotOptions.maxElements || 200;
+    const maxTokens = snapshotOptions.maxTokens || 6000;
     const options = { visibility: "ariaOrVisible", refs: "interactable", refPrefix: "", includeGenericRole: true, renderActive: true, renderCursorPointer: true };
     const lines = [];
     let nodesToRender = ariaSnapshot.root.role === "fragment" ? ariaSnapshot.root.children : [ariaSnapshot.root];
@@ -1402,9 +1403,48 @@ interface SnapshotOptions {
  */
 const DEFAULT_SNAPSHOT_OPTIONS: SnapshotOptions = {
   interactiveOnly: true,
-  maxElements: 300,
-  maxTokens: 8000,
+  maxElements: 200,
+  maxTokens: 6000,
 };
+
+/**
+ * Build screenshot options with reduced quality and full-page height cap.
+ * - JPEG quality 50 (sufficient for AI vision analysis, saves ~40% vs quality 80)
+ * - Full-page height capped at 1800px to avoid Anthropic's 2000px dimension limit
+ */
+async function getScreenshotOptions(page: Page, fullPage?: boolean): Promise<{
+  type: 'jpeg';
+  quality: number;
+  fullPage: boolean;
+  clip?: { x: number; y: number; width: number; height: number };
+}> {
+  const opts: {
+    type: 'jpeg';
+    quality: number;
+    fullPage: boolean;
+    clip?: { x: number; y: number; width: number; height: number };
+  } = {
+    type: 'jpeg',
+    quality: 50,
+    fullPage: false,
+  };
+
+  if (fullPage) {
+    // Get the full page height to check if clipping is needed
+    const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+    const viewport = page.viewportSize();
+    const width = viewport?.width || 1280;
+
+    if (pageHeight > 1800) {
+      // Clip to 1800px height to stay under Anthropic's 2000px limit
+      opts.clip = { x: 0, y: 0, width, height: 1800 };
+    } else {
+      opts.fullPage = true;
+    }
+  }
+
+  return opts;
+}
 
 /**
  * Get a snapshot with session history header and diff support.
@@ -1768,7 +1808,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           max_elements: {
             type: 'number',
-            description: 'Maximum elements to include (1-1000). Default: 300',
+            description: 'Maximum elements to include (1-1000). Default: 200',
           },
           viewport_only: {
             type: 'boolean',
@@ -1780,7 +1820,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           max_tokens: {
             type: 'number',
-            description: 'Maximum estimated tokens (1000-50000). Default: 8000',
+            description: 'Maximum estimated tokens (1000-50000). Default: 6000',
           },
         },
       },
@@ -2514,13 +2554,13 @@ The page has loaded. Use browser_snapshot() to see the page elements and find in
         // If full_snapshot is true, use Infinity to bypass element limits
         const validatedMaxElements = full_snapshot
           ? Infinity
-          : Math.min(Math.max(max_elements ?? 300, 1), 1000);
+          : Math.min(Math.max(max_elements ?? 200, 1), 1000);
 
         // Parse and validate max_tokens (1000-50000, default 8000)
         // If full_snapshot is true, use Infinity to bypass token limits
         const validatedMaxTokens = full_snapshot
           ? Infinity
-          : Math.min(Math.max(max_tokens ?? 8000, 1000), 50000);
+          : Math.min(Math.max(max_tokens ?? 6000, 1000), 50000);
 
         const snapshotOptions: SnapshotOptions = {
           interactiveOnly: interactive_only ?? true,
@@ -2721,13 +2761,8 @@ The page has loaded. Use browser_snapshot() to see the page elements and find in
         const { page_name, full_page } = args as BrowserScreenshotInput;
         const page = await getPage(page_name);
 
-        // Use JPEG with 80% quality to keep screenshots under 5MB API limit
-        // PNG screenshots of image-heavy pages can exceed 6MB after base64 encoding
-        const screenshotBuffer = await page.screenshot({
-          fullPage: full_page ?? false,
-          type: 'jpeg',
-          quality: 80,
-        });
+        const screenshotOpts = await getScreenshotOptions(page, full_page ?? false);
+        const screenshotBuffer = await page.screenshot(screenshotOpts);
 
         const base64 = screenshotBuffer.toString('base64');
 
@@ -3047,11 +3082,8 @@ The page has loaded. Use browser_snapshot() to see the page elements and find in
               }
 
               case 'screenshot': {
-                const buffer = await page.screenshot({
-                  fullPage: step.fullPage ?? false,
-                  type: 'jpeg',
-                  quality: 80,
-                });
+                const ssOpts = await getScreenshotOptions(page, step.fullPage ?? false);
+                const buffer = await page.screenshot(ssOpts);
                 screenshotData = {
                   type: 'image',
                   mimeType: 'image/jpeg',
