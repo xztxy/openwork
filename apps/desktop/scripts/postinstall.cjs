@@ -22,15 +22,10 @@ if (process.env.OPENWORK_POSTINSTALL_RUNNING) {
 process.env.OPENWORK_POSTINSTALL_RUNNING = '1';
 
 const isWindows = process.platform === 'win32';
-const skipPlaywrightDownloads =
-  process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD === '1' ||
-  process.env.PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD === 'true' ||
-  process.env.OPENWORK_SKIP_PLAYWRIGHT_DOWNLOAD === '1' ||
-  process.env.OPENWORK_SKIP_PLAYWRIGHT_DOWNLOAD === 'true' ||
-  process.env.CI === 'true';
+const skipPlaywrightDownloads = true;
 
 if (skipPlaywrightDownloads) {
-  console.log('> Skipping Playwright browser downloads (CI or OPENWORK_SKIP_PLAYWRIGHT_DOWNLOAD set)');
+  console.log('> Skipping Playwright browser downloads (default)');
 }
 
 function runCommand(command, description) {
