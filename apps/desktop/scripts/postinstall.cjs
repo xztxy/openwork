@@ -107,9 +107,11 @@ if (isWindows) {
 }
 
 // Install skill dependencies (works on all platforms)
+// Use --omit=dev to exclude devDependencies (vitest, @types/*) - not needed at runtime
+// This significantly reduces installer size and build time
 const skills = ['dev-browser', 'dev-browser-mcp', 'file-permission', 'ask-user-question', 'complete-task'];
 for (const skill of skills) {
-  runCommand(`npm --prefix skills/${skill} install`, `Installing ${skill} dependencies`);
+  runCommand(`npm --prefix skills/${skill} install --omit=dev`, `Installing ${skill} dependencies`);
 }
 
 console.log('\n> Postinstall complete!');
