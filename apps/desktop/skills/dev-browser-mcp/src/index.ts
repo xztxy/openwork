@@ -3139,67 +3139,6 @@ The page has loaded. Use browser_snapshot() to see the page elements and find in
         return { content };
       }
 
-      case 'browser_keyboard': {
-        const { action, key, text, typing_delay, page_name } = args as BrowserKeyboardInput;
-        const page = await getPage(page_name);
-
-        switch (action) {
-          case 'press': {
-            if (!key) {
-              return {
-                content: [{ type: 'text', text: 'Error: "key" is required for press action' }],
-                isError: true,
-              };
-            }
-            await page.keyboard.press(key);
-            return {
-              content: [{ type: 'text', text: `Pressed key: ${key}` }],
-            };
-          }
-          case 'type': {
-            if (!text) {
-              return {
-                content: [{ type: 'text', text: 'Error: "text" is required for type action' }],
-                isError: true,
-              };
-            }
-            await page.keyboard.type(text, { delay: typing_delay ?? 20 });
-            return {
-              content: [{ type: 'text', text: `Typed text: "${text}"` }],
-            };
-          }
-          case 'down': {
-            if (!key) {
-              return {
-                content: [{ type: 'text', text: 'Error: "key" is required for down action' }],
-                isError: true,
-              };
-            }
-            await page.keyboard.down(key);
-            return {
-              content: [{ type: 'text', text: `Key down: ${key}` }],
-            };
-          }
-          case 'up': {
-            if (!key) {
-              return {
-                content: [{ type: 'text', text: 'Error: "key" is required for up action' }],
-                isError: true,
-              };
-            }
-            await page.keyboard.up(key);
-            return {
-              content: [{ type: 'text', text: `Key up: ${key}` }],
-            };
-          }
-          default:
-            return {
-              content: [{ type: 'text', text: `Error: Unknown keyboard action "${action}"` }],
-              isError: true,
-            };
-        }
-      }
-
       case 'browser_scroll': {
         const { direction, amount, ref, selector, position, page_name } = args as BrowserScrollInput;
         const page = await getPage(page_name);
