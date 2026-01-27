@@ -152,12 +152,6 @@ export function generateTestLocalAgentConfig(): string {
         },
         timeout: 30000,
       },
-      'complete-task': {
-        type: 'local',
-        command: ['npx', 'tsx', path.join(skillsPath, 'complete-task', 'src', 'index.ts')],
-        enabled: true,
-        timeout: 5000,
-      },
     },
   };
 

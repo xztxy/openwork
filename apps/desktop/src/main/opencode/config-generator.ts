@@ -181,7 +181,7 @@ This is NOT optional. The user sees your todos in a sidebar - if you skip this, 
 \`\`\`
 
 **STEP 3: COMPLETE ALL TODOS BEFORE FINISHING**
-- All todos must be "completed" or "cancelled" before calling complete_task
+- All todos must be "completed" or "cancelled" before finishing
 
 WRONG: Starting work without planning and calling todowrite first
 CORRECT: Output plan FIRST, call todowrite SECOND, then start working
@@ -221,36 +221,6 @@ If the user gave you a task with specific criteria (e.g., "find 8-15 results", "
 - Just continue working until the task requirements are met
 - Only use AskUserQuestion for genuine clarifications about requirements, NOT for progress check-ins
 
-**TASK COMPLETION - CRITICAL:**
-
-You MUST call the \`complete_task\` tool to finish ANY task. Never stop without calling it.
-
-When to call \`complete_task\`:
-
-1. **status: "success"** - You verified EVERY part of the user's request is done
-   - Before calling, re-read the original request
-   - Check off each requirement mentally
-   - Summarize what you did for each part
-
-2. **status: "blocked"** - You hit an unresolvable TECHNICAL blocker
-   - Only use for: login walls, CAPTCHAs, rate limits, site errors, missing permissions
-   - NOT for: "task is large", "many items to check", "would take many steps"
-   - If the task is big but doable, KEEP WORKING - do not use blocked as an excuse to quit
-   - Explain what you were trying to do
-   - Describe what went wrong
-   - State what remains undone in \`remaining_work\`
-
-3. **status: "partial"** - AVOID THIS STATUS
-   - Only use if you are FORCED to stop mid-task (context limit approaching, etc.)
-   - The system will automatically continue you to finish the remaining work
-   - If you use partial, you MUST fill in remaining_work with specific next steps
-   - Do NOT use partial as a way to ask "should I continue?" - just keep working
-   - If you've done some work and can keep going, KEEP GOING - don't use partial
-
-**NEVER** just stop working. If you find yourself about to end without calling \`complete_task\`,
-ask yourself: "Did I actually finish what was asked?" If unsure, keep working.
-
-The \`original_request_summary\` field forces you to re-read the request - use this as a checklist.
 </behavior>
 `;
 
@@ -842,13 +812,6 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
       'dev-browser-mcp': {
         type: 'local',
         command: ['npx', 'tsx', path.join(skillsPath, 'dev-browser-mcp', 'src', 'index.ts')],
-        enabled: true,
-        timeout: 30000,
-      },
-      // Provides complete_task tool - agent must call to signal task completion
-      'complete-task': {
-        type: 'local',
-        command: ['npx', 'tsx', path.join(skillsPath, 'complete-task', 'src', 'index.ts')],
         enabled: true,
         timeout: 30000,
       },

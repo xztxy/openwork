@@ -85,7 +85,6 @@ const TOOL_PROGRESS_MAP: Record<string, { label: string; icon: typeof FileText }
   // Utility MCP tools
   request_file_permission: { label: 'Requesting permission', icon: ShieldCheck },
   AskUserQuestion: { label: 'Asking question', icon: MessageCircleQuestion },
-  complete_task: { label: 'Completing task', icon: CheckCircle },
   report_thought: { label: 'Thinking', icon: Lightbulb },
   report_checkpoint: { label: 'Checkpoint', icon: Flag },
 };
@@ -94,7 +93,6 @@ const TOOL_PROGRESS_MAP: Record<string, { label: string; icon: typeof FileText }
 // MCP tools are prefixed as "servername_toolname", e.g.:
 //   "dev-browser-mcp_browser_navigate" -> "browser_navigate"
 //   "file-permission_request_file_permission" -> "request_file_permission"
-//   "complete-task_complete_task" -> "complete_task"
 function getBaseToolName(toolName: string): string {
   // Try progressively stripping prefixes at each underscore position
   // to find a match in our map. This handles server names with hyphens
