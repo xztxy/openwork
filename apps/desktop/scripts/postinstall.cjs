@@ -22,11 +22,6 @@ if (process.env.OPENWORK_POSTINSTALL_RUNNING) {
 process.env.OPENWORK_POSTINSTALL_RUNNING = '1';
 
 const isWindows = process.platform === 'win32';
-const skipPlaywrightDownloads = true;
-
-if (skipPlaywrightDownloads) {
-  console.log('> Skipping Playwright browser downloads (default)');
-}
 
 function runCommand(command, description) {
   console.log(`\n> ${description}...`);
@@ -38,7 +33,6 @@ function runCommand(command, description) {
       env: {
         ...process.env,
         OPENWORK_POSTINSTALL_RUNNING: '1',
-        ...(skipPlaywrightDownloads ? { PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1' } : {})
       }
     });
   } catch (error) {
