@@ -23,6 +23,14 @@ if (process.argv.includes('--e2e-mock-tasks') || process.env.E2E_MOCK_TASK_EVENT
   (global as Record<string, unknown>).E2E_MOCK_TASK_EVENTS = true;
 }
 
+// Early eval mode detection - check for --eval-mode flag
+import { parseEvalArgs, runEvalMode } from './eval-mode';
+const evalConfig = parseEvalArgs(process.argv);
+if (evalConfig) {
+  // Set flag for eval mode
+  (global as Record<string, unknown>).EVAL_MODE = true;
+}
+
 // Clean mode - wipe all stored data for a fresh start
 // Use CLEAN_START env var since CLI args don't pass through vite to Electron
 if (process.env.CLEAN_START === '1') {
@@ -130,86 +138,109 @@ function createWindow() {
   }
 }
 
-// Single instance lock
-const gotTheLock = app.requestSingleInstanceLock();
+// Eval mode handling - skip UI and run headlessly
+if (evalConfig) {
+  console.log('[Main] Eval mode detected, running headlessly');
 
-if (!gotTheLock) {
-  console.log('[Main] Second instance attempted; quitting');
-  app.quit();
-} else {
-  // Initialize logging FIRST - before anything else
+  // Disable GPU for headless operation
+  app.commandLine.appendSwitch('disable-gpu');
+
+  // Initialize logging
   initializeLogCollector();
-  getLogCollector().logEnv('INFO', 'App starting', {
+  getLogCollector().logEnv('INFO', 'Eval mode starting', {
     version: app.getVersion(),
     platform: process.platform,
     arch: process.arch,
     nodeVersion: process.version,
-  });
-
-  app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-      console.log('[Main] Focused existing instance after second-instance event');
-    }
+    task: evalConfig.task.substring(0, 100),
   });
 
   app.whenReady().then(async () => {
-    console.log('[Main] Electron app ready, version:', app.getVersion());
+    console.log('[Main] Electron app ready for eval mode');
+    await runEvalMode(evalConfig);
+  });
+} else {
+  // Normal app startup - single instance lock
+  const gotTheLock = app.requestSingleInstanceLock();
 
-    // Check for fresh install and cleanup old data BEFORE initializing stores
-    // This ensures users get a clean slate after reinstalling from DMG
-    try {
-      const didCleanup = await checkAndCleanupFreshInstall();
-      if (didCleanup) {
-        console.log('[Main] Cleaned up data from previous installation');
-      }
-    } catch (err) {
-      console.error('[Main] Fresh install cleanup failed:', err);
-    }
+  if (!gotTheLock) {
+    console.log('[Main] Second instance attempted; quitting');
+    app.quit();
+  } else {
+    // Initialize logging FIRST - before anything else
+    initializeLogCollector();
+    getLogCollector().logEnv('INFO', 'App starting', {
+      version: app.getVersion(),
+      platform: process.platform,
+      arch: process.arch,
+      nodeVersion: process.version,
+    });
 
-    // Initialize database and run migrations
-    try {
-      initializeDatabase();
-    } catch (err) {
-      if (err instanceof FutureSchemaError) {
-        await dialog.showMessageBox({
-          type: 'error',
-          title: 'Update Required',
-          message: `This data was created by a newer version of Openwork (schema v${err.storedVersion}).`,
-          detail: `Your app supports up to schema v${err.appVersion}. Please update Openwork to continue.`,
-          buttons: ['Quit'],
-        });
-        app.quit();
-        return;
-      }
-      throw err;
-    }
-
-    // Set dock icon on macOS
-    if (process.platform === 'darwin' && app.dock) {
-      const iconPath = app.isPackaged
-        ? path.join(process.resourcesPath, 'icon.png')
-        : path.join(process.env.APP_ROOT!, 'resources', 'icon.png');
-      const icon = nativeImage.createFromPath(iconPath);
-      if (!icon.isEmpty()) {
-        app.dock.setIcon(icon);
-      }
-    }
-
-    // Register IPC handlers before creating window
-    registerIPCHandlers();
-    console.log('[Main] IPC handlers registered');
-
-    createWindow();
-
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        createWindow();
-        console.log('[Main] Application reactivated; recreated window');
+    app.on('second-instance', () => {
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.focus();
+        console.log('[Main] Focused existing instance after second-instance event');
       }
     });
-  });
+
+    app.whenReady().then(async () => {
+      console.log('[Main] Electron app ready, version:', app.getVersion());
+
+      // Check for fresh install and cleanup old data BEFORE initializing stores
+      // This ensures users get a clean slate after reinstalling from DMG
+      try {
+        const didCleanup = await checkAndCleanupFreshInstall();
+        if (didCleanup) {
+          console.log('[Main] Cleaned up data from previous installation');
+        }
+      } catch (err) {
+        console.error('[Main] Fresh install cleanup failed:', err);
+      }
+
+      // Initialize database and run migrations
+      try {
+        initializeDatabase();
+      } catch (err) {
+        if (err instanceof FutureSchemaError) {
+          await dialog.showMessageBox({
+            type: 'error',
+            title: 'Update Required',
+            message: `This data was created by a newer version of Openwork (schema v${err.storedVersion}).`,
+            detail: `Your app supports up to schema v${err.appVersion}. Please update Openwork to continue.`,
+            buttons: ['Quit'],
+          });
+          app.quit();
+          return;
+        }
+        throw err;
+      }
+
+      // Set dock icon on macOS
+      if (process.platform === 'darwin' && app.dock) {
+        const iconPath = app.isPackaged
+          ? path.join(process.resourcesPath, 'icon.png')
+          : path.join(process.env.APP_ROOT!, 'resources', 'icon.png');
+        const icon = nativeImage.createFromPath(iconPath);
+        if (!icon.isEmpty()) {
+          app.dock.setIcon(icon);
+        }
+      }
+
+      // Register IPC handlers before creating window
+      registerIPCHandlers();
+      console.log('[Main] IPC handlers registered');
+
+      createWindow();
+
+      app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
+          createWindow();
+          console.log('[Main] Application reactivated; recreated window');
+        }
+      });
+    });
+  }
 }
 
 app.on('window-all-closed', () => {
