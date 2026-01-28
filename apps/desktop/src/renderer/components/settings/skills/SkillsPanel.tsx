@@ -21,7 +21,7 @@ export function SkillsPanel() {
   const [isAtBottom, setIsAtBottom] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Filter and search skills
+  // Filter, search, and sort skills (enabled first)
   const filteredSkills = useMemo(() => {
     let result = skills;
 
@@ -43,7 +43,11 @@ export function SkillsPanel() {
       );
     }
 
-    return result;
+    // Sort: enabled skills first
+    return [...result].sort((a, b) => {
+      if (a.isEnabled === b.isEnabled) return 0;
+      return a.isEnabled ? -1 : 1;
+    });
   }, [skills, filter, searchQuery]);
 
   // Check if scrolled to bottom
