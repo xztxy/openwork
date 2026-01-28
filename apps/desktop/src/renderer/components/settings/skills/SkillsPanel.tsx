@@ -1,6 +1,6 @@
 // apps/desktop/src/renderer/components/settings/skills/SkillsPanel.tsx
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import type { Skill } from '@accomplish/shared';
 import { Input } from '@/components/ui/input';
 import {
@@ -18,6 +18,8 @@ export function SkillsPanel() {
   const [skills, setSkills] = useState<Skill[]>(MOCK_SKILLS);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
+  const [isAtBottom, setIsAtBottom] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Filter and search skills
   const filteredSkills = useMemo(() => {
@@ -43,6 +45,20 @@ export function SkillsPanel() {
 
     return result;
   }, [skills, filter, searchQuery]);
+
+  // Check if scrolled to bottom
+  const checkScrollPosition = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const threshold = 5; // Small threshold for rounding errors
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    setIsAtBottom(atBottom);
+  }, []);
+
+  // Check scroll position on mount and when filtered skills change
+  useEffect(() => {
+    checkScrollPosition();
+  }, [filteredSkills, checkScrollPosition]);
 
   // Handlers
   const handleToggle = useCallback((id: string) => {
@@ -125,7 +141,11 @@ export function SkillsPanel() {
       </div>
 
       {/* Scrollable Skills Grid */}
-      <div className="max-h-[280px] min-h-[280px] overflow-y-auto pr-1">
+      <div
+        ref={scrollRef}
+        onScroll={checkScrollPosition}
+        className="max-h-[280px] min-h-[280px] overflow-y-auto pr-1"
+      >
         <div className="grid grid-cols-2 gap-3">
           {filteredSkills.map((skill) => (
             <SkillCard
@@ -144,8 +164,8 @@ export function SkillsPanel() {
         )}
       </div>
 
-      {/* Scroll Indicator */}
-      {filteredSkills.length > 4 && (
+      {/* Scroll Indicator - only show when not scrolled to bottom */}
+      {filteredSkills.length > 4 && !isAtBottom && (
         <div className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
           <svg
             className="h-3.5 w-3.5 animate-bounce"
