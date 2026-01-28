@@ -1,6 +1,7 @@
 // apps/desktop/src/renderer/components/settings/skills/SkillsPanel.tsx
 
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import type { Skill } from '@accomplish/shared';
 import { Input } from '@/components/ui/input';
 import {
@@ -9,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { settingsVariants, settingsTransitions } from '@/lib/animations';
 import { SkillCard } from './SkillCard';
 import { MOCK_SKILLS } from './mockSkills';
 
@@ -151,21 +153,45 @@ export function SkillsPanel() {
         className="max-h-[280px] min-h-[280px] overflow-y-auto pr-1"
       >
         <div className="grid grid-cols-2 gap-3">
-          {filteredSkills.map((skill) => (
-            <SkillCard
-              key={skill.id}
-              skill={skill}
-              onToggle={handleToggle}
-              onDelete={handleDelete}
-              onConfigure={handleConfigure}
-            />
-          ))}
+          <AnimatePresence mode="popLayout">
+            {filteredSkills.map((skill, index) => (
+              <motion.div
+                key={skill.id}
+                layout
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{
+                  layout: { duration: 0.2 },
+                  opacity: { duration: 0.15 },
+                  scale: { duration: 0.15 },
+                  delay: index * 0.02,
+                }}
+              >
+                <SkillCard
+                  skill={skill}
+                  onToggle={handleToggle}
+                  onDelete={handleDelete}
+                  onConfigure={handleConfigure}
+                />
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
-        {filteredSkills.length === 0 && (
-          <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
-            No skills found
-          </div>
-        )}
+        <AnimatePresence>
+          {filteredSkills.length === 0 && (
+            <motion.div
+              className="flex h-[200px] items-center justify-center text-sm text-muted-foreground"
+              variants={settingsVariants.fadeSlide}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={settingsTransitions.enter}
+            >
+              No skills found
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Scroll Indicator - use opacity to prevent layout shift flickering */}
