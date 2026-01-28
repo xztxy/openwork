@@ -164,11 +164,15 @@ export function SkillsPanel() {
         )}
       </div>
 
-      {/* Scroll Indicator - only show when not scrolled to bottom */}
-      {filteredSkills.length > 4 && !isAtBottom && (
-        <div className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+      {/* Scroll Indicator - use opacity to prevent layout shift flickering */}
+      {filteredSkills.length > 4 && (
+        <div
+          className={`mt-2 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground transition-opacity duration-150 ${
+            isAtBottom ? 'opacity-0' : 'opacity-100'
+          }`}
+        >
           <svg
-            className="h-3.5 w-3.5 animate-bounce"
+            className={`h-3.5 w-3.5 ${isAtBottom ? '' : 'animate-bounce'}`}
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
