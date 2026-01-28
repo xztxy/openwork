@@ -49,14 +49,20 @@ try {
     ? ' --config.win.sign=false --config.win.signAndEditExecutable=false'
     : '';
 
+  // Speed up NSIS packaging on CI by using zip compression.
+  const nsisZipFlag = isWindows && isCi ? ' --config.nsis.useZip=true' : '';
+
   // Use npx to run electron-builder to ensure it's found in node_modules
-  const command = `npx electron-builder ${args}${npmRebuildFlag}${skipSigningFlag}`;
+  const command = `npx electron-builder ${args}${npmRebuildFlag}${skipSigningFlag}${nsisZipFlag}`;
 
   console.log('Running:', command);
   if (isWindows) {
     console.log('(Skipping native module rebuild on Windows - using prebuilt binaries)');
     if (skipSigningFlag) {
       console.log('(Skipping Windows signing on CI)');
+    }
+    if (nsisZipFlag) {
+      console.log('(Using NSIS zip compression on CI)');
     }
   }
   execSync(command, { stdio: 'inherit', cwd: path.join(__dirname, '..') });
