@@ -636,8 +636,28 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       }
     }
 
-    // Load all API keys
-    const apiKeys = await getAllApiKeys();
+    // In eval mode, skip loading stored keys - use environment variables instead
+    const preferEnvKeys = process.env.OPENWORK_PREFER_ENV_KEYS === '1';
+
+    // Load all API keys (empty object in eval mode to let env vars pass through)
+    const apiKeys = preferEnvKeys
+      ? ({} as Awaited<ReturnType<typeof getAllApiKeys>>)
+      : await getAllApiKeys();
+
+    if (preferEnvKeys) {
+      // In eval mode, ensure PROVIDER_API_KEY is in subprocess environment
+      // The OpenCode config uses {env:PROVIDER_API_KEY} to read this value
+      if (process.env.PROVIDER_API_KEY) {
+        env.PROVIDER_API_KEY = process.env.PROVIDER_API_KEY;
+        console.log('[OpenCode CLI] Eval mode: PROVIDER_API_KEY passed to subprocess');
+      } else {
+        console.warn('[OpenCode CLI] Eval mode: PROVIDER_API_KEY not set');
+      }
+
+      if (process.env.OPENWORK_MODEL) {
+        console.log(`[OpenCode CLI] Eval mode: using model ${process.env.OPENWORK_MODEL}`);
+      }
+    }
 
     if (apiKeys.anthropic) {
       env.ANTHROPIC_API_KEY = apiKeys.anthropic;
@@ -737,6 +757,41 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   }
 
   private async buildCliArgs(config: TaskConfig): Promise<string[]> {
+    // ==========================================================================
+    // EVAL MODE: Build args from environment variables and return early
+    // This bypasses the normal database-based provider/model selection
+    // ==========================================================================
+    if (process.env.OPENWORK_PREFER_ENV_KEYS === '1') {
+      const provider = process.env.OPENWORK_PROVIDER?.toLowerCase();
+      const model = process.env.OPENWORK_MODEL;
+
+      if (!provider || !model) {
+        throw new Error('Eval mode requires OPENWORK_PROVIDER and OPENWORK_MODEL environment variables');
+      }
+
+      const modelArg = `${provider}/${model}`;
+      this.currentModelId = modelArg;
+
+      const args = [
+        'run',
+        config.prompt,
+        '--format', 'json',
+        '--model', modelArg,
+        '--agent', ACCOMPLISH_AGENT_NAME,
+      ];
+
+      if (config.sessionId) {
+        args.push('--session', config.sessionId);
+      }
+
+      console.log(`[OpenCode CLI] Eval mode args: --model ${modelArg}`);
+      return args;
+    }
+
+    // ==========================================================================
+    // NORMAL MODE: Original code below (unchanged)
+    // ==========================================================================
+
     // Try new provider settings first, fall back to legacy settings
     const activeModel = getActiveProviderModel();
     const selectedModel = activeModel || getSelectedModel();
