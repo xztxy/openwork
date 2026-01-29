@@ -117,11 +117,6 @@ export function SkillsPanel({ refreshTrigger }: SkillsPanelProps) {
     }
   }, [skills]);
 
-  const handleConfigure = useCallback((id: string) => {
-    // TODO: Open configuration modal
-    console.log('Configure skill:', id);
-  }, []);
-
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
   }, []);
@@ -254,7 +249,6 @@ export function SkillsPanel({ refreshTrigger }: SkillsPanelProps) {
                   skill={skill}
                   onToggle={handleToggle}
                   onDelete={handleDelete}
-                  onConfigure={handleConfigure}
                 />
               </motion.div>
             ))}
