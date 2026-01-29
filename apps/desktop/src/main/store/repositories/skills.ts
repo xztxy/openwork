@@ -11,6 +11,7 @@ interface SkillRow {
   source: string;
   is_enabled: number;
   is_verified: number;
+  is_hidden: number;
   file_path: string;
   github_url: string | null;
   updated_at: string;
@@ -25,6 +26,7 @@ function rowToSkill(row: SkillRow): Skill {
     source: row.source as SkillSource,
     isEnabled: row.is_enabled === 1,
     isVerified: row.is_verified === 1,
+    isHidden: row.is_hidden === 1,
     filePath: row.file_path,
     githubUrl: row.github_url || undefined,
     updatedAt: row.updated_at,
@@ -54,14 +56,15 @@ export function getSkillById(id: string): Skill | null {
 export function upsertSkill(skill: Skill): void {
   const db = getDatabase();
   db.prepare(`
-    INSERT INTO skills (id, name, command, description, source, is_enabled, is_verified, file_path, github_url, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO skills (id, name, command, description, source, is_enabled, is_verified, is_hidden, file_path, github_url, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       command = excluded.command,
       description = excluded.description,
       is_enabled = excluded.is_enabled,
       is_verified = excluded.is_verified,
+      is_hidden = excluded.is_hidden,
       file_path = excluded.file_path,
       github_url = excluded.github_url,
       updated_at = excluded.updated_at
@@ -73,6 +76,7 @@ export function upsertSkill(skill: Skill): void {
     skill.source,
     skill.isEnabled ? 1 : 0,
     skill.isVerified ? 1 : 0,
+    skill.isHidden ? 1 : 0,
     skill.filePath,
     skill.githubUrl || null,
     skill.updatedAt

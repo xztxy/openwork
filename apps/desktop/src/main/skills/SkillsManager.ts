@@ -17,11 +17,17 @@ import {
 export class SkillsManager {
   private initialized = false;
 
+  /**
+   * Get the official skills directory path.
+   * These are user-facing skills bundled with the app.
+   * In dev: apps/desktop/official-skills
+   * In packaged: resources/official-skills
+   */
   getBundledSkillsPath(): string {
     if (app.isPackaged) {
-      return path.join(process.resourcesPath, 'skills');
+      return path.join(process.resourcesPath, 'official-skills');
     }
-    return path.join(app.getAppPath(), 'skills');
+    return path.join(app.getAppPath(), 'official-skills');
   }
 
   getUserSkillsPath(): string {
@@ -42,6 +48,11 @@ export class SkillsManager {
 
     this.initialized = true;
     console.log('[SkillsManager] Initialized');
+  }
+
+  async resync(): Promise<void> {
+    console.log('[SkillsManager] Resyncing skills...');
+    await this.syncSkills();
   }
 
   private async syncSkills(): Promise<void> {
@@ -97,6 +108,7 @@ export class SkillsManager {
           source,
           isEnabled: true,
           isVerified: frontmatter.verified || false,
+          isHidden: frontmatter.hidden || false,
           filePath: skillMdPath,
           updatedAt: new Date().toISOString(),
         });
@@ -116,6 +128,7 @@ export class SkillsManager {
         description: data.description || '',
         command: data.command,
         verified: data.verified,
+        hidden: data.hidden,
       };
     } catch {
       return { name: '', description: '' };
@@ -174,6 +187,7 @@ export class SkillsManager {
       source: 'custom',
       isEnabled: true,
       isVerified: false,
+      isHidden: false,
       filePath: destPath,
       updatedAt: new Date().toISOString(),
     };
@@ -184,15 +198,35 @@ export class SkillsManager {
 
   async addFromGitHub(rawUrl: string): Promise<Skill> {
     if (!rawUrl.includes('raw.githubusercontent.com') && !rawUrl.includes('github.com')) {
-      throw new Error('URL must be a GitHub raw file URL');
+      throw new Error('URL must be a GitHub URL');
     }
 
     let fetchUrl = rawUrl;
     if (rawUrl.includes('github.com') && !rawUrl.includes('raw.githubusercontent.com')) {
-      fetchUrl = rawUrl
-        .replace('github.com', 'raw.githubusercontent.com')
-        .replace('/blob/', '/');
+      // Handle directory URLs (/tree/) - append SKILL.md
+      if (rawUrl.includes('/tree/')) {
+        fetchUrl = rawUrl
+          .replace('github.com', 'raw.githubusercontent.com')
+          .replace('/tree/', '/');
+        // If URL doesn't end with SKILL.md, append it
+        if (!fetchUrl.endsWith('SKILL.md')) {
+          fetchUrl = fetchUrl.replace(/\/?$/, '/SKILL.md');
+        }
+      } else if (rawUrl.includes('/blob/')) {
+        // Handle file URLs (/blob/)
+        fetchUrl = rawUrl
+          .replace('github.com', 'raw.githubusercontent.com')
+          .replace('/blob/', '/');
+      } else {
+        // Try to construct a raw URL assuming it's a path
+        fetchUrl = rawUrl.replace('github.com', 'raw.githubusercontent.com');
+        if (!fetchUrl.endsWith('SKILL.md')) {
+          fetchUrl = fetchUrl.replace(/\/?$/, '/SKILL.md');
+        }
+      }
     }
+
+    console.log('[SkillsManager] Fetching from:', fetchUrl);
 
     const response = await fetch(fetchUrl);
     if (!response.ok) {
@@ -222,6 +256,7 @@ export class SkillsManager {
       source: 'community',
       isEnabled: true,
       isVerified: false,
+      isHidden: false,
       filePath: destPath,
       githubUrl: rawUrl,
       updatedAt: new Date().toISOString(),

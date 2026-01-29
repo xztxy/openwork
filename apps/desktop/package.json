@@ -158,6 +158,13 @@
           "!**/*.test.ts",
           "!**/vitest.config.ts"
         ]
+      },
+      {
+        "from": "official-skills",
+        "to": "official-skills",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "publish": {

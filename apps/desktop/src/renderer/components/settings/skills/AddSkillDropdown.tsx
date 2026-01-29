@@ -17,16 +17,41 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useTaskStore } from '@/stores/taskStore';
 
 interface AddSkillDropdownProps {
   onSkillAdded?: () => void;
+  onClose?: () => void; // Close the settings dialog
 }
 
-export function AddSkillDropdown({ onSkillAdded }: AddSkillDropdownProps) {
+export function AddSkillDropdown({ onSkillAdded, onClose }: AddSkillDropdownProps) {
   const [isGitHubDialogOpen, setIsGitHubDialogOpen] = useState(false);
   const [gitHubUrl, setGitHubUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { openLauncherWithPrompt } = useTaskStore();
+
+  const handleUploadSkill = async () => {
+    if (!window.accomplish) return;
+
+    try {
+      setIsLoading(true);
+      setError(null);
+      const filePath = await window.accomplish.pickSkillFile();
+      if (!filePath) {
+        setIsLoading(false);
+        return; // User cancelled
+      }
+      await window.accomplish.addSkillFromFile(filePath);
+      onSkillAdded?.();
+    } catch (err) {
+      console.error('Failed to upload skill:', err);
+      setError(err instanceof Error ? err.message : 'Failed to upload skill');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleImportFromGitHub = async () => {
     if (!gitHubUrl.trim() || !window.accomplish) return;
@@ -44,6 +69,12 @@ export function AddSkillDropdown({ onSkillAdded }: AddSkillDropdownProps) {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleBuildWithAI = () => {
+    // Close the settings dialog and open the task launcher with /create-skills
+    onClose?.();
+    openLauncherWithPrompt('/create-skills ');
   };
 
   const handleOpenGitHubDialog = () => {
@@ -87,7 +118,10 @@ export function AddSkillDropdown({ onSkillAdded }: AddSkillDropdownProps) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-60">
-          <DropdownMenuItem className="flex-col items-start gap-0.5 py-2.5 opacity-50 cursor-not-allowed">
+          <DropdownMenuItem
+            onClick={handleBuildWithAI}
+            className="flex-col items-start gap-0.5 py-2.5"
+          >
             <div className="flex items-center gap-2">
               <svg
                 className="h-4 w-4 text-muted-foreground"
@@ -106,7 +140,11 @@ export function AddSkillDropdown({ onSkillAdded }: AddSkillDropdownProps) {
             </span>
           </DropdownMenuItem>
 
-          <DropdownMenuItem className="flex-col items-start gap-0.5 py-2.5 opacity-50 cursor-not-allowed">
+          <DropdownMenuItem
+            onClick={handleUploadSkill}
+            disabled={isLoading}
+            className="flex-col items-start gap-0.5 py-2.5"
+          >
             <div className="flex items-center gap-2">
               <svg
                 className="h-4 w-4 text-muted-foreground"
@@ -122,25 +160,7 @@ export function AddSkillDropdown({ onSkillAdded }: AddSkillDropdownProps) {
               <span className="font-medium">Upload a skill</span>
             </div>
             <span className="pl-6 text-xs text-muted-foreground">
-              Upload .zip, .skill, or folder
-            </span>
-          </DropdownMenuItem>
-
-          <DropdownMenuItem className="flex-col items-start gap-0.5 py-2.5 opacity-50 cursor-not-allowed">
-            <div className="flex items-center gap-2">
-              <svg
-                className="h-4 w-4 text-muted-foreground"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              </svg>
-              <span className="font-medium">Add from official</span>
-            </div>
-            <span className="pl-6 text-xs text-muted-foreground">
-              Pre-built skills by Openwork
+              Upload a SKILL.md file
             </span>
           </DropdownMenuItem>
 
@@ -167,17 +187,18 @@ export function AddSkillDropdown({ onSkillAdded }: AddSkillDropdownProps) {
         </DropdownMenuContent>
       </DropdownMenu>
 
+      {/* GitHub Import Dialog */}
       <Dialog open={isGitHubDialogOpen} onOpenChange={handleCloseGitHubDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Import from GitHub</DialogTitle>
             <DialogDescription>
-              Enter the URL of a GitHub repository containing a skill.
+              Enter the URL of a GitHub repository containing a SKILL.md file.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 py-4">
             <Input
-              placeholder="https://github.com/user/skill-repo"
+              placeholder="https://github.com/user/repo/blob/main/SKILL.md"
               value={gitHubUrl}
               onChange={(e) => setGitHubUrl(e.target.value)}
               onKeyDown={(e) => {

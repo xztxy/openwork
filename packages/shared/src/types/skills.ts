@@ -10,6 +10,7 @@ export interface Skill {
   source: SkillSource;
   isEnabled: boolean;
   isVerified: boolean;
+  isHidden: boolean; // Hidden skills are always enabled but not shown in UI
   filePath: string; // Absolute path to SKILL.md
   githubUrl?: string; // Original URL if imported from GitHub
   updatedAt: string; // ISO date string
@@ -26,4 +27,5 @@ export interface SkillFrontmatter {
   description: string;
   command?: string;
   verified?: boolean;
+  hidden?: boolean;
 }

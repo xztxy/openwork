@@ -44,6 +44,7 @@ export default function SettingsDialog({
   const [closeWarning, setCloseWarning] = useState(false);
   const [showModelError, setShowModelError] = useState(false);
   const [activeTab, setActiveTab] = useState<'providers' | 'voice' | 'skills'>(initialTab);
+  const [skillsRefreshTrigger, setSkillsRefreshTrigger] = useState(0);
 
   const {
     settings,
@@ -322,7 +323,10 @@ export default function SettingsDialog({
             </div>
             {activeTab === 'skills' && (
               <div className="pb-2">
-                <AddSkillDropdown />
+                <AddSkillDropdown
+                  onSkillAdded={() => setSkillsRefreshTrigger(t => t + 1)}
+                  onClose={() => onOpenChange(false)}
+                />
               </div>
             )}
           </div>
@@ -484,7 +488,7 @@ export default function SettingsDialog({
           {/* Skills Tab */}
           {activeTab === 'skills' && (
             <div className="space-y-6">
-              <SkillsPanel />
+              <SkillsPanel refreshTrigger={skillsRefreshTrigger} />
             </div>
           )}
 

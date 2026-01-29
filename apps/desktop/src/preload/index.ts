@@ -306,11 +306,14 @@ const accomplishAPI = {
     ipcRenderer.invoke('skills:set-enabled', id, enabled),
   getSkillContent: (id: string): Promise<string | null> =>
     ipcRenderer.invoke('skills:get-content', id),
+  pickSkillFile: (): Promise<string | null> =>
+    ipcRenderer.invoke('skills:pick-file'),
   addSkillFromFile: (filePath: string): Promise<Skill> =>
     ipcRenderer.invoke('skills:add-from-file', filePath),
   addSkillFromGitHub: (rawUrl: string): Promise<Skill> =>
     ipcRenderer.invoke('skills:add-from-github', rawUrl),
   deleteSkill: (id: string): Promise<void> => ipcRenderer.invoke('skills:delete', id),
+  resyncSkills: (): Promise<Skill[]> => ipcRenderer.invoke('skills:resync'),
 };
 
 // Expose the API to the renderer

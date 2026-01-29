@@ -196,9 +196,11 @@ interface AccomplishAPI {
   getEnabledSkills(): Promise<Skill[]>;
   setSkillEnabled(id: string, enabled: boolean): Promise<void>;
   getSkillContent(id: string): Promise<string | null>;
+  pickSkillFile(): Promise<string | null>;
   addSkillFromFile(filePath: string): Promise<Skill>;
   addSkillFromGitHub(rawUrl: string): Promise<Skill>;
   deleteSkill(id: string): Promise<void>;
+  resyncSkills(): Promise<Skill[]>;
 }
 
 interface AccomplishShell {

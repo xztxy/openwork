@@ -15,7 +15,11 @@ import { SkillCard } from './SkillCard';
 
 type FilterType = 'all' | 'active' | 'official';
 
-export function SkillsPanel() {
+interface SkillsPanelProps {
+  refreshTrigger?: number;
+}
+
+export function SkillsPanel({ refreshTrigger }: SkillsPanelProps) {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -23,9 +27,10 @@ export function SkillsPanel() {
   const [isAtBottom, setIsAtBottom] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Filter, search, and sort skills (enabled first)
+  // Filter, search, and sort skills (enabled first, hide hidden skills)
   const filteredSkills = useMemo(() => {
-    let result = skills;
+    // First, filter out hidden skills - they should never appear in the UI
+    let result = skills.filter((s) => !s.isHidden);
 
     // Apply filter
     if (filter === 'active') {
@@ -66,7 +71,7 @@ export function SkillsPanel() {
     checkScrollPosition();
   }, [filteredSkills, checkScrollPosition]);
 
-  // Load skills on mount
+  // Load skills on mount and when refreshTrigger changes
   useEffect(() => {
     if (!window.accomplish) {
       console.error('Accomplish API not available');
@@ -78,7 +83,7 @@ export function SkillsPanel() {
       .then(setSkills)
       .catch((err: unknown) => console.error('Failed to load skills:', err))
       .finally(() => setLoading(false));
-  }, []);
+  }, [refreshTrigger]);
 
   // Handlers
   const handleToggle = useCallback(async (id: string) => {
@@ -121,11 +126,26 @@ export function SkillsPanel() {
     setSearchQuery(e.target.value);
   }, []);
 
-  const filterLabel = filter === 'all' ? 'All types' : filter === 'active' ? 'Active' : 'Official';
+  const [isResyncing, setIsResyncing] = useState(false);
+
+  const handleResync = useCallback(async () => {
+    if (!window.accomplish || isResyncing) return;
+    setIsResyncing(true);
+    try {
+      const updatedSkills = await window.accomplish.resyncSkills();
+      setSkills(updatedSkills);
+    } catch (err) {
+      console.error('Failed to resync skills:', err);
+    } finally {
+      setIsResyncing(false);
+    }
+  }, [isResyncing]);
+
+  const filterLabel = filter === 'all' ? 'All types' : filter === 'active' ? 'Active' : 'By Openwork';
 
   if (loading) {
     return (
-      <div className="flex h-[280px] items-center justify-center">
+      <div className="flex h-[480px] items-center justify-center">
         <div className="text-sm text-muted-foreground">Loading skills...</div>
       </div>
     );
@@ -163,7 +183,7 @@ export function SkillsPanel() {
           <DropdownMenuContent align="start">
             <DropdownMenuItem onClick={() => setFilter('all')}>All types</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setFilter('active')}>Active</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setFilter('official')}>Official</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setFilter('official')}>By Openwork</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -187,13 +207,32 @@ export function SkillsPanel() {
             className="pl-9"
           />
         </div>
+
+        {/* Refresh Button */}
+        <button
+          onClick={handleResync}
+          disabled={isResyncing}
+          className="flex items-center justify-center rounded-lg border border-border bg-card p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+          title="Refresh skills"
+        >
+          <svg
+            className={`h-4 w-4 ${isResyncing ? 'animate-spin' : ''}`}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+            <path d="M21 3v5h-5" />
+          </svg>
+        </button>
       </div>
 
       {/* Scrollable Skills Grid */}
       <div
         ref={scrollRef}
         onScroll={checkScrollPosition}
-        className="max-h-[280px] min-h-[280px] overflow-y-auto pr-1"
+        className="max-h-[480px] min-h-[480px] overflow-y-auto pr-1"
       >
         <div className="grid grid-cols-2 gap-3">
           <AnimatePresence mode="popLayout">
@@ -224,7 +263,7 @@ export function SkillsPanel() {
         <AnimatePresence>
           {filteredSkills.length === 0 && (
             <motion.div
-              className="flex h-[200px] items-center justify-center text-sm text-muted-foreground"
+              className="flex h-[340px] items-center justify-center text-sm text-muted-foreground"
               variants={settingsVariants.fadeSlide}
               initial="initial"
               animate="animate"
