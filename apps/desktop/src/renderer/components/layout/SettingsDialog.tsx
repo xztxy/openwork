@@ -322,12 +322,7 @@ export default function SettingsDialog({
             </div>
             {activeTab === 'skills' && (
               <div className="pb-2">
-                <AddSkillDropdown
-                  onBuildWithAI={() => console.log('Build with AI')}
-                  onUpload={() => console.log('Upload')}
-                  onAddFromOfficial={() => console.log('Add from official')}
-                  onImportFromGitHub={() => console.log('Import from GitHub')}
-                />
+                <AddSkillDropdown />
               </div>
             )}
           </div>
