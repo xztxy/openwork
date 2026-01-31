@@ -179,8 +179,10 @@ export default function ExecutionPage() {
   const [debugModeEnabled, setDebugModeEnabled] = useState(false);
   const [debugExported, setDebugExported] = useState(false);
   const [debugSearchQuery, setDebugSearchQuery] = useState('');
+  const [debugSearchIndex, setDebugSearchIndex] = useState(0); // Current focused match index
   const debugPanelRef = useRef<HTMLDivElement>(null);
   const debugSearchInputRef = useRef<HTMLInputElement>(null);
+  const debugLogRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [customResponse, setCustomResponse] = useState('');
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
@@ -247,6 +249,30 @@ export default function ExecutionPage() {
           .toLowerCase().includes(query))
     );
   }, [debugLogs, debugSearchQuery]);
+
+  // Reset search index when query changes
+  useEffect(() => {
+    setDebugSearchIndex(0);
+  }, [debugSearchQuery]);
+
+  // Navigate to next/previous match
+  const goToNextMatch = useCallback(() => {
+    if (filteredDebugLogs.length === 0) return;
+    const nextIndex = (debugSearchIndex + 1) % filteredDebugLogs.length;
+    setDebugSearchIndex(nextIndex);
+    // Scroll the row into view
+    const rowEl = debugLogRefs.current.get(nextIndex);
+    rowEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [filteredDebugLogs.length, debugSearchIndex]);
+
+  const goToPrevMatch = useCallback(() => {
+    if (filteredDebugLogs.length === 0) return;
+    const prevIndex = (debugSearchIndex - 1 + filteredDebugLogs.length) % filteredDebugLogs.length;
+    setDebugSearchIndex(prevIndex);
+    // Scroll the row into view
+    const rowEl = debugLogRefs.current.get(prevIndex);
+    rowEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [filteredDebugLogs.length, debugSearchIndex]);
 
   // Highlight matching text in debug logs
   const highlightText = useCallback((text: string, query: string) => {
@@ -1386,7 +1412,13 @@ export default function ExecutionPage() {
               >
                 <div className="h-[200px] flex flex-col bg-zinc-950">
                   {/* Sticky search input - top right */}
-                  <div className="flex justify-end p-2 border-b border-zinc-800 shrink-0">
+                  <div className="flex items-center justify-end gap-2 p-2 border-b border-zinc-800 shrink-0">
+                    {/* Match counter */}
+                    {debugSearchQuery.trim() && filteredDebugLogs.length > 0 && (
+                      <span className="text-xs text-zinc-500">
+                        {debugSearchIndex + 1} of {filteredDebugLogs.length}
+                      </span>
+                    )}
                     <div className="relative">
                       <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-500" />
                       <input
@@ -1394,6 +1426,16 @@ export default function ExecutionPage() {
                         type="text"
                         value={debugSearchQuery}
                         onChange={(e) => setDebugSearchQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && debugSearchQuery.trim()) {
+                            e.preventDefault();
+                            if (e.shiftKey) {
+                              goToPrevMatch();
+                            } else {
+                              goToNextMatch();
+                            }
+                          }
+                        }}
                         placeholder="Search logs... (⌘F)"
                         className="h-7 w-52 pl-7 pr-2 text-xs bg-zinc-800 border border-zinc-700 rounded text-zinc-300 placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500"
                         data-testid="debug-search-input"
@@ -1416,7 +1458,17 @@ export default function ExecutionPage() {
                     ) : (
                       <div className="space-y-1">
                         {filteredDebugLogs.map((log, index) => (
-                          <div key={index} className="flex gap-2">
+                          <div
+                            key={index}
+                            ref={(el) => {
+                              if (el) debugLogRefs.current.set(index, el);
+                              else debugLogRefs.current.delete(index);
+                            }}
+                            className={cn(
+                              'flex gap-2 px-1 -mx-1 rounded',
+                              debugSearchQuery.trim() && index === debugSearchIndex && 'bg-zinc-800/80 ring-1 ring-zinc-600'
+                            )}
+                          >
                             <span className="text-zinc-500 shrink-0">
                               {new Date(log.timestamp).toLocaleTimeString()}
                             </span>
