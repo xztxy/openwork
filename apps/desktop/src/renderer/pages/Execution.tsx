@@ -1166,31 +1166,27 @@ export default function ExecutionPage() {
 {/* Running state input with Stop button */}
       {currentTask.status === 'running' && !permissionRequest && (
         <div className="flex-shrink-0 border-t border-border bg-card/50 px-6 py-4">
-          <div className="max-w-4xl mx-auto flex flex-col gap-2">
-            {/* Model indicator above input */}
-            <div className="flex justify-start">
+          <div className="max-w-4xl mx-auto">
+            {/* All elements inside one bordered container */}
+            <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2.5">
+              <input
+                placeholder="Agent is working..."
+                disabled
+                className="flex-1 bg-transparent text-sm text-muted-foreground placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed"
+              />
               <ModelIndicator
                 isRunning={true}
                 onOpenSettings={handleOpenModelSettings}
               />
-            </div>
-            {/* Input row */}
-            <div className="flex gap-3 items-center">
-              <Input
-                placeholder="Agent is working..."
-                disabled
-                className="flex-1 opacity-50"
-              />
-              <Button
-                variant="outline"
-                size="icon"
+              <div className="w-px h-6 bg-border flex-shrink-0" />
+              <button
                 onClick={interruptTask}
                 title="Stop agent (Ctrl+C)"
-                className="shrink-0 hover:bg-destructive/10 hover:text-destructive hover:border-destructive"
+                className="flex h-9 w-9 items-center justify-center rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
                 data-testid="execution-stop-button"
               >
                 <Square className="h-4 w-4 fill-current" />
-              </Button>
+              </button>
             </div>
           </div>
         </div>
@@ -1199,14 +1195,7 @@ export default function ExecutionPage() {
       {/* Follow-up input */}
       {canFollowUp && (
         <div className="flex-shrink-0 border-t border-border bg-card/50 px-6 py-4">
-          <div className="max-w-4xl mx-auto flex flex-col gap-2">
-            {/* Model indicator above input */}
-            <div className="flex justify-start">
-              <ModelIndicator
-                isRunning={false}
-                onOpenSettings={handleOpenModelSettings}
-              />
-            </div>
+          <div className="max-w-4xl mx-auto space-y-2">
             {speechInput.error && (
               <Alert
                 variant="destructive"
@@ -1227,9 +1216,9 @@ export default function ExecutionPage() {
                 </AlertDescription>
               </Alert>
             )}
-            {/* Input field with Send button */}
-            <div className="flex gap-3 items-center">
-              <Input
+            {/* All elements inside one bordered container */}
+            <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2.5 transition-all duration-200 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring">
+              <input
                 ref={followUpInputRef}
                 value={followUp}
                 onChange={(e) => setFollowUp(e.target.value)}
@@ -1249,9 +1238,14 @@ export default function ExecutionPage() {
                       : "Ask for something..."
                 }
                 disabled={isLoading || speechInput.isRecording}
-                className="flex-1"
+                className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                 data-testid="execution-follow-up-input"
               />
+              <ModelIndicator
+                isRunning={false}
+                onOpenSettings={handleOpenModelSettings}
+              />
+              <div className="w-px h-6 bg-border flex-shrink-0" />
               <SpeechInputButton
                 isRecording={speechInput.isRecording}
                 isTranscribing={speechInput.isTranscribing}
@@ -1265,14 +1259,14 @@ export default function ExecutionPage() {
                 onOpenSettings={handleOpenSpeechSettings}
                 size="md"
               />
-              <Button
+              <button
+                type="button"
                 onClick={handleFollowUp}
                 disabled={!followUp.trim() || isLoading || speechInput.isRecording}
-                variant="outline"
+                className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <CornerDownLeft className="h-4 w-4 mr-1.5" />
-                Send
-              </Button>
+                <CornerDownLeft className="h-4 w-4" />
+              </button>
             </div>
           </div>
         </div>
