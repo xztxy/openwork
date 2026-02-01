@@ -44,8 +44,8 @@ interface TaskState {
   // Task history
   tasks: Task[];
 
-  // Permission handling
-  permissionRequest: PermissionRequest | null;
+  // Permission handling (per-task to prevent leaking between parallel tasks)
+  pendingPermissions: Record<string, PermissionRequest>;
 
   // Setup progress (e.g., browser download)
   setupProgress: string | null;
@@ -76,7 +76,8 @@ interface TaskState {
   sendFollowUp: (message: string) => Promise<void>;
   cancelTask: () => Promise<void>;
   interruptTask: () => Promise<void>;
-  setPermissionRequest: (request: PermissionRequest | null) => void;
+  setPendingPermission: (taskId: string, request: PermissionRequest) => void;
+  clearPendingPermission: (taskId: string) => void;
   respondToPermission: (response: PermissionResponse) => Promise<void>;
   addTaskUpdate: (event: TaskUpdateEvent) => void;
   addTaskUpdateBatch: (event: TaskUpdateBatchEvent) => void;
@@ -102,7 +103,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   isLoading: false,
   error: null,
   tasks: [],
-  permissionRequest: null,
+  pendingPermissions: {},
   setupProgress: null,
   setupProgressTaskId: null,
   setupDownloadStep: 1,
@@ -331,8 +332,20 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     }
   },
 
-  setPermissionRequest: (request) => {
-    set({ permissionRequest: request });
+  setPendingPermission: (taskId, request) => {
+    set((state) => ({
+      pendingPermissions: {
+        ...state.pendingPermissions,
+        [taskId]: request,
+      },
+    }));
+  },
+
+  clearPendingPermission: (taskId) => {
+    set((state) => {
+      const { [taskId]: _, ...rest } = state.pendingPermissions;
+      return { pendingPermissions: rest };
+    });
   },
 
   respondToPermission: async (response: PermissionResponse) => {
@@ -343,7 +356,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       context: { ...response },
     });
     await accomplish.respondToPermission(response);
-    set({ permissionRequest: null });
+    get().clearPendingPermission(response.taskId);
   },
 
   addTaskUpdate: (event: TaskUpdateEvent) => {
@@ -533,7 +546,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       currentTask: null,
       isLoading: false,
       error: null,
-      permissionRequest: null,
+      pendingPermissions: {},
       setupProgress: null,
       setupProgressTaskId: null,
       setupDownloadStep: 1,
@@ -639,5 +652,14 @@ if (typeof window !== 'undefined' && window.accomplish) {
   // Subscribe to auth error events (e.g., OAuth token expired)
   window.accomplish.onAuthError?.((data: { providerId: string; message: string }) => {
     useTaskStore.getState().setAuthError(data);
+  });
+
+  // Subscribe to permission requests globally - always capture regardless of which page is active
+  // This ensures permission requests aren't lost when user is on Home or navigating between tasks
+  window.accomplish.onPermissionRequest?.((request: unknown) => {
+    const permRequest = request as { taskId?: string };
+    if (permRequest.taskId) {
+      useTaskStore.getState().setPendingPermission(permRequest.taskId, request as PermissionRequest);
+    }
   });
 }

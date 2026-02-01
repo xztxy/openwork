@@ -85,25 +85,20 @@ export default function HomePage() {
   const [showExamples, setShowExamples] = useState(true);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<'providers' | 'voice'>('providers');
-  const { startTask, isLoading, addTaskUpdate, setPermissionRequest } = useTaskStore();
+  const { startTask, isLoading, addTaskUpdate } = useTaskStore();
   const navigate = useNavigate();
   const accomplish = getAccomplish();
 
-  // Subscribe to task events
+  // Subscribe to task events (permission requests handled per-task in Execution.tsx)
   useEffect(() => {
     const unsubscribeTask = accomplish.onTaskUpdate((event) => {
       addTaskUpdate(event);
     });
 
-    const unsubscribePermission = accomplish.onPermissionRequest((request) => {
-      setPermissionRequest(request);
-    });
-
     return () => {
       unsubscribeTask();
-      unsubscribePermission();
     };
-  }, [addTaskUpdate, setPermissionRequest, accomplish]);
+  }, [addTaskUpdate, accomplish]);
 
   const executeTask = useCallback(async () => {
     if (!prompt.trim() || isLoading) return;

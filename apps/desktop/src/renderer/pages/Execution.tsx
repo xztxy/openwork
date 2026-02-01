@@ -207,8 +207,7 @@ export default function ExecutionPage() {
     addTaskUpdate,
     addTaskUpdateBatch,
     updateTaskStatus,
-    setPermissionRequest,
-    permissionRequest,
+    pendingPermissions,
     respondToPermission,
     sendFollowUp,
     interruptTask,
@@ -220,6 +219,9 @@ export default function ExecutionPage() {
     todos,
     todosTaskId,
   } = useTaskStore();
+
+  // Get permission request for current task only (prevents leaking between parallel tasks)
+  const permissionRequest = id ? pendingPermissions[id] ?? null : null;
 
   const speechInput = useSpeechInput({
     onTranscriptionComplete: (text) => {
@@ -391,9 +393,8 @@ export default function ExecutionPage() {
       }
     });
 
-    const unsubscribePermission = accomplish.onPermissionRequest((request) => {
-      setPermissionRequest(request);
-    });
+    // Note: Permission requests are handled by a global listener in taskStore.ts
+    // This ensures permissions aren't lost when user is on Home or navigating between pages
 
     // Subscribe to task status changes (e.g., queued -> running)
     const unsubscribeStatusChange = accomplish.onTaskStatusChange?.((data) => {
@@ -413,12 +414,11 @@ export default function ExecutionPage() {
     return () => {
       unsubscribeTask();
       unsubscribeTaskBatch?.();
-      unsubscribePermission();
       unsubscribeStatusChange?.();
       unsubscribeDebugLog();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, loadTaskById, addTaskUpdate, addTaskUpdateBatch, updateTaskStatus, setPermissionRequest]); // accomplish is stable singleton
+  }, [id, loadTaskById, addTaskUpdate, addTaskUpdateBatch, updateTaskStatus]); // accomplish is stable singleton, permissions handled globally in taskStore
 
   // Increment counter when task starts/resumes
   useEffect(() => {

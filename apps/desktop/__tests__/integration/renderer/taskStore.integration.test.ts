@@ -102,7 +102,7 @@ describe('taskStore Integration', () => {
         isLoading: false,
         error: null,
         tasks: [],
-        permissionRequest: null,
+        pendingPermissions: {},
         setupProgress: null,
         setupProgressTaskId: null,
         setupDownloadStep: 1,
@@ -159,7 +159,7 @@ describe('taskStore Integration', () => {
       expect(state.tasks).toEqual([]);
     });
 
-    it('should have null permissionRequest initially', async () => {
+    it('should have empty pendingPermissions initially', async () => {
       // Arrange
       const { useTaskStore } = await import('@/stores/taskStore');
 
@@ -167,7 +167,7 @@ describe('taskStore Integration', () => {
       const state = useTaskStore.getState();
 
       // Assert
-      expect(state.permissionRequest).toBeNull();
+      expect(state.pendingPermissions).toEqual({});
     });
 
     it('should have setupDownloadStep as 1 initially', async () => {
@@ -716,7 +716,7 @@ describe('taskStore Integration', () => {
         isLoading: true,
         error: 'Some error',
         tasks,
-        permissionRequest: { id: 'perm-1', taskId: 'task-1', type: 'file', message: 'Allow?' },
+        pendingPermissions: { 'task-1': { id: 'perm-1', taskId: 'task-1', type: 'file', message: 'Allow?' } },
         setupProgress: 'Downloading...',
         setupProgressTaskId: 'task-1',
         setupDownloadStep: 2,
@@ -730,7 +730,7 @@ describe('taskStore Integration', () => {
       expect(state.currentTask).toBeNull();
       expect(state.isLoading).toBe(false);
       expect(state.error).toBeNull();
-      expect(state.permissionRequest).toBeNull();
+      expect(state.pendingPermissions).toEqual({});
       expect(state.setupProgress).toBeNull();
       expect(state.setupProgressTaskId).toBeNull();
       expect(state.setupDownloadStep).toBe(1);
@@ -744,19 +744,44 @@ describe('taskStore Integration', () => {
       // Arrange
       const { useTaskStore } = await import('@/stores/taskStore');
       useTaskStore.setState({
-        permissionRequest: { id: 'perm-1', taskId: 'task-1', type: 'file', message: 'Allow?' },
+        pendingPermissions: { 'task-1': { id: 'perm-1', taskId: 'task-1', type: 'file', message: 'Allow?' } },
       });
       mockAccomplish.respondToPermission.mockResolvedValueOnce(undefined);
 
       const response = { permissionId: 'perm-1', granted: true };
 
       // Act
-      await useTaskStore.getState().respondToPermission(response);
+      await useTaskStore.getState().respondToPermission('task-1', response);
       const state = useTaskStore.getState();
 
       // Assert
       expect(mockAccomplish.respondToPermission).toHaveBeenCalledWith(response);
-      expect(state.permissionRequest).toBeNull();
+      expect(state.pendingPermissions['task-1']).toBeUndefined();
+    });
+
+    it('should store permissions per-task and not leak between tasks', async () => {
+      // Arrange
+      const { useTaskStore } = await import('@/stores/taskStore');
+      const { setPendingPermission, clearPendingPermission } = useTaskStore.getState();
+
+      // Act - Set permissions for two different tasks
+      setPendingPermission('task-1', { id: 'perm-1', taskId: 'task-1', type: 'file', message: 'Allow file?' });
+      setPendingPermission('task-2', { id: 'perm-2', taskId: 'task-2', type: 'question', message: 'Answer?' });
+
+      let state = useTaskStore.getState();
+
+      // Assert - Both permissions should be stored separately
+      expect(state.pendingPermissions['task-1']?.id).toBe('perm-1');
+      expect(state.pendingPermissions['task-2']?.id).toBe('perm-2');
+
+      // Act - Clear one task's permission
+      clearPendingPermission('task-1');
+
+      state = useTaskStore.getState();
+
+      // Assert - Only task-1's permission should be cleared, task-2 should remain
+      expect(state.pendingPermissions['task-1']).toBeUndefined();
+      expect(state.pendingPermissions['task-2']?.id).toBe('perm-2');
     });
   });
 

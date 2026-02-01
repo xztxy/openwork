@@ -13,10 +13,8 @@ import type { Task, TaskStatus } from '@accomplish/shared';
 // Create mock functions
 const mockStartTask = vi.fn();
 const mockAddTaskUpdate = vi.fn();
-const mockSetPermissionRequest = vi.fn();
 const mockHasAnyApiKey = vi.fn();
 const mockOnTaskUpdate = vi.fn();
-const mockOnPermissionRequest = vi.fn();
 const mockLogEvent = vi.fn();
 
 // Helper to create a mock task
@@ -40,7 +38,6 @@ const mockAccomplish = {
   getSelectedModel: vi.fn().mockResolvedValue({ provider: 'anthropic', id: 'claude-3-opus' }),
   getOllamaConfig: vi.fn().mockResolvedValue(null),
   onTaskUpdate: mockOnTaskUpdate.mockReturnValue(() => {}),
-  onPermissionRequest: mockOnPermissionRequest.mockReturnValue(() => {}),
   logEvent: mockLogEvent.mockResolvedValue(undefined),
   isE2EMode: vi.fn().mockResolvedValue(false),
   getProviderSettings: vi.fn().mockResolvedValue({
@@ -76,7 +73,6 @@ let mockStoreState = {
   startTask: mockStartTask,
   isLoading: false,
   addTaskUpdate: mockAddTaskUpdate,
-  setPermissionRequest: mockSetPermissionRequest,
 };
 
 // Mock the task store
@@ -140,7 +136,6 @@ describe('Home Page Integration', () => {
       startTask: mockStartTask,
       isLoading: false,
       addTaskUpdate: mockAddTaskUpdate,
-      setPermissionRequest: mockSetPermissionRequest,
     };
     // Default to having API key (legacy)
     mockHasAnyApiKey.mockResolvedValue(true);
@@ -233,9 +228,8 @@ describe('Home Page Integration', () => {
         </MemoryRouter>
       );
 
-      // Assert
+      // Assert - Home subscribes to task updates only (permissions are handled per-task in Execution.tsx)
       expect(mockOnTaskUpdate).toHaveBeenCalled();
-      expect(mockOnPermissionRequest).toHaveBeenCalled();
     });
   });
 
