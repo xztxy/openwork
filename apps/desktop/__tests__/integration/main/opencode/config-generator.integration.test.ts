@@ -319,7 +319,7 @@ describe('OpenCode Config Generator Integration', () => {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       const prompt = config.agent['accomplish'].prompt;
 
-      expect(prompt).toContain('FILE PERMISSION WORKFLOW');
+      expect(prompt).toContain('FILE PERMISSIONS');
       expect(prompt).toContain('request_file_permission');
     });
 
@@ -332,7 +332,7 @@ describe('OpenCode Config Generator Integration', () => {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       const prompt = config.agent['accomplish'].prompt;
 
-      expect(prompt).toContain('user-communication');
+      expect(prompt).toContain('USER CANNOT SEE YOUR TEXT OUTPUT');
       expect(prompt).toContain('AskUserQuestion');
     });
   });
