@@ -26,6 +26,7 @@ import { TodoSidebar } from '../components/TodoSidebar';
 import { ModelIndicator } from '../components/ui/ModelIndicator';
 import { useSpeechInput } from '../hooks/useSpeechInput';
 import { SpeechInputButton } from '../components/ui/SpeechInputButton';
+import { PlusMenu } from '../components/landing/PlusMenu';
 
 // Debug log entry type
 interface DebugLogEntry {
@@ -188,7 +189,7 @@ export default function ExecutionPage() {
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [customResponse, setCustomResponse] = useState('');
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
-  const [settingsInitialTab, setSettingsInitialTab] = useState<'providers' | 'voice'>('providers');
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'providers' | 'voice' | 'skills'>('providers');
   const [pendingFollowUp, setPendingFollowUp] = useState<string | null>(null);
   const pendingSpeechFollowUpRef = useRef<string | null>(null);
 
@@ -1326,7 +1327,23 @@ export default function ExecutionPage() {
                 />
               </div>
               {/* Toolbar - fixed at bottom */}
-              <div className="flex items-center justify-end gap-2 px-3 py-2 border-t border-border/50">
+              <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-border/50">
+                {/* Plus Menu on left */}
+                <PlusMenu
+                  onSkillSelect={(command) => {
+                    const newValue = `${command} ${followUp}`.trim();
+                    setFollowUp(newValue);
+                    setTimeout(() => followUpInputRef.current?.focus(), 0);
+                  }}
+                  onOpenSettings={(tab) => {
+                    setSettingsInitialTab(tab);
+                    setShowSettingsDialog(true);
+                  }}
+                  disabled={isLoading || speechInput.isRecording}
+                />
+
+                {/* Right side controls */}
+                <div className="flex items-center gap-2">
                 <ModelIndicator
                   isRunning={false}
                   onOpenSettings={handleOpenModelSettings}
@@ -1354,6 +1371,7 @@ export default function ExecutionPage() {
                 >
                   <CornerDownLeft className="h-4 w-4" />
                 </button>
+                </div>
               </div>
             </div>
           </div>

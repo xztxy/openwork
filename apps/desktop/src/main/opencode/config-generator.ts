@@ -8,6 +8,7 @@ import { getProviderSettings, getActiveProviderModel, getConnectedProviderIds } 
 import { ensureAzureFoundryProxy } from './azure-foundry-proxy';
 import { ensureMoonshotProxy } from './moonshot-proxy';
 import { getNodePath } from '../utils/bundled-node';
+import { skillsManager } from '../skills';
 import type { BedrockCredentials, ProviderId, ZaiCredentials, AzureFoundryCredentials } from '@accomplish/shared';
 
 /**
@@ -23,24 +24,24 @@ export const ACCOMPLISH_AGENT_NAME = 'accomplish';
  * @see https://github.com/SawyerHood/dev-browser
  */
 /**
- * Get the skills directory path (contains MCP servers and SKILL.md files)
- * In dev: apps/desktop/skills
- * In packaged: resources/skills (unpacked from asar)
+ * Get the MCP tools directory path (contains MCP servers)
+ * In dev: apps/desktop/mcp-tools
+ * In packaged: resources/mcp-tools (unpacked from asar)
  */
 export function getSkillsPath(): string {
   if (app.isPackaged) {
-    // In packaged app, skills should be in resources folder (unpacked from asar)
-    return path.join(process.resourcesPath, 'skills');
+    // In packaged app, mcp-tools should be in resources folder (unpacked from asar)
+    return path.join(process.resourcesPath, 'mcp-tools');
   } else {
     // In development, use app.getAppPath() which returns the desktop app directory
     // app.getAppPath() returns apps/desktop in dev mode
-    return path.join(app.getAppPath(), 'skills');
+    return path.join(app.getAppPath(), 'mcp-tools');
   }
 }
 
 /**
- * Get the OpenCode config directory path (parent of skills/ for OPENCODE_CONFIG_DIR)
- * OpenCode looks for skills at $OPENCODE_CONFIG_DIR/skills/<name>/SKILL.md
+ * Get the OpenCode config directory path (parent of mcp-tools/ for OPENCODE_CONFIG_DIR)
+ * OpenCode looks for skills at $OPENCODE_CONFIG_DIR/mcp-tools/<name>/SKILL.md
  */
 export function getOpenCodeConfigDir(): string {
   if (app.isPackaged) {
@@ -888,6 +889,37 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
   }
 
   const tsxCommand = resolveBundledTsxCommand(skillsPath);
+
+  // Get enabled skills and add to system prompt
+  const enabledSkills = await skillsManager.getEnabled();
+
+  let skillsSection = '';
+  if (enabledSkills.length > 0) {
+    skillsSection = `
+
+<available-skills>
+##############################################################################
+# CHECK SKILLS AFTER PLANNING (Step 2)
+##############################################################################
+
+After outputting your plan, check if any of these skills match your task.
+If a skill matches, read its SKILL.md file and adjust your approach accordingly.
+
+**Available Skills:**
+
+${enabledSkills.map(s => `- **${s.name}** (${s.command}): ${s.description}
+  File: ${s.filePath}`).join('\n\n')}
+
+Skills provide specialized instructions - use them when they match your task.
+
+##############################################################################
+</available-skills>
+`;
+  }
+
+  // Combine base system prompt with skills section
+  const fullSystemPrompt = systemPrompt + skillsSection;
+
   console.log('[OpenCode Config] MCP build marker: edited by codex');
 
   // For Bedrock, set model and small_model to the same value in order to prevent the model from using 
@@ -920,7 +952,7 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
     agent: {
       [ACCOMPLISH_AGENT_NAME]: {
         description: 'Browser automation assistant using dev-browser',
-        prompt: systemPrompt,
+        prompt: fullSystemPrompt,
         mode: 'primary',
       },
     },

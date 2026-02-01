@@ -15,6 +15,7 @@ import { migration as v002 } from './v002-azure-foundry';
 import { migration as v003 } from './v003-lmstudio';
 import { migration as v004 } from './v004-openai-base-url';
 import { migration as v005 } from './v005-task-todos';
+import { migration as v006 } from './v006-skills';
 
 // Migrations array
 const migrations: Migration[] = [
@@ -23,6 +24,7 @@ const migrations: Migration[] = [
   v003,
   v004,
   v005,
+  v006,
 ];
 
 /**
@@ -38,7 +40,7 @@ export function registerMigration(migration: Migration): void {
  * Current schema version supported by this app.
  * Increment this when adding new migrations.
  */
-export const CURRENT_VERSION = 5;
+export const CURRENT_VERSION = 6;
 
 /**
  * Get the stored schema version from the database.
