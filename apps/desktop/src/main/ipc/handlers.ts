@@ -11,6 +11,7 @@ import { getAzureEntraToken } from '../opencode/azure-token-manager';
 import {
   getTaskManager,
   disposeTaskManager,
+  prewarmBrowserServer,
   type TaskCallbacks,
 } from '../opencode/task-manager';
 import {
@@ -2340,6 +2341,18 @@ export function registerIPCHandlers(): void {
   // Onboarding: Set onboarding complete status
   handle('onboarding:set-complete', async (_event: IpcMainInvokeEvent, complete: boolean) => {
     setOnboardingComplete(complete);
+
+    // Pre-warm browser server when onboarding completes
+    // This eliminates browser startup delay on first task
+    if (complete) {
+      prewarmBrowserServer();
+    }
+  });
+
+  // Browser: Pre-warm the browser server
+  // Call this early (e.g., when home page loads) to eliminate startup delay
+  handle('browser:prewarm', async () => {
+    prewarmBrowserServer();
   });
 
   // Shell: Open URL in external browser

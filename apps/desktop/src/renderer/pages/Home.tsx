@@ -89,6 +89,14 @@ export default function HomePage() {
   const navigate = useNavigate();
   const accomplish = getAccomplish();
 
+  // Pre-warm browser server on home page load
+  // This eliminates browser startup delay when user submits first task
+  useEffect(() => {
+    accomplish.prewarmBrowser().catch(() => {
+      // Silently ignore prewarm failures - browser will start on first task if needed
+    });
+  }, [accomplish]);
+
   // Subscribe to task events
   useEffect(() => {
     const unsubscribeTask = accomplish.onTaskUpdate((event) => {

@@ -32,6 +32,9 @@ interface AccomplishAPI {
   // Shell
   openExternal(url: string): Promise<void>;
 
+  // Browser
+  prewarmBrowser(): Promise<void>;
+
   // Task operations
   startTask(config: TaskConfig): Promise<Task>;
   cancelTask(taskId: string): Promise<void>;

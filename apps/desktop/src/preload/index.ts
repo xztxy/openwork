@@ -17,6 +17,10 @@ const accomplishAPI = {
   openExternal: (url: string): Promise<void> =>
     ipcRenderer.invoke('shell:open-external', url),
 
+  // Browser
+  prewarmBrowser: (): Promise<void> =>
+    ipcRenderer.invoke('browser:prewarm'),
+
   // Task operations
   startTask: (config: { description: string }): Promise<unknown> =>
     ipcRenderer.invoke('task:start', config),

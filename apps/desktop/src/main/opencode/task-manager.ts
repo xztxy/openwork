@@ -24,6 +24,11 @@ import {
   type TodoItem,
 } from '@accomplish/shared';
 
+/** Tracks whether browser pre-warming has been initiated */
+let browserPrewarmStarted = false;
+/** Promise that resolves when browser prewarm completes (for optional awaiting) */
+let browserPrewarmPromise: Promise<void> | null = null;
+
 /**
  * Check if system Chrome is installed
  */
@@ -166,18 +171,24 @@ async function isDevBrowserServerReady(): Promise<boolean> {
 }
 
 /**
- * Wait for the dev-browser server to be ready with polling
+ * Wait for the dev-browser server to be ready with exponential backoff polling.
+ * Starts fast (100ms) to detect quick startups, then backs off to reduce CPU usage.
  */
-async function waitForDevBrowserServer(maxWaitMs = 15000, pollIntervalMs = 500): Promise<boolean> {
+async function waitForDevBrowserServer(maxWaitMs = 15000): Promise<boolean> {
   const startTime = Date.now();
   let attempts = 0;
+  let pollInterval = 100; // Start at 100ms
+  const maxPollInterval = 1000; // Cap at 1s
+
   while (Date.now() - startTime < maxWaitMs) {
     attempts++;
     if (await isDevBrowserServerReady()) {
       console.log(`[TaskManager] Dev-browser server ready after ${attempts} attempts (${Date.now() - startTime}ms)`);
       return true;
     }
-    await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+    await new Promise(resolve => setTimeout(resolve, pollInterval));
+    // Exponential backoff: 100 -> 200 -> 400 -> 800 -> 1000 (capped)
+    pollInterval = Math.min(pollInterval * 2, maxPollInterval);
   }
   console.log(`[TaskManager] Dev-browser server not ready after ${attempts} attempts (${maxWaitMs}ms timeout)`);
   return false;
@@ -339,6 +350,35 @@ async function ensureDevBrowserServer(
   } catch (error) {
     console.error('[TaskManager] Failed to start dev-browser server:', error);
   }
+}
+
+/**
+ * Pre-warm the browser server in the background.
+ * Call this early (e.g., after onboarding, when home page loads) to eliminate
+ * browser startup delay when the first task is submitted.
+ *
+ * This is fire-and-forget - it won't block and failures are logged but not thrown.
+ */
+export function prewarmBrowserServer(): void {
+  if (browserPrewarmStarted) {
+    console.log('[TaskManager] Browser prewarm already started, skipping');
+    return;
+  }
+
+  browserPrewarmStarted = true;
+  console.log('[TaskManager] Starting browser server prewarm...');
+
+  browserPrewarmPromise = ensureDevBrowserServer().catch((error) => {
+    console.error('[TaskManager] Browser prewarm failed:', error);
+  });
+}
+
+/**
+ * Check if the browser server is already running and ready.
+ * Useful to skip "Preparing browser..." UI if prewarm completed.
+ */
+export async function isBrowserServerReady(): Promise<boolean> {
+  return isDevBrowserServerReady();
 }
 
 /**
@@ -578,7 +618,7 @@ export class TaskManager {
       createdAt: new Date().toISOString(),
     };
 
-    // Start browser setup and agent asynchronously
+    // Start agent asynchronously - browser starts in background (lazy start)
     // This allows the UI to navigate immediately while setup happens
     const isFirstTask = this.isFirstTask;
     (async () => {
@@ -586,15 +626,24 @@ export class TaskManager {
         // Emit starting stage immediately
         callbacks.onProgress({ stage: 'starting', message: 'Starting task...', isFirstTask });
 
-        // Emit browser stage only on cold start (first task)
-        if (isFirstTask) {
-          callbacks.onProgress({ stage: 'browser', message: 'Preparing browser...', isFirstTask });
+        // Check if browser is already ready (from prewarm or previous task)
+        const browserReady = await isDevBrowserServerReady();
+
+        if (!browserReady) {
+          // Browser not ready - start it in the background (fire-and-forget)
+          // Don't block the agent - it will start immediately
+          // By the time the agent needs browser tools, the server should be ready
+          if (isFirstTask) {
+            callbacks.onProgress({ stage: 'browser', message: 'Preparing browser...', isFirstTask });
+          }
+          ensureDevBrowserServer(callbacks.onProgress).catch((error) => {
+            console.error('[TaskManager] Background browser startup failed:', error);
+          });
+        } else {
+          console.log('[TaskManager] Browser server already ready (prewarm or previous task)');
         }
 
-        // Ensure browser is available (may download Playwright if needed)
-        await ensureDevBrowserServer(callbacks.onProgress);
-
-        // Mark cold start as complete after browser setup
+        // Mark cold start as complete
         if (this.isFirstTask) {
           this.isFirstTask = false;
         }
@@ -602,7 +651,8 @@ export class TaskManager {
         // Emit environment setup stage
         callbacks.onProgress({ stage: 'environment', message: 'Setting up environment...', isFirstTask });
 
-        // Now start the agent
+        // Start the agent immediately - don't wait for browser
+        // The MCP server will connect to browser when agent uses browser tools
         await adapter.startTask({ ...config, taskId });
       } catch (error) {
         // Cleanup on failure and process queue
