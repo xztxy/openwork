@@ -892,6 +892,10 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
               this.completionEnforcer.updateTodos(todos);
               console.log('[OpenCode Adapter] Created todos from start_task steps');
             }
+            // Load and emit skill content if skills were specified
+            if (startInput.skills?.length > 0) {
+              this.emitSkillContent(startInput.skills, this.currentSessionId || '');
+            }
           }
         }
 
@@ -971,6 +975,10 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
               this.emit('todo:update', todos);
               this.completionEnforcer.updateTodos(todos);
               console.log('[OpenCode Adapter] Created todos from start_task steps');
+            }
+            // Load and emit skill content if skills were specified
+            if (startInput.skills?.length > 0) {
+              this.emitSkillContent(startInput.skills, toolUseMessage.part.sessionID || '');
             }
           }
         }
@@ -1349,7 +1357,10 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     const verificationSection = input.verification?.length
       ? `\n\n**Verification:**\n${input.verification.map((v, i) => `${i + 1}. ${v}`).join('\n')}`
       : '';
-    const planText = `**Plan:**\n\n**Goal:** ${input.goal}\n\n**Steps:**\n${input.steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}${verificationSection}`;
+    const skillsSection = input.skills?.length
+      ? `\n\n**Skills:** ${input.skills.join(', ')}`
+      : '';
+    const planText = `**Plan:**\n\n**Goal:** ${input.goal}\n\n**Steps:**\n${input.steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}${verificationSection}${skillsSection}`;
 
     const syntheticMessage: OpenCodeMessage = {
       type: 'text',
@@ -1366,6 +1377,60 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
     this.emit('message', syntheticMessage);
     console.log('[OpenCode Adapter] Emitted synthetic plan message');
+  }
+
+  /**
+   * Load and emit skill content for the skills specified in start_task.
+   * This injects skill instructions into the conversation context.
+   */
+  private async emitSkillContent(skills: string[], sessionId: string): Promise<void> {
+    if (!skills || skills.length === 0) return;
+
+    const { skillsManager } = await import('../skills');
+    const allSkills = await skillsManager.getEnabled();
+
+    const skillContents: string[] = [];
+
+    for (const skillRef of skills) {
+      // Find skill by name or command
+      const skill = allSkills.find(
+        s => s.name.toLowerCase() === skillRef.toLowerCase() ||
+             s.command.toLowerCase() === skillRef.toLowerCase() ||
+             s.command.toLowerCase() === `/${skillRef.toLowerCase()}`
+      );
+
+      if (skill) {
+        const content = await skillsManager.getContent(skill.id);
+        if (content) {
+          skillContents.push(`<skill name="${skill.name}">\n${content}\n</skill>`);
+          console.log(`[OpenCode Adapter] Loaded skill content: ${skill.name}`);
+        } else {
+          console.warn(`[OpenCode Adapter] Could not load content for skill: ${skill.name}`);
+        }
+      } else {
+        console.warn(`[OpenCode Adapter] Skill not found: ${skillRef}`);
+      }
+    }
+
+    if (skillContents.length > 0) {
+      const skillText = `**Skill Instructions:**\n\n${skillContents.join('\n\n')}`;
+
+      const syntheticMessage: OpenCodeMessage = {
+        type: 'text',
+        timestamp: Date.now(),
+        sessionID: sessionId,
+        part: {
+          id: this.generateMessageId(),
+          sessionID: sessionId,
+          messageID: this.generateMessageId(),
+          type: 'text',
+          text: skillText,
+        },
+      } as import('@accomplish/shared').OpenCodeTextMessage;
+
+      this.emit('message', syntheticMessage);
+      console.log(`[OpenCode Adapter] Emitted skill content for ${skillContents.length} skills`);
+    }
   }
 
   /**
@@ -1436,6 +1501,7 @@ interface StartTaskInput {
   goal: string;
   steps: string[];
   verification: string[];
+  skills: string[];
 }
 
 /**

@@ -132,6 +132,7 @@ start_task requires:
 - goal: What you aim to accomplish
 - steps: Array of planned actions to achieve the goal
 - verification: Array of how you will verify the task is complete
+- skills: Array of relevant skill names from <available-skills> (or empty [] if none apply)
 
 **STEP 2: UPDATE TODOS AS YOU PROGRESS**
 
@@ -899,18 +900,17 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
 
 <available-skills>
 ##############################################################################
-# CHECK SKILLS AFTER PLANNING (Step 2)
+# SKILLS - Include relevant ones in your start_task call
 ##############################################################################
 
-After outputting your plan, check if any of these skills match your task.
-If a skill matches, read its SKILL.md file and adjust your approach accordingly.
+Review these skills and include any relevant ones in your start_task call's \`skills\` array.
+The skill content will be provided to you automatically after you call start_task.
 
 **Available Skills:**
 
-${enabledSkills.map(s => `- **${s.name}** (${s.command}): ${s.description}
-  File: ${s.filePath}`).join('\n\n')}
+${enabledSkills.map(s => `- **${s.name}** (${s.command}): ${s.description}`).join('\n')}
 
-Skills provide specialized instructions - use them when they match your task.
+Use empty array [] if no skills apply to your task.
 
 ##############################################################################
 </available-skills>
