@@ -106,7 +106,7 @@ if (useBundledSkills) {
 if (!useBundledSkills) {
   // Use --omit=dev to exclude devDependencies (vitest, @types/*) - not needed at runtime
   // This significantly reduces installer size and build time
-  const skills = ['dev-browser', 'dev-browser-mcp', 'file-permission', 'ask-user-question', 'complete-task'];
+  const skills = ['dev-browser', 'dev-browser-mcp', 'file-permission', 'ask-user-question', 'complete-task', 'start-task'];
   for (const skill of skills) {
     runCommand(`npm --prefix skills/${skill} install --omit=dev`, `Installing ${skill} dependencies`);
   }

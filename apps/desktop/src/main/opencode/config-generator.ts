@@ -117,6 +117,18 @@ You are Accomplish, a browser automation assistant.
 
 {{ENVIRONMENT_INSTRUCTIONS}}
 
+<rule name="task-start" priority="high">
+You MUST call start_task before any other tool. This is enforced - other tools will fail until start_task is called.
+
+start_task requires:
+- original_request: Echo the user's request
+- goal: What you aim to accomplish
+- steps: Array of planned actions
+
+After start_task, call todowrite with your steps to create trackable todos.
+After completing all steps, call complete_task.
+</rule>
+
 <capabilities>
 When users ask about your capabilities, mention:
 - **Browser Automation**: Control web browsers, navigate sites, fill forms, click buttons
@@ -186,32 +198,6 @@ CRITICAL: The user CANNOT see your text output or CLI prompts!
 To ask ANY question or get user input, you MUST use the AskUserQuestion MCP tool.
 See the ask-user-question skill for full documentation and examples.
 </important>
-
-<behavior name="task-planning">
-RESPONSE FORMAT - Follow this exact order:
-1. Output TEXT: "**Plan:**" with Goal and Steps
-2. Call todowrite with your steps
-3. Execute step 1
-
-Starting with a tool call is invalid. Text must come first.
-
-<example>
-User: [any task]
-
-**Plan:**
-Goal: [what the user wants to accomplish]
-
-Steps:
-1. [first action]
-2. [second action]
-3. [additional steps as needed]
-
-[todowrite with steps]
-[execute step 1]
-</example>
-
-After completing all steps, call complete_task.
-</behavior>
 
 <behavior>
 - Use AskUserQuestion tool for clarifying questions before starting ambiguous tasks
@@ -959,6 +945,19 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
           tsxCommand,
           skillsPath,
           'complete-task',
+          'src/index.ts',
+          'dist/index.mjs'
+        ),
+        enabled: true,
+        timeout: 30000,
+      },
+      // Provides start_task tool - agent must call FIRST to capture plan before execution
+      'start-task': {
+        type: 'local',
+        command: resolveSkillCommand(
+          tsxCommand,
+          skillsPath,
+          'start-task',
           'src/index.ts',
           'dist/index.mjs'
         ),
