@@ -301,16 +301,6 @@ export default function SettingsDialog({
                 Providers
               </button>
               <button
-                onClick={() => setActiveTab('voice')}
-                className={`pb-3 px-1 font-medium text-sm transition-colors ${
-                  activeTab === 'voice'
-                    ? 'text-foreground border-b-2 border-primary'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                Voice Input
-              </button>
-              <button
                 onClick={() => setActiveTab('skills')}
                 className={`pb-3 px-1 font-medium text-sm transition-colors ${
                   activeTab === 'skills'
@@ -319,6 +309,16 @@ export default function SettingsDialog({
                 }`}
               >
                 Skills
+              </button>
+              <button
+                onClick={() => setActiveTab('voice')}
+                className={`pb-3 px-1 font-medium text-sm transition-colors ${
+                  activeTab === 'voice'
+                    ? 'text-foreground border-b-2 border-primary'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Voice Input
               </button>
             </div>
             {activeTab === 'skills' && (
@@ -478,17 +478,17 @@ export default function SettingsDialog({
             </div>
           )}
 
-          {/* Voice Input Tab */}
-          {activeTab === 'voice' && (
-            <div className="space-y-6">
-              <SpeechSettingsForm onSave={() => {}} onChange={() => {}} />
-            </div>
-          )}
-
           {/* Skills Tab */}
           {activeTab === 'skills' && (
             <div className="space-y-6">
               <SkillsPanel refreshTrigger={skillsRefreshTrigger} />
+            </div>
+          )}
+
+          {/* Voice Input Tab */}
+          {activeTab === 'voice' && (
+            <div className="space-y-6">
+              <SpeechSettingsForm onSave={() => {}} onChange={() => {}} />
             </div>
           )}
 

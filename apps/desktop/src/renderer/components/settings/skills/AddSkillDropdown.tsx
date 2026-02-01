@@ -26,17 +26,19 @@ interface AddSkillDropdownProps {
 
 export function AddSkillDropdown({ onSkillAdded, onClose }: AddSkillDropdownProps) {
   const [isGitHubDialogOpen, setIsGitHubDialogOpen] = useState(false);
+  const [isUploadErrorDialogOpen, setIsUploadErrorDialogOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [gitHubUrl, setGitHubUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const handleUploadSkill = async () => {
     if (!window.accomplish) return;
 
     try {
       setIsLoading(true);
-      setError(null);
+      setUploadError(null);
       const filePath = await window.accomplish.pickSkillFile();
       if (!filePath) {
         setIsLoading(false);
@@ -46,7 +48,14 @@ export function AddSkillDropdown({ onSkillAdded, onClose }: AddSkillDropdownProp
       onSkillAdded?.();
     } catch (err) {
       console.error('Failed to upload skill:', err);
-      setError(err instanceof Error ? err.message : 'Failed to upload skill');
+      let errorMessage = err instanceof Error ? err.message : 'Failed to upload skill';
+      // Clean up the error message - extract the actual error after "Error: "
+      const errorMatch = errorMessage.match(/Error:\s*(.+)$/);
+      if (errorMatch) {
+        errorMessage = errorMatch[1];
+      }
+      setUploadError(errorMessage);
+      setIsUploadErrorDialogOpen(true);
     } finally {
       setIsLoading(false);
     }
@@ -223,6 +232,57 @@ export function AddSkillDropdown({ onSkillAdded, onClose }: AddSkillDropdownProp
               disabled={isLoading || !gitHubUrl.trim()}
             >
               {isLoading ? 'Importing...' : 'Import'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Upload Error Dialog */}
+      <Dialog open={isUploadErrorDialogOpen} onOpenChange={setIsUploadErrorDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <div className="flex items-start gap-4">
+            <div className="bg-destructive/10 rounded-full p-3 flex-shrink-0">
+              <svg className="w-5 h-5 text-destructive" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <DialogHeader className="space-y-1">
+                <DialogTitle>Upload Failed</DialogTitle>
+                <DialogDescription>
+                  The skill file could not be uploaded.
+                </DialogDescription>
+              </DialogHeader>
+            </div>
+          </div>
+
+          <div className="mt-4 p-3 bg-destructive/10 rounded-lg border border-destructive/20">
+            <div className="flex items-start gap-2">
+              <svg className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <p className="text-sm text-destructive">{uploadError}</p>
+            </div>
+          </div>
+
+          <p className="mt-4 text-sm text-muted-foreground">
+            Make sure your SKILL.md file has valid YAML frontmatter with at least a <code className="bg-muted px-1.5 py-0.5 rounded text-foreground">name</code> field:
+          </p>
+
+          <pre className="mt-2 p-3 bg-muted rounded-md text-xs overflow-x-auto text-muted-foreground">
+{`---
+name: my-skill
+description: What this skill does
+---
+
+# My Skill
+
+Instructions here...`}
+          </pre>
+
+          <DialogFooter className="mt-4">
+            <Button onClick={() => setIsUploadErrorDialogOpen(false)}>
+              OK
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -160,34 +160,50 @@ After creating the skill:
 
 ### User Skills Directory
 
+**CRITICAL: You MUST save skills to EXACTLY this path. Do NOT ask the user where to save - the path is fixed by the app.**
+
 Skills must be saved to the Openwork user data directory under a `skills` folder:
 
 **macOS:** `~/Library/Application Support/Openwork/skills/<skill-name>/SKILL.md`
 **Windows:** `%APPDATA%\Openwork\skills\<skill-name>\SKILL.md`
 **Linux:** `~/.config/Openwork/skills/<skill-name>/SKILL.md`
 
+**NEVER:**
+- Ask the user where to save the skill file
+- Use any other path like `~/skills/`, `./skills/`, or custom paths
+- Offer the user choices about the save location
+
+The path is determined by the operating system. Detect the OS and use the correct path automatically.
+
 ### How to Save a Skill
 
-1. **Create the skill directory** named after your skill (lowercase, hyphenated):
+**Do not ask the user for a path. Follow these steps automatically:**
+
+1. **Detect the operating system** to determine the correct base path:
+   - macOS: `~/Library/Application Support/Openwork/skills/`
+   - Windows: `%APPDATA%\Openwork\skills\`
+   - Linux: `~/.config/Openwork/skills/`
+
+2. **Create the skill directory** named after your skill (lowercase, hyphenated):
    ```
-   ~/Library/Application Support/Openwork/skills/my-awesome-skill/
+   <base-path>/my-awesome-skill/
    ```
 
-2. **Write the SKILL.md file** inside that directory:
+3. **Write the SKILL.md file** inside that directory:
    ```
-   ~/Library/Application Support/Openwork/skills/my-awesome-skill/SKILL.md
+   <base-path>/my-awesome-skill/SKILL.md
    ```
 
-3. **Add any bundled resources** as subdirectories if needed:
+4. **Add any bundled resources** as subdirectories if needed:
    ```
-   ~/Library/Application Support/Openwork/skills/my-awesome-skill/
+   <base-path>/my-awesome-skill/
    ├── SKILL.md
    ├── scripts/
    ├── references/
    └── assets/
    ```
 
-4. **The skill is automatically detected** - Openwork scans this directory on startup and syncs new skills to its database. The skill will appear in Settings > Skills as a "Custom" skill.
+5. **The skill is automatically detected** - Openwork scans this directory on startup and syncs new skills to its database. The skill will appear in Settings > Skills as a "Custom" skill.
 
 ### Skill Frontmatter Rules
 
