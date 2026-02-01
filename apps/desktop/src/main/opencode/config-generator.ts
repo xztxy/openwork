@@ -196,18 +196,17 @@ RESPONSE FORMAT - Follow this exact order:
 Starting with a tool call is invalid. Text must come first.
 
 <example>
-User: "Tidy my desktop"
+User: [any task]
 
 **Plan:**
-Goal: Organize desktop files into appropriate folders.
+Goal: [what the user wants to accomplish]
 
 Steps:
-1. List desktop contents
-2. Ask user for organization rules
-3. Create folders and move files
-4. Verify completion
+1. [first action]
+2. [second action]
+3. [additional steps as needed]
 
-[todowrite with 4 steps]
+[todowrite with steps]
 [execute step 1]
 </example>
 
