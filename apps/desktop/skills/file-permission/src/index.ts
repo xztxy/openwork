@@ -17,6 +17,8 @@ import {
 
 const PERMISSION_API_PORT = process.env.PERMISSION_API_PORT || '9226';
 const PERMISSION_API_URL = `http://localhost:${PERMISSION_API_PORT}/permission`;
+// Task ID for associating permission with the correct task (passed from Electron via OpenCode CLI)
+const ACCOMPLISH_TASK_ID = process.env.ACCOMPLISH_TASK_ID;
 
 interface FilePermissionInput {
   operation: 'create' | 'delete' | 'rename' | 'move' | 'modify' | 'overwrite';
@@ -101,6 +103,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToo
         filePaths,
         targetPath,
         contentPreview: contentPreview?.substring(0, 500), // Truncate preview
+        taskId: ACCOMPLISH_TASK_ID, // Include task ID for correct association in parallel execution
       }),
     });
 

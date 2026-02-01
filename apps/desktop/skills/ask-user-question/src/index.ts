@@ -16,6 +16,8 @@ import {
 
 const QUESTION_API_PORT = process.env.QUESTION_API_PORT || '9227';
 const QUESTION_API_URL = `http://localhost:${QUESTION_API_PORT}/question`;
+// Task ID for associating question with the correct task (passed from Electron via OpenCode CLI)
+const ACCOMPLISH_TASK_ID = process.env.ACCOMPLISH_TASK_ID;
 
 interface QuestionOption {
   label: string;
@@ -134,6 +136,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToo
         header: question.header,
         options: question.options,
         multiSelect: question.multiSelect,
+        taskId: ACCOMPLISH_TASK_ID, // Include task ID for correct association in parallel execution
       }),
     });
 

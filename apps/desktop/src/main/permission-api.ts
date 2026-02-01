@@ -129,6 +129,7 @@ export function startPermissionApiServer(): http.Server {
       filePaths?: string[];
       targetPath?: string;
       contentPreview?: string;
+      taskId?: string; // Task ID for correct association in parallel execution
     };
 
     try {
@@ -155,13 +156,14 @@ export function startPermissionApiServer(): http.Server {
     }
 
     // Check if we have the necessary dependencies
-    if (!mainWindow || mainWindow.isDestroyed() || !getActiveTaskId) {
+    if (!mainWindow || mainWindow.isDestroyed()) {
       res.writeHead(503, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Permission API not initialized' }));
       return;
     }
 
-    const taskId = getActiveTaskId();
+    // Use task ID from request if provided (for parallel execution), otherwise fall back to active task
+    const taskId = data.taskId || (getActiveTaskId ? getActiveTaskId() : null);
     if (!taskId) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'No active task' }));
@@ -257,6 +259,7 @@ export function startQuestionApiServer(): http.Server {
       header?: string;
       options?: Array<{ label: string; description?: string }>;
       multiSelect?: boolean;
+      taskId?: string; // Task ID for correct association in parallel execution
     };
 
     try {
@@ -275,13 +278,14 @@ export function startQuestionApiServer(): http.Server {
     }
 
     // Check if we have the necessary dependencies
-    if (!mainWindow || mainWindow.isDestroyed() || !getActiveTaskId) {
+    if (!mainWindow || mainWindow.isDestroyed()) {
       res.writeHead(503, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Question API not initialized' }));
       return;
     }
 
-    const taskId = getActiveTaskId();
+    // Use task ID from request if provided (for parallel execution), otherwise fall back to active task
+    const taskId = data.taskId || (getActiveTaskId ? getActiveTaskId() : null);
     if (!taskId) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'No active task' }));
