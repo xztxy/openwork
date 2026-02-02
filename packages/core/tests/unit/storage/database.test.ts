@@ -277,7 +277,8 @@ describe('Database', () => {
 
       // Check for tables created by migrations
       expect(tableNames).toContain('app_settings');
-      expect(tableNames).toContain('provider_settings');
+      expect(tableNames).toContain('provider_meta');
+      expect(tableNames).toContain('providers');
       expect(tableNames).toContain('tasks');
     });
   });

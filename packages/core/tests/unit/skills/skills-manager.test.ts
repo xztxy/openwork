@@ -535,8 +535,15 @@ Content.
       const sourcePath = path.join(sourceDir, 'SKILL.md');
       fs.writeFileSync(sourcePath, skillContent);
 
-      // Should throw or sanitize the name
-      await expect(manager.addSkill(sourcePath)).rejects.toThrow();
+      // The manager sanitizes dangerous names rather than throwing
+      // This is actually better security - sanitize and proceed safely
+      const skill = await manager.addSkill(sourcePath);
+      expect(skill).not.toBeNull();
+      // The sanitized name should not contain path traversal characters
+      expect(skill!.id).toBe('custom-etc-passwd');
+      // Verify the file was created in the user skills directory, not /etc/
+      expect(skill!.filePath.startsWith(testDir)).toBe(true);
+      expect(skill!.filePath).not.toContain('/etc/passwd');
     });
   });
 });
