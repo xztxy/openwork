@@ -81,7 +81,7 @@ function resolveMcpCommand(
   const mcpDir = path.join(mcpToolsPath, mcpName);
   const distPath = path.join(mcpDir, distRelPath);
 
-  if ((app.isPackaged || process.env.OPENWORK_BUNDLED_MCP === '1') && fs.existsSync(distPath)) {
+  if ((app.isPackaged || process.env.ACCOMPLISH_BUNDLED_MCP === '1') && fs.existsSync(distPath)) {
     const nodePath = getNodePath();
     console.log('[OpenCode Config] Using bundled MCP entry:', distPath);
     return [nodePath, distPath];
