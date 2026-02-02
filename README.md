@@ -14,7 +14,7 @@
   <a href="https://downloads.accomplish.ai/downloads/0.3.5/macos/Accomplish-0.3.5-mac-arm64.dmg"><img src="https://img.shields.io/badge/Download-macOS-0ea5e9?style=flat-square" alt="Download for macOS" /></a>
 </p>
 
-# Accomplish™ - Open Source AI Desktop Agent
+# Accomplish™ (formerly Openwork) - Open Source AI Desktop Agent
 
 Accomplish is an open source AI desktop agent that automates file management, document creation, and browser tasks locally on your machine. Bring your own API keys (OpenAI, Anthropic, Google, xAI) or run local models via Ollama.
 
