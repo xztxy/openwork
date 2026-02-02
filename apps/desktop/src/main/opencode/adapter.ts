@@ -321,7 +321,9 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
       this.ptyProcess = pty.spawn(shellCmd, shellArgs, {
         name: 'xterm-256color',
-        cols: 200,
+        // Use very wide columns to minimize PTY line wrapping on Windows
+        // Windows PTY inserts raw newlines at column boundary which corrupts JSON
+        cols: 32000,
         rows: 30,
         cwd: safeCwd,
         env: env as { [key: string]: string },
@@ -1154,19 +1156,12 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
   /**
    * Build a shell command string with properly escaped arguments.
-   * On Windows, prepends & call operator for paths with spaces.
    */
   private buildShellCommand(command: string, args: string[]): string {
     const escapedCommand = this.escapeShellArg(command);
     const escapedArgs = args.map(arg => this.escapeShellArg(arg));
 
-    // On Windows, if the command path contains spaces (and is thus quoted),
-    // we need to prepend & call operator so PowerShell executes it as a command
-    // Without &, PowerShell treats "path with spaces" as a string literal
-    if (process.platform === 'win32' && escapedCommand.startsWith('"')) {
-      return ['&', escapedCommand, ...escapedArgs].join(' ');
-    }
-
+    // cmd.exe and Unix shells can execute quoted paths directly
     return [escapedCommand, ...escapedArgs].join(' ');
   }
 
@@ -1275,7 +1270,9 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
     this.ptyProcess = pty.spawn(shellCmd, shellArgs, {
       name: 'xterm-256color',
-      cols: 200,
+      // Use very wide columns to minimize PTY line wrapping on Windows
+      // Windows PTY inserts raw newlines at column boundary which corrupts JSON
+      cols: 32000,
       rows: 30,
       cwd: safeCwd,
       env: env as { [key: string]: string },
@@ -1284,7 +1281,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     // Set up event handlers for new process
     this.ptyProcess.onData((data: string) => {
       // Filter out ANSI escape codes and control characters for cleaner parsing
-      // Enhanced to handle Windows PowerShell sequences (cursor visibility, window titles)
+      // Enhanced to handle Windows cmd.exe sequences
       const cleanData = data
         .replace(/\x1B\[[0-9;?]*[a-zA-Z]/g, '')  // CSI sequences (added ? for DEC modes like cursor hide)
         .replace(/\x1B\][^\x07]*\x07/g, '')       // OSC sequences with BEL terminator (window titles)
@@ -1379,8 +1376,8 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
    */
   private getPlatformShell(): string {
     if (process.platform === 'win32') {
-      // Use PowerShell on Windows for better compatibility
-      return 'powershell.exe';
+      // Use cmd.exe on Windows - much faster startup than PowerShell
+      return 'cmd.exe';
     } else if (app.isPackaged && process.platform === 'darwin') {
       // In packaged macOS apps, use /bin/sh to avoid loading user shell configs
       // (zsh always loads ~/.zshenv, which may trigger TCC permissions)
@@ -1410,11 +1407,9 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
    */
   private getShellArgs(command: string): string[] {
     if (process.platform === 'win32') {
-      // PowerShell: Use -EncodedCommand with Base64-encoded UTF-16LE to avoid
-      // all escaping/parsing issues. This is the most reliable way to pass
-      // complex commands with quotes, special characters, etc. to PowerShell.
-      const encodedCommand = Buffer.from(command, 'utf16le').toString('base64');
-      return ['-NoProfile', '-EncodedCommand', encodedCommand];
+      // cmd.exe: Use /c to run command and exit
+      // /s strips outer quotes, /c runs the command
+      return ['/s', '/c', command];
     } else {
       // Unix shells: -c to run command (no -l to avoid profile loading)
       return ['-c', command];

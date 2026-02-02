@@ -45,6 +45,15 @@ const SpinningIcon = ({ className }: { className?: string }) => (
   />
 );
 
+// Action-oriented thinking phrases
+const THINKING_PHRASES = [
+  'Doing...',
+  'Executing...',
+  'Running...',
+  'Handling it...',
+  'Accomplishing...',
+];
+
 // Tool name to human-readable progress mapping
 const TOOL_PROGRESS_MAP: Record<string, { label: string; icon: typeof FileText }> = {
   // Special error case - OpenCode returns "invalid" when LLM makes invalid tool call
@@ -217,6 +226,7 @@ export default function ExecutionPage() {
     setupDownloadStep,
     startupStage,
     startupStageTaskId,
+    clearStartupStage,
     todos,
     todosTaskId,
   } = useTaskStore();
@@ -251,6 +261,12 @@ export default function ExecutionPage() {
           .toLowerCase().includes(query))
     );
   }, [debugLogs, debugSearchQuery]);
+
+  // Pick a random thinking phrase when entering thinking state (currentTool becomes null)
+  const thinkingPhrase = useMemo(() => {
+    return THINKING_PHRASES[Math.floor(Math.random() * THINKING_PHRASES.length)];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTool]);
 
   // Reset search index when query changes
   useEffect(() => {
@@ -371,6 +387,12 @@ export default function ExecutionPage() {
           setCurrentToolInput(event.message.toolInput);
         }
       }
+      // Clear tool and startup stage when agent sends a text response (only for current task)
+      if (event.taskId === id && event.type === 'message' && event.message?.type === 'assistant') {
+        setCurrentTool(null);
+        setCurrentToolInput(null);
+        if (id) clearStartupStage(id);
+      }
       // Clear tool on completion (only for current task)
       if (event.taskId === id && (event.type === 'complete' || event.type === 'error')) {
         setCurrentTool(null);
@@ -383,14 +405,20 @@ export default function ExecutionPage() {
     const unsubscribeTaskBatch = accomplish.onTaskUpdateBatch?.((event) => {
       if (event.messages?.length) {
         addTaskUpdateBatch(event);
-        // Track current tool from the last tool message (only for current task)
+        // Track current tool from the last message (only for current task)
         if (event.taskId === id) {
-          const lastToolMsg = [...event.messages].reverse().find(m => m.type === 'tool');
-          if (lastToolMsg) {
-            const toolName = lastToolMsg.toolName || lastToolMsg.content?.match(/Using tool: (\w+)/)?.[1];
+          const lastMsg = event.messages[event.messages.length - 1];
+          if (lastMsg.type === 'assistant') {
+            // Agent sent a text response - no tool is active
+            setCurrentTool(null);
+            setCurrentToolInput(null);
+            if (id) clearStartupStage(id);
+          } else if (lastMsg.type === 'tool') {
+            // Tool is active
+            const toolName = lastMsg.toolName || lastMsg.content?.match(/Using tool: (\w+)/)?.[1];
             if (toolName) {
               setCurrentTool(toolName);
-              setCurrentToolInput(lastToolMsg.toolInput);
+              setCurrentToolInput(lastMsg.toolInput);
             }
           }
         }
@@ -905,7 +933,7 @@ export default function ExecutionPage() {
                           ? ((currentToolInput as { description?: string })?.description || getToolDisplayInfo(currentTool)?.label || currentTool)
                           : (startupStageTaskId === id && startupStage)
                             ? startupStage.message
-                            : 'Thinking...'}
+                            : thinkingPhrase}
                       </span>
                       {currentTool && !(currentToolInput as { description?: string })?.description && (
                         <span className="text-xs text-muted-foreground/60">
