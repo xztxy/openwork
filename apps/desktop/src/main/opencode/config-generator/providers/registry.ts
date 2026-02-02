@@ -12,7 +12,13 @@
  */
 
 import type { ProviderId, ProviderCredentials } from '@accomplish/shared';
-import { PROVIDER_URLS, NPM_PACKAGES } from '../constants';
+import {
+  PROVIDER_URLS,
+  NPM_PACKAGES,
+  PROVIDER_IDS,
+  OPENCODE_PROVIDER_NAMES,
+  SPECIAL_PROVIDER_IDS,
+} from '../constants';
 
 /**
  * Provider specification defining how to build configs for a provider
@@ -41,53 +47,53 @@ export interface ProviderSpec {
  * These providers use the @ai-sdk/openai-compatible package
  */
 export const PROVIDER_SPECS: Record<string, ProviderSpec> = {
-  ollama: {
-    id: 'ollama',
-    openCodeId: 'ollama',
+  [PROVIDER_IDS.OLLAMA]: {
+    id: PROVIDER_IDS.OLLAMA,
+    openCodeId: OPENCODE_PROVIDER_NAMES.OLLAMA,
     displayName: 'Ollama (local)',
-    npm: NPM_PACKAGES.ollama,
-    credentialsType: 'ollama',
-    modelIdPrefix: 'ollama/',
+    npm: NPM_PACKAGES[PROVIDER_IDS.OLLAMA],
+    credentialsType: PROVIDER_IDS.OLLAMA,
+    modelIdPrefix: `${PROVIDER_IDS.OLLAMA}/`,
     requiresApiKey: false,
     defaultToolSupport: true,
   },
-  openrouter: {
-    id: 'openrouter',
-    openCodeId: 'openrouter',
+  [PROVIDER_IDS.OPENROUTER]: {
+    id: PROVIDER_IDS.OPENROUTER,
+    openCodeId: OPENCODE_PROVIDER_NAMES.OPENROUTER,
     displayName: 'OpenRouter',
-    npm: NPM_PACKAGES.openrouter,
-    credentialsType: 'openrouter',
-    modelIdPrefix: 'openrouter/',
+    npm: NPM_PACKAGES[PROVIDER_IDS.OPENROUTER],
+    credentialsType: PROVIDER_IDS.OPENROUTER,
+    modelIdPrefix: `${PROVIDER_IDS.OPENROUTER}/`,
     requiresApiKey: true,
     defaultToolSupport: true,
   },
-  moonshot: {
-    id: 'moonshot',
-    openCodeId: 'moonshot',
+  [PROVIDER_IDS.MOONSHOT]: {
+    id: PROVIDER_IDS.MOONSHOT,
+    openCodeId: OPENCODE_PROVIDER_NAMES.MOONSHOT,
     displayName: 'Moonshot AI',
-    npm: NPM_PACKAGES.moonshot,
+    npm: NPM_PACKAGES[PROVIDER_IDS.MOONSHOT],
     credentialsType: 'api-key', // Moonshot uses api_key credentials type
-    modelIdPrefix: 'moonshot/',
+    modelIdPrefix: `${PROVIDER_IDS.MOONSHOT}/`,
     requiresApiKey: true,
     defaultToolSupport: true,
   },
-  litellm: {
-    id: 'litellm',
-    openCodeId: 'litellm',
+  [PROVIDER_IDS.LITELLM]: {
+    id: PROVIDER_IDS.LITELLM,
+    openCodeId: OPENCODE_PROVIDER_NAMES.LITELLM,
     displayName: 'LiteLLM',
-    npm: NPM_PACKAGES.litellm,
-    credentialsType: 'litellm',
-    modelIdPrefix: 'litellm/',
+    npm: NPM_PACKAGES[PROVIDER_IDS.LITELLM],
+    credentialsType: PROVIDER_IDS.LITELLM,
+    modelIdPrefix: `${PROVIDER_IDS.LITELLM}/`,
     requiresApiKey: false, // API key is optional for LiteLLM
     defaultToolSupport: true,
   },
-  lmstudio: {
-    id: 'lmstudio',
-    openCodeId: 'lmstudio',
+  [PROVIDER_IDS.LMSTUDIO]: {
+    id: PROVIDER_IDS.LMSTUDIO,
+    openCodeId: OPENCODE_PROVIDER_NAMES.LMSTUDIO,
     displayName: 'LM Studio',
-    npm: NPM_PACKAGES.lmstudio,
-    credentialsType: 'lmstudio',
-    modelIdPrefix: 'lmstudio/',
+    npm: NPM_PACKAGES[PROVIDER_IDS.LMSTUDIO],
+    credentialsType: PROVIDER_IDS.LMSTUDIO,
+    modelIdPrefix: `${PROVIDER_IDS.LMSTUDIO}/`,
     requiresApiKey: false,
     defaultToolSupport: false, // Tool support varies by model
   },
@@ -96,8 +102,9 @@ export const PROVIDER_SPECS: Record<string, ProviderSpec> = {
 /**
  * Special providers that have dedicated builder modules
  * These are NOT handled by the standard builder
+ * Re-exported from constants for backward compatibility
  */
-export const SPECIAL_PROVIDERS = ['bedrock', 'azure-foundry', 'zai'] as const;
+export const SPECIAL_PROVIDERS = SPECIAL_PROVIDER_IDS;
 
 /**
  * Standard provider IDs (handled by the generic builder)

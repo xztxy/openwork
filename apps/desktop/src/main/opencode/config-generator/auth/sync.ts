@@ -14,17 +14,17 @@
 import path from 'path';
 import fs from 'fs';
 import { app } from 'electron';
+import {
+  AUTH_SYNC_PROVIDER_MAPPINGS,
+  PROVIDER_IDS,
+  OPENCODE_PROVIDER_NAMES,
+} from '../constants';
 
 /**
- * Map Openwork provider IDs to OpenCode CLI provider IDs
- *
- * Note: zai maps to 'zai-coding-plan' in OpenCode CLI, not 'zai'
+ * @deprecated Use AUTH_SYNC_PROVIDER_MAPPINGS from constants instead
+ * Kept for backward compatibility with existing code
  */
-export const API_KEY_MAPPINGS: Record<string, string> = {
-  deepseek: 'deepseek',
-  zai: 'zai-coding-plan',
-  minimax: 'minimax',
-};
+export const API_KEY_MAPPINGS = AUTH_SYNC_PROVIDER_MAPPINGS;
 
 /**
  * Auth entry structure in auth.json
@@ -58,7 +58,7 @@ export function getOpenCodeAuthPath(): string {
  *
  * This function:
  * 1. Retrieves all API keys from secure storage
- * 2. For each provider in API_KEY_MAPPINGS, checks if key exists
+ * 2. For each provider in AUTH_SYNC_PROVIDER_MAPPINGS, checks if key exists
  * 3. Creates/updates auth.json only if changes are needed
  * 4. Preserves existing entries for other providers
  *
@@ -79,7 +79,7 @@ export async function syncApiKeysToOpenCodeAuth(
   const apiKeys = await getKeys();
 
   // Check if any of the sync-able keys are present
-  const hasKeysToSync = Object.keys(API_KEY_MAPPINGS).some(
+  const hasKeysToSync = Object.keys(AUTH_SYNC_PROVIDER_MAPPINGS).some(
     (key) => apiKeys[key] != null
   );
 
@@ -112,27 +112,30 @@ export async function syncApiKeysToOpenCodeAuth(
   let updated = false;
 
   // Sync DeepSeek API key
-  if (apiKeys.deepseek) {
-    if (!auth['deepseek'] || auth['deepseek'].key !== apiKeys.deepseek) {
-      auth['deepseek'] = { type: 'api', key: apiKeys.deepseek };
+  if (apiKeys[PROVIDER_IDS.DEEPSEEK]) {
+    const openCodeId = OPENCODE_PROVIDER_NAMES.DEEPSEEK;
+    if (!auth[openCodeId] || auth[openCodeId].key !== apiKeys[PROVIDER_IDS.DEEPSEEK]) {
+      auth[openCodeId] = { type: 'api', key: apiKeys[PROVIDER_IDS.DEEPSEEK]! };
       updated = true;
       console.log('[OpenCode Auth] Synced DeepSeek API key');
     }
   }
 
   // Sync Z.AI Coding Plan API key (maps to 'zai-coding-plan' provider in OpenCode CLI)
-  if (apiKeys.zai) {
-    if (!auth['zai-coding-plan'] || auth['zai-coding-plan'].key !== apiKeys.zai) {
-      auth['zai-coding-plan'] = { type: 'api', key: apiKeys.zai };
+  if (apiKeys[PROVIDER_IDS.ZAI]) {
+    const openCodeId = OPENCODE_PROVIDER_NAMES.ZAI_CODING_PLAN;
+    if (!auth[openCodeId] || auth[openCodeId].key !== apiKeys[PROVIDER_IDS.ZAI]) {
+      auth[openCodeId] = { type: 'api', key: apiKeys[PROVIDER_IDS.ZAI]! };
       updated = true;
       console.log('[OpenCode Auth] Synced Z.AI Coding Plan API key');
     }
   }
 
   // Sync MiniMax API key
-  if (apiKeys.minimax) {
-    if (!auth.minimax || auth.minimax.key !== apiKeys.minimax) {
-      auth.minimax = { type: 'api', key: apiKeys.minimax };
+  if (apiKeys[PROVIDER_IDS.MINIMAX]) {
+    const openCodeId = OPENCODE_PROVIDER_NAMES.MINIMAX;
+    if (!auth[openCodeId] || auth[openCodeId].key !== apiKeys[PROVIDER_IDS.MINIMAX]) {
+      auth[openCodeId] = { type: 'api', key: apiKeys[PROVIDER_IDS.MINIMAX]! };
       updated = true;
       console.log('[OpenCode Auth] Synced MiniMax API key');
     }

@@ -37,7 +37,7 @@ export type {
 
 // Import internal dependencies
 import { getMcpToolsPath, getOpenCodeConfigDir, resolveBundledTsxCommand, resolveMcpCommand } from './paths';
-import { PROVIDER_ID_TO_OPENCODE } from './constants';
+import { PROVIDER_ID_TO_OPENCODE, BASE_ENABLED_PROVIDERS, PROVIDER_IDS } from './constants';
 import { ACCOMPLISH_AGENT_NAME, ACCOMPLISH_SYSTEM_PROMPT_TEMPLATE, getPlatformEnvironmentInstructions } from './system-prompt';
 import type {
   OpenCodeConfig,
@@ -48,22 +48,6 @@ import type {
   ProviderModelConfig,
   ZaiProviderModelConfig,
 } from './types';
-
-/**
- * Base providers that are always enabled
- */
-const BASE_PROVIDERS = [
-  'anthropic',
-  'openai',
-  'openrouter',
-  'google',
-  'xai',
-  'deepseek',
-  'moonshot',
-  'zai-coding-plan',
-  'amazon-bedrock',
-  'minimax',
-];
 
 /**
  * Options for assembling the OpenCode config
@@ -280,13 +264,14 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
   const activeModel = getActiveProviderModel();
 
   // Build enabled providers list from connected providers
-  let enabledProviders = [...BASE_PROVIDERS];
+  // Type as string[] to allow adding providers not in BASE_ENABLED_PROVIDERS
+  let enabledProviders: string[] = [...BASE_ENABLED_PROVIDERS];
 
   // If we have connected providers, add them to the enabled list
   if (connectedIds.length > 0) {
     const mappedProviders = connectedIds.map(id => PROVIDER_ID_TO_OPENCODE[id]);
     // Always include base providers to allow switching
-    enabledProviders = [...new Set([...BASE_PROVIDERS, ...mappedProviders])];
+    enabledProviders = [...new Set([...BASE_ENABLED_PROVIDERS, ...mappedProviders])];
     console.log('[OpenCode Config] Using connected providers:', mappedProviders);
   }
 

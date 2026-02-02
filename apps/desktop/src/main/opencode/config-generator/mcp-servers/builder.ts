@@ -17,30 +17,11 @@ import path from 'path';
 import fs from 'fs';
 import { getNodePath } from '../../../utils/bundled-node';
 import type { McpServerConfig } from '../types';
+import { MCP_SERVERS, MCP_SERVER_CONFIG, type McpServerName } from '../constants';
 
-/**
- * MCP configuration constants
- */
-export const MCP_CONFIG = {
-  TIMEOUT_MS: 30000,
-  TYPE: 'local' as const,
-  ENABLED: true,
-  SOURCE_FILE: 'src/index.ts',
-  DIST_FILE: 'dist/index.mjs',
-} as const;
-
-/**
- * MCP server names used by Accomplish
- */
-export const MCP_SERVER_NAMES = [
-  'file-permission',
-  'ask-user-question',
-  'dev-browser-mcp',
-  'complete-task',
-  'start-task',
-] as const;
-
-export type McpServerName = (typeof MCP_SERVER_NAMES)[number];
+// Re-export for backward compatibility
+export { MCP_SERVERS as MCP_SERVER_NAMES };
+export const MCP_CONFIG = MCP_SERVER_CONFIG;
 
 /**
  * Resolve the command to run an MCP server
@@ -106,20 +87,20 @@ export function buildMcpServerConfigs(
 ): Record<McpServerName, McpServerConfig> {
   const configs = {} as Record<McpServerName, McpServerConfig>;
 
-  for (const serverName of MCP_SERVER_NAMES) {
+  for (const serverName of MCP_SERVERS) {
     const command = resolveMcpCommand(
       tsxCommand,
       mcpToolsPath,
       serverName,
-      MCP_CONFIG.SOURCE_FILE,
-      MCP_CONFIG.DIST_FILE
+      MCP_SERVER_CONFIG.SOURCE_FILE,
+      MCP_SERVER_CONFIG.DIST_FILE
     );
 
     const config: McpServerConfig = {
-      type: MCP_CONFIG.TYPE,
+      type: MCP_SERVER_CONFIG.TYPE,
       command,
-      enabled: MCP_CONFIG.ENABLED,
-      timeout: MCP_CONFIG.TIMEOUT_MS,
+      enabled: MCP_SERVER_CONFIG.ENABLED,
+      timeout: MCP_SERVER_CONFIG.TIMEOUT_MS,
     };
 
     // Add environment variables for servers that need them
