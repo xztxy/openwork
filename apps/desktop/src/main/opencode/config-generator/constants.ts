@@ -38,27 +38,6 @@ export const PROVIDER_IDS = {
   LMSTUDIO: 'lmstudio',
 } as const;
 
-/**
- * OpenCode CLI provider name constants
- * These are the names OpenCode CLI uses internally
- */
-export const OPENCODE_PROVIDER_NAMES = {
-  ANTHROPIC: 'anthropic',
-  OPENAI: 'openai',
-  GOOGLE: 'google',
-  XAI: 'xai',
-  DEEPSEEK: 'deepseek',
-  MOONSHOT: 'moonshot',
-  ZAI_CODING_PLAN: 'zai-coding-plan',
-  AMAZON_BEDROCK: 'amazon-bedrock',
-  AZURE_FOUNDRY: 'azure-foundry',
-  OLLAMA: 'ollama',
-  OPENROUTER: 'openrouter',
-  LITELLM: 'litellm',
-  MINIMAX: 'minimax',
-  LMSTUDIO: 'lmstudio',
-} as const;
-
 // =============================================================================
 // Provider Mappings
 // =============================================================================
@@ -66,22 +45,26 @@ export const OPENCODE_PROVIDER_NAMES = {
 /**
  * Provider ID to OpenCode CLI provider name mapping
  * Maps our internal provider IDs to the names used by OpenCode CLI
+ *
+ * Most are the same, except:
+ * - zai → zai-coding-plan
+ * - bedrock → amazon-bedrock
  */
 export const PROVIDER_ID_TO_OPENCODE: Record<ProviderId, string> = {
-  [PROVIDER_IDS.ANTHROPIC]: OPENCODE_PROVIDER_NAMES.ANTHROPIC,
-  [PROVIDER_IDS.OPENAI]: OPENCODE_PROVIDER_NAMES.OPENAI,
-  [PROVIDER_IDS.GOOGLE]: OPENCODE_PROVIDER_NAMES.GOOGLE,
-  [PROVIDER_IDS.XAI]: OPENCODE_PROVIDER_NAMES.XAI,
-  [PROVIDER_IDS.DEEPSEEK]: OPENCODE_PROVIDER_NAMES.DEEPSEEK,
-  [PROVIDER_IDS.MOONSHOT]: OPENCODE_PROVIDER_NAMES.MOONSHOT,
-  [PROVIDER_IDS.ZAI]: OPENCODE_PROVIDER_NAMES.ZAI_CODING_PLAN,
-  [PROVIDER_IDS.BEDROCK]: OPENCODE_PROVIDER_NAMES.AMAZON_BEDROCK,
-  [PROVIDER_IDS.AZURE_FOUNDRY]: OPENCODE_PROVIDER_NAMES.AZURE_FOUNDRY,
-  [PROVIDER_IDS.OLLAMA]: OPENCODE_PROVIDER_NAMES.OLLAMA,
-  [PROVIDER_IDS.OPENROUTER]: OPENCODE_PROVIDER_NAMES.OPENROUTER,
-  [PROVIDER_IDS.LITELLM]: OPENCODE_PROVIDER_NAMES.LITELLM,
-  [PROVIDER_IDS.MINIMAX]: OPENCODE_PROVIDER_NAMES.MINIMAX,
-  [PROVIDER_IDS.LMSTUDIO]: OPENCODE_PROVIDER_NAMES.LMSTUDIO,
+  anthropic: 'anthropic',
+  openai: 'openai',
+  google: 'google',
+  xai: 'xai',
+  deepseek: 'deepseek',
+  moonshot: 'moonshot',
+  zai: 'zai-coding-plan',        // Different!
+  bedrock: 'amazon-bedrock',     // Different!
+  'azure-foundry': 'azure-foundry',
+  ollama: 'ollama',
+  openrouter: 'openrouter',
+  litellm: 'litellm',
+  minimax: 'minimax',
+  lmstudio: 'lmstudio',
 };
 
 /**
@@ -91,16 +74,16 @@ export const PROVIDER_ID_TO_OPENCODE: Record<ProviderId, string> = {
  * which require explicit configuration
  */
 export const BASE_ENABLED_PROVIDERS = [
-  OPENCODE_PROVIDER_NAMES.ANTHROPIC,
-  OPENCODE_PROVIDER_NAMES.OPENAI,
-  OPENCODE_PROVIDER_NAMES.OPENROUTER,
-  OPENCODE_PROVIDER_NAMES.GOOGLE,
-  OPENCODE_PROVIDER_NAMES.XAI,
-  OPENCODE_PROVIDER_NAMES.DEEPSEEK,
-  OPENCODE_PROVIDER_NAMES.MOONSHOT,
-  OPENCODE_PROVIDER_NAMES.ZAI_CODING_PLAN,
-  OPENCODE_PROVIDER_NAMES.AMAZON_BEDROCK,
-  OPENCODE_PROVIDER_NAMES.MINIMAX,
+  'anthropic',
+  'openai',
+  'openrouter',
+  'google',
+  'xai',
+  'deepseek',
+  'moonshot',
+  'zai-coding-plan',
+  'amazon-bedrock',
+  'minimax',
 ] as const;
 
 /**
@@ -208,12 +191,11 @@ export const ZAI_MODELS: Record<string, ZaiProviderModelConfig> = {
  * Only these providers need their keys synced (others use env vars)
  *
  * Maps Openwork provider ID -> OpenCode CLI provider ID
- * Note: zai maps to 'zai-coding-plan' in OpenCode CLI
  */
 export const AUTH_SYNC_PROVIDER_MAPPINGS: Record<string, string> = {
-  [PROVIDER_IDS.DEEPSEEK]: OPENCODE_PROVIDER_NAMES.DEEPSEEK,
-  [PROVIDER_IDS.ZAI]: OPENCODE_PROVIDER_NAMES.ZAI_CODING_PLAN,
-  [PROVIDER_IDS.MINIMAX]: OPENCODE_PROVIDER_NAMES.MINIMAX,
+  deepseek: 'deepseek',
+  zai: 'zai-coding-plan',
+  minimax: 'minimax',
 };
 
 // =============================================================================

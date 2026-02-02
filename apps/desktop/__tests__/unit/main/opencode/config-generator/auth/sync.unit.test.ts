@@ -717,7 +717,7 @@ describe('Auth Sync Module', () => {
 
       // Assert
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('DeepSeek')
+        expect.stringContaining('deepseek')
       );
       consoleSpy.mockRestore();
     });
@@ -742,7 +742,7 @@ describe('Auth Sync Module', () => {
 
       // Assert
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Z.AI')
+        expect.stringContaining('zai')
       );
       consoleSpy.mockRestore();
     });
@@ -767,7 +767,7 @@ describe('Auth Sync Module', () => {
 
       // Assert
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('MiniMax')
+        expect.stringContaining('minimax')
       );
       consoleSpy.mockRestore();
     });

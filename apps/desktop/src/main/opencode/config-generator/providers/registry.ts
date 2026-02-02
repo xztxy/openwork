@@ -16,7 +16,7 @@ import {
   PROVIDER_URLS,
   NPM_PACKAGES,
   PROVIDER_IDS,
-  OPENCODE_PROVIDER_NAMES,
+  PROVIDER_ID_TO_OPENCODE,
   SPECIAL_PROVIDER_IDS,
 } from '../constants';
 
@@ -47,53 +47,53 @@ export interface ProviderSpec {
  * These providers use the @ai-sdk/openai-compatible package
  */
 export const PROVIDER_SPECS: Record<string, ProviderSpec> = {
-  [PROVIDER_IDS.OLLAMA]: {
-    id: PROVIDER_IDS.OLLAMA,
-    openCodeId: OPENCODE_PROVIDER_NAMES.OLLAMA,
+  ollama: {
+    id: 'ollama',
+    openCodeId: PROVIDER_ID_TO_OPENCODE.ollama,
     displayName: 'Ollama (local)',
-    npm: NPM_PACKAGES[PROVIDER_IDS.OLLAMA],
-    credentialsType: PROVIDER_IDS.OLLAMA,
-    modelIdPrefix: `${PROVIDER_IDS.OLLAMA}/`,
+    npm: NPM_PACKAGES.ollama,
+    credentialsType: 'ollama',
+    modelIdPrefix: 'ollama/',
     requiresApiKey: false,
     defaultToolSupport: true,
   },
-  [PROVIDER_IDS.OPENROUTER]: {
-    id: PROVIDER_IDS.OPENROUTER,
-    openCodeId: OPENCODE_PROVIDER_NAMES.OPENROUTER,
+  openrouter: {
+    id: 'openrouter',
+    openCodeId: PROVIDER_ID_TO_OPENCODE.openrouter,
     displayName: 'OpenRouter',
-    npm: NPM_PACKAGES[PROVIDER_IDS.OPENROUTER],
-    credentialsType: PROVIDER_IDS.OPENROUTER,
-    modelIdPrefix: `${PROVIDER_IDS.OPENROUTER}/`,
+    npm: NPM_PACKAGES.openrouter,
+    credentialsType: 'openrouter',
+    modelIdPrefix: 'openrouter/',
     requiresApiKey: true,
     defaultToolSupport: true,
   },
-  [PROVIDER_IDS.MOONSHOT]: {
-    id: PROVIDER_IDS.MOONSHOT,
-    openCodeId: OPENCODE_PROVIDER_NAMES.MOONSHOT,
+  moonshot: {
+    id: 'moonshot',
+    openCodeId: PROVIDER_ID_TO_OPENCODE.moonshot,
     displayName: 'Moonshot AI',
-    npm: NPM_PACKAGES[PROVIDER_IDS.MOONSHOT],
+    npm: NPM_PACKAGES.moonshot,
     credentialsType: 'api_key', // Matches shared ApiKeyCredentials type
-    modelIdPrefix: `${PROVIDER_IDS.MOONSHOT}/`,
+    modelIdPrefix: 'moonshot/',
     requiresApiKey: true,
     defaultToolSupport: true,
   },
-  [PROVIDER_IDS.LITELLM]: {
-    id: PROVIDER_IDS.LITELLM,
-    openCodeId: OPENCODE_PROVIDER_NAMES.LITELLM,
+  litellm: {
+    id: 'litellm',
+    openCodeId: PROVIDER_ID_TO_OPENCODE.litellm,
     displayName: 'LiteLLM',
-    npm: NPM_PACKAGES[PROVIDER_IDS.LITELLM],
-    credentialsType: PROVIDER_IDS.LITELLM,
-    modelIdPrefix: `${PROVIDER_IDS.LITELLM}/`,
+    npm: NPM_PACKAGES.litellm,
+    credentialsType: 'litellm',
+    modelIdPrefix: 'litellm/',
     requiresApiKey: false, // API key is optional for LiteLLM
     defaultToolSupport: true,
   },
-  [PROVIDER_IDS.LMSTUDIO]: {
-    id: PROVIDER_IDS.LMSTUDIO,
-    openCodeId: OPENCODE_PROVIDER_NAMES.LMSTUDIO,
+  lmstudio: {
+    id: 'lmstudio',
+    openCodeId: PROVIDER_ID_TO_OPENCODE.lmstudio,
     displayName: 'LM Studio',
-    npm: NPM_PACKAGES[PROVIDER_IDS.LMSTUDIO],
-    credentialsType: PROVIDER_IDS.LMSTUDIO,
-    modelIdPrefix: `${PROVIDER_IDS.LMSTUDIO}/`,
+    npm: NPM_PACKAGES.lmstudio,
+    credentialsType: 'lmstudio',
+    modelIdPrefix: 'lmstudio/',
     requiresApiKey: false,
     defaultToolSupport: false, // Tool support varies by model
   },

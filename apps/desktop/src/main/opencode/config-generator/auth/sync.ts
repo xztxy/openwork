@@ -16,8 +16,7 @@ import fs from 'fs';
 import { app } from 'electron';
 import {
   AUTH_SYNC_PROVIDER_MAPPINGS,
-  PROVIDER_IDS,
-  OPENCODE_PROVIDER_NAMES,
+  PROVIDER_ID_TO_OPENCODE,
 } from '../constants';
 
 /**
@@ -105,33 +104,14 @@ export async function syncApiKeysToOpenCodeAuth(
 
   let updated = false;
 
-  // Sync DeepSeek API key
-  if (apiKeys[PROVIDER_IDS.DEEPSEEK]) {
-    const openCodeId = OPENCODE_PROVIDER_NAMES.DEEPSEEK;
-    if (!auth[openCodeId] || auth[openCodeId].key !== apiKeys[PROVIDER_IDS.DEEPSEEK]) {
-      auth[openCodeId] = { type: 'api', key: apiKeys[PROVIDER_IDS.DEEPSEEK]! };
-      updated = true;
-      console.log('[OpenCode Auth] Synced DeepSeek API key');
-    }
-  }
-
-  // Sync Z.AI Coding Plan API key (maps to 'zai-coding-plan' provider in OpenCode CLI)
-  if (apiKeys[PROVIDER_IDS.ZAI]) {
-    const openCodeId = OPENCODE_PROVIDER_NAMES.ZAI_CODING_PLAN;
-    if (!auth[openCodeId] || auth[openCodeId].key !== apiKeys[PROVIDER_IDS.ZAI]) {
-      auth[openCodeId] = { type: 'api', key: apiKeys[PROVIDER_IDS.ZAI]! };
-      updated = true;
-      console.log('[OpenCode Auth] Synced Z.AI Coding Plan API key');
-    }
-  }
-
-  // Sync MiniMax API key
-  if (apiKeys[PROVIDER_IDS.MINIMAX]) {
-    const openCodeId = OPENCODE_PROVIDER_NAMES.MINIMAX;
-    if (!auth[openCodeId] || auth[openCodeId].key !== apiKeys[PROVIDER_IDS.MINIMAX]) {
-      auth[openCodeId] = { type: 'api', key: apiKeys[PROVIDER_IDS.MINIMAX]! };
-      updated = true;
-      console.log('[OpenCode Auth] Synced MiniMax API key');
+  // Sync API keys for each provider in AUTH_SYNC_PROVIDER_MAPPINGS
+  for (const [providerId, openCodeId] of Object.entries(AUTH_SYNC_PROVIDER_MAPPINGS)) {
+    if (apiKeys[providerId]) {
+      if (!auth[openCodeId] || auth[openCodeId].key !== apiKeys[providerId]) {
+        auth[openCodeId] = { type: 'api', key: apiKeys[providerId]! };
+        updated = true;
+        console.log(`[OpenCode Auth] Synced ${providerId} API key`);
+      }
     }
   }
 
