@@ -8,9 +8,15 @@
 // Types
 export * from './types.js';
 
+// Providers - API key validation and model utilities
+export * from './providers/index.js';
+
+// Utils - Platform-independent utilities
+export * from './utils/index.js';
+
+// Skills - Skill discovery and management
+export * from './skills/index.js';
+
 // Placeholder comments for future modules (to be implemented in subsequent tasks):
 // export * from './opencode/index.js';
 // export * from './storage/index.js';
-// export * from './providers/index.js';
-// export * from './skills/index.js';
-// export * from './utils/index.js';
