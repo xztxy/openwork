@@ -45,7 +45,6 @@
   "dependencies": {
     "@accomplish/shared": "workspace:*",
     "better-sqlite3": "^11.8.1",
-    "electron-store": "^8.2.0",
     "gray-matter": "^4.0.3",
     "node-pty": "^1.0.0",
     "zod": "^3.24.1"
