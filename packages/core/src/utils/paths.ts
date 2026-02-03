@@ -7,6 +7,7 @@
 
 import * as os from 'os';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import type { PlatformConfig } from '../types.js';
 
 /**
@@ -107,4 +108,18 @@ export function resolveAppPath(config: PlatformConfig, ...segments: string[]): s
     return null;
   }
   return path.join(config.appPath, ...segments);
+}
+
+/**
+ * Get the path to the bundled MCP tools directory in @accomplish/core.
+ *
+ * Uses module resolution to find the package location, which works for
+ * all installation methods (npm, yarn, pnpm, symlinks).
+ *
+ * @returns Absolute path to the mcp-tools directory
+ */
+export function getMcpToolsPath(): string {
+  const currentDir = path.dirname(fileURLToPath(import.meta.url));
+  // Navigate from dist/utils/ to package root, then to mcp-tools
+  return path.join(currentDir, '..', '..', 'mcp-tools');
 }
