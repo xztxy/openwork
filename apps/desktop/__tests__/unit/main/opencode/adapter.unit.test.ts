@@ -100,6 +100,169 @@ vi.mock('node-pty', () => ({
   spawn: mockPtySpawn,
 }));
 
+// Mock @accomplish/core - core package exports used by adapter
+vi.mock('@accomplish/core', async () => {
+  const { EventEmitter } = await import('events');
+
+  // Create mock StreamParser class that extends EventEmitter with proper buffering
+  class MockStreamParser extends EventEmitter {
+    private buffer: string = '';
+
+    feed(chunk: string) {
+      this.buffer += chunk;
+      this.parseBuffer();
+    }
+
+    private parseBuffer() {
+      // Try to find complete JSON objects using brace counting
+      while (this.buffer.length > 0) {
+        const startIdx = this.buffer.indexOf('{');
+        if (startIdx === -1) {
+          this.buffer = '';
+          return;
+        }
+        if (startIdx > 0) {
+          this.buffer = this.buffer.substring(startIdx);
+        }
+        // Try to find end of JSON using brace counting
+        let depth = 0;
+        let inString = false;
+        let escaped = false;
+        for (let i = 0; i < this.buffer.length; i++) {
+          const ch = this.buffer[i];
+          if (escaped) {
+            escaped = false;
+            continue;
+          }
+          if (ch === '\\' && inString) {
+            escaped = true;
+            continue;
+          }
+          if (ch === '"') {
+            inString = !inString;
+            continue;
+          }
+          if (!inString) {
+            if (ch === '{') depth++;
+            else if (ch === '}') {
+              depth--;
+              if (depth === 0) {
+                const jsonStr = this.buffer.substring(0, i + 1);
+                this.buffer = this.buffer.substring(i + 1).replace(/^\s+/, '');
+                try {
+                  const msg = JSON.parse(jsonStr);
+                  this.emit('message', msg);
+                } catch {
+                  // Invalid JSON, skip
+                }
+                break; // Continue with next iteration
+              }
+            }
+          }
+        }
+        if (depth > 0) {
+          // Incomplete JSON, wait for more data
+          return;
+        }
+      }
+    }
+
+    flush() {
+      if (this.buffer.trim()) {
+        try {
+          const msg = JSON.parse(this.buffer.trim());
+          this.emit('message', msg);
+        } catch {
+          // Invalid JSON
+        }
+      }
+      this.buffer = '';
+    }
+
+    reset() {
+      this.buffer = '';
+    }
+  }
+
+  // Create mock CompletionEnforcer class that properly handles callbacks
+  class MockCompletionEnforcer {
+    private callbacks: { onComplete?: () => void; onDebug?: (type: string, msg: string) => void } = {};
+    private toolsUsed = false;
+    private completeTaskCalled = false;
+    private attempts = 0;
+    private maxAttempts = 20;
+
+    constructor(callbacks: { onComplete?: () => void; onDebug?: (type: string, msg: string) => void } = {}, maxAttempts = 20) {
+      this.callbacks = callbacks;
+      this.maxAttempts = maxAttempts;
+    }
+    handleMessage() {}
+    handleStepFinish(reason: string) {
+      // Return 'continue' for tool_use (more work expected)
+      if (reason === 'tool_use') {
+        return 'continue';
+      }
+      // If tools were used but complete_task wasn't called, schedule continuation
+      if (this.toolsUsed && !this.completeTaskCalled) {
+        this.attempts++;
+        if (this.attempts > this.maxAttempts) {
+          return 'complete';
+        }
+        if (this.callbacks.onDebug) {
+          this.callbacks.onDebug('continuation', `Scheduled continuation (attempt ${this.attempts})`);
+        }
+        return 'pending';
+      }
+      // If complete_task was called or no tools used, complete
+      return 'complete';
+    }
+    markToolsUsed() {
+      this.toolsUsed = true;
+    }
+    forceComplete() {}
+    reset() {
+      this.toolsUsed = false;
+      this.completeTaskCalled = false;
+      this.attempts = 0;
+    }
+    updateTodos() {}
+    handleCompleteTaskDetection() {
+      this.completeTaskCalled = true;
+      return true;
+    }
+    handleProcessExit() {
+      // Call onComplete callback to simulate successful completion
+      if (this.callbacks.onComplete) {
+        this.callbacks.onComplete();
+      }
+      return Promise.resolve();
+    }
+    shouldComplete() { return true; }
+    getState() { return 'DONE'; }
+    getContinuationAttempts() { return this.attempts; }
+  }
+
+  // Create mock LogWatcher that extends EventEmitter
+  class MockLogWatcher extends EventEmitter {
+    start() { return Promise.resolve(); }
+    stop() { return Promise.resolve(); }
+  }
+
+  return {
+    StreamParser: MockStreamParser,
+    OpenCodeLogWatcher: MockLogWatcher,
+    createLogWatcher: vi.fn(() => new MockLogWatcher()),
+    CompletionEnforcer: MockCompletionEnforcer,
+    getSelectedModel: vi.fn(() => ({ model: 'claude-3-opus-20240229' })),
+    getAzureFoundryConfig: vi.fn(() => null),
+    getOpenAiBaseUrl: vi.fn(() => ''),
+    getActiveProviderModel: vi.fn(() => null),
+    getConnectedProvider: vi.fn(() => null),
+    getAzureEntraToken: vi.fn(() => Promise.resolve({ success: true, token: 'mock-token' })),
+    getModelDisplayName: vi.fn((model: string) => model),
+  };
+});
+
 // Mock child_process for execSync
 vi.mock('child_process', () => ({
   execSync: vi.fn(() => '/usr/local/bin/opencode'),
@@ -114,23 +277,7 @@ vi.mock('@main/store/secureStorage', () => ({
   getBedrockCredentials: vi.fn(() => null),
 }));
 
-// Mock app settings
-vi.mock('@main/store/appSettings', () => ({
-  getSelectedModel: vi.fn(() => ({ model: 'claude-3-opus-20240229' })),
-  getAzureFoundryConfig: vi.fn(() => null),
-  getOpenAiBaseUrl: vi.fn(() => ''),
-}));
-
-// Mock provider settings (uses SQLite which isn't available in tests)
-vi.mock('@main/store/providerSettings', () => ({
-  getActiveProviderModel: vi.fn(() => null),
-  getProviderSettings: vi.fn(() => ({
-    activeProviderId: null,
-    connectedProviders: {},
-    debugMode: false,
-  })),
-  getConnectedProvider: vi.fn(() => null),
-}));
+// Note: App settings and provider settings are now mocked via @accomplish/core mock above
 
 // Mock config generator
 vi.mock('@main/opencode/config-generator', () => ({

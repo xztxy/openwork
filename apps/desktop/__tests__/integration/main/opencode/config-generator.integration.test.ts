@@ -26,6 +26,7 @@ import os from 'os';
 // Create temp directories for each test
 let tempUserDataDir: string;
 let tempAppDir: string;
+let tempMonorepoRoot: string;
 
 // Mock only the external electron module
 const mockApp = {
@@ -47,8 +48,9 @@ vi.mock('@main/permission-api', () => ({
   QUESTION_API_PORT: 9227,
 }));
 
-// Mock providerSettings (now uses SQLite which requires native module)
-vi.mock('@main/store/providerSettings', () => ({
+// Mock @accomplish/core (uses SQLite which requires native module)
+vi.mock('@accomplish/core', () => ({
+  // Provider settings
   getProviderSettings: vi.fn(() => ({
     activeProviderId: null,
     connectedProviders: {},
@@ -66,19 +68,8 @@ vi.mock('@main/store/providerSettings', () => ({
   getActiveProviderModel: vi.fn(() => null),
   hasReadyProvider: vi.fn(() => false),
   getConnectedProviderIds: vi.fn(() => []),
-}));
 
-// Mock skills module (uses SQLite which requires native module)
-vi.mock('@main/skills', () => ({
-  skillsManager: {
-    getEnabled: vi.fn(() => Promise.resolve([])),
-    getAll: vi.fn(() => Promise.resolve([])),
-    initialize: vi.fn(() => Promise.resolve()),
-  },
-}));
-
-// Mock appSettings (now uses SQLite which requires native module)
-vi.mock('@main/store/appSettings', () => ({
+  // App settings
   getDebugMode: vi.fn(() => false),
   setDebugMode: vi.fn(),
   getOnboardingComplete: vi.fn(() => false),
@@ -105,6 +96,15 @@ vi.mock('@main/store/appSettings', () => ({
   clearAppSettings: vi.fn(),
 }));
 
+// Mock skills module (uses SQLite which requires native module)
+vi.mock('@main/skills', () => ({
+  skillsManager: {
+    getEnabled: vi.fn(() => Promise.resolve([])),
+    getAll: vi.fn(() => Promise.resolve([])),
+    initialize: vi.fn(() => Promise.resolve()),
+  },
+}));
+
 describe('OpenCode Config Generator Integration', () => {
   let originalEnv: NodeJS.ProcessEnv;
 
@@ -116,12 +116,17 @@ describe('OpenCode Config Generator Integration', () => {
 
     // Create real temp directories for each test
     tempUserDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'opencode-config-test-userData-'));
-    tempAppDir = fs.mkdtempSync(path.join(os.tmpdir(), 'opencode-config-test-app-'));
 
-    // Create mcp-tools directory structure in temp app dir
+    // Create a monorepo-like structure in temp dir
+    // This simulates the real structure: monorepo/apps/desktop with packages/core/mcp-tools
+    tempMonorepoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'opencode-config-test-monorepo-'));
+    tempAppDir = path.join(tempMonorepoRoot, 'apps', 'desktop');
+    fs.mkdirSync(tempAppDir, { recursive: true });
+
+    // Create mcp-tools directory structure at packages/core/mcp-tools
     // In development, mcp-tools is at packages/core/mcp-tools relative to apps/desktop
-    // So we simulate this by creating the structure: tempAppDir/../../packages/core/mcp-tools
-    const mcpToolsDir = path.join(tempAppDir, '..', '..', 'packages', 'core', 'mcp-tools');
+    // path.join(tempAppDir, '..', '..', 'packages', 'core', 'mcp-tools') now resolves correctly
+    const mcpToolsDir = path.join(tempMonorepoRoot, 'packages', 'core', 'mcp-tools');
     fs.mkdirSync(mcpToolsDir, { recursive: true });
     fs.mkdirSync(path.join(mcpToolsDir, 'file-permission', 'src'), { recursive: true });
     fs.writeFileSync(path.join(mcpToolsDir, 'file-permission', 'src', 'index.ts'), '// mock file');
@@ -141,7 +146,7 @@ describe('OpenCode Config Generator Integration', () => {
     // Clean up temp directories
     try {
       fs.rmSync(tempUserDataDir, { recursive: true, force: true });
-      fs.rmSync(tempAppDir, { recursive: true, force: true });
+      fs.rmSync(tempMonorepoRoot, { recursive: true, force: true });
     } catch {
       // Ignore cleanup errors
     }

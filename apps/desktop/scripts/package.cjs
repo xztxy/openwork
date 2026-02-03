@@ -14,25 +14,30 @@ const isWindows = process.platform === 'win32';
 const nodeModulesPath = path.join(__dirname, '..', 'node_modules');
 const accomplishPath = path.join(nodeModulesPath, '@accomplish');
 
-// Save symlink target for restoration
-let symlinkTarget = null;
-const sharedPath = path.join(accomplishPath, 'shared');
+// Save symlink targets for restoration
+const workspacePackages = ['shared', 'core'];
+const symlinkTargets = {};
 
 try {
-  // Check if @accomplish/shared symlink exists
-  if (fs.existsSync(sharedPath)) {
-    const stats = fs.lstatSync(sharedPath);
-    if (stats.isSymbolicLink()) {
-      symlinkTarget = fs.readlinkSync(sharedPath);
-      console.log('Temporarily removing workspace symlink:', sharedPath);
-      fs.unlinkSync(sharedPath);
-
-      // Remove empty @accomplish directory if it exists
-      try {
-        fs.rmdirSync(accomplishPath);
-      } catch {
-        // Directory not empty or doesn't exist, ignore
+  // Check and remove workspace symlinks
+  for (const pkg of workspacePackages) {
+    const pkgPath = path.join(accomplishPath, pkg);
+    if (fs.existsSync(pkgPath)) {
+      const stats = fs.lstatSync(pkgPath);
+      if (stats.isSymbolicLink()) {
+        symlinkTargets[pkg] = fs.readlinkSync(pkgPath);
+        console.log('Temporarily removing workspace symlink:', pkgPath);
+        fs.unlinkSync(pkgPath);
       }
+    }
+  }
+
+  // Remove empty @accomplish directory if it exists
+  if (Object.keys(symlinkTargets).length > 0) {
+    try {
+      fs.rmdirSync(accomplishPath);
+    } catch {
+      // Directory not empty or doesn't exist, ignore
     }
   }
 
@@ -53,25 +58,32 @@ try {
   execSync(command, { stdio: 'inherit', cwd: path.join(__dirname, '..') });
 
 } finally {
-  // Restore the symlink
-  if (symlinkTarget) {
-    console.log('Restoring workspace symlink');
+  // Restore the symlinks
+  const packagesToRestore = Object.keys(symlinkTargets);
+  if (packagesToRestore.length > 0) {
+    console.log('Restoring workspace symlinks');
 
     // Recreate @accomplish directory if needed
     if (!fs.existsSync(accomplishPath)) {
       fs.mkdirSync(accomplishPath, { recursive: true });
     }
 
-    // On Windows, use junction instead of symlink (doesn't require admin privileges)
-    // The target needs to be an absolute path for junctions
-    const absoluteTarget = path.isAbsolute(symlinkTarget)
-      ? symlinkTarget
-      : path.resolve(path.dirname(sharedPath), symlinkTarget);
+    for (const pkg of packagesToRestore) {
+      const pkgPath = path.join(accomplishPath, pkg);
+      const target = symlinkTargets[pkg];
 
-    if (isWindows) {
-      fs.symlinkSync(absoluteTarget, sharedPath, 'junction');
-    } else {
-      fs.symlinkSync(symlinkTarget, sharedPath);
+      // On Windows, use junction instead of symlink (doesn't require admin privileges)
+      // The target needs to be an absolute path for junctions
+      const absoluteTarget = path.isAbsolute(target)
+        ? target
+        : path.resolve(path.dirname(pkgPath), target);
+
+      if (isWindows) {
+        fs.symlinkSync(absoluteTarget, pkgPath, 'junction');
+      } else {
+        fs.symlinkSync(target, pkgPath);
+      }
+      console.log('  Restored:', pkgPath);
     }
   }
 }
