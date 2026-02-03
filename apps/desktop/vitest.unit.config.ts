@@ -28,6 +28,7 @@ export default defineConfig({
     environmentMatchGlobs: [
       ['__tests__/**/*.renderer.*.test.{ts,tsx}', 'jsdom'],
       ['__tests__/**/renderer/**/*.test.{ts,tsx}', 'jsdom'],
+      ['__tests__/**/renderer/**/*.unit.test.{ts,tsx}', 'jsdom'],
     ],
     testTimeout: 5000,
     hookTimeout: 10000,
