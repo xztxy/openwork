@@ -1155,7 +1155,8 @@ export function registerIPCHandlers(): void {
               return { valid: false, error: firstErrorMessage || `API returned status ${response.status}` };
             }
           }
-          
+          break;
+
         case 'minimax':
           // MiniMax uses Anthropic-compatible API
           response = await fetchWithTimeout(
