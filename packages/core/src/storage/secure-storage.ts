@@ -65,7 +65,23 @@ export class SecureStorage {
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    fs.writeFileSync(this.filePath, JSON.stringify(this.data, null, 2));
+    // Atomic write: write to temp file, then rename
+    // This prevents data loss if the process crashes mid-write
+    const tempPath = `${this.filePath}.${process.pid}.tmp`;
+    const content = JSON.stringify(this.data, null, 2);
+
+    try {
+      fs.writeFileSync(tempPath, content, { mode: 0o600 });
+      fs.renameSync(tempPath, this.filePath);
+    } catch (error) {
+      // Clean up temp file if rename fails
+      try {
+        fs.unlinkSync(tempPath);
+      } catch {
+        // Ignore cleanup errors
+      }
+      throw error;
+    }
   }
 
   private getSalt(): Buffer {
