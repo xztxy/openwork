@@ -1,4 +1,5 @@
 export * from './auth.js';
+export * from './logging.js';
 export * from './opencode.js';
 export * from './permission.js';
 export * from './provider.js';
