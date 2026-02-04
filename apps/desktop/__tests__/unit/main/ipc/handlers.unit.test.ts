@@ -247,6 +247,34 @@ vi.mock('@accomplish/core', async (importOriginal) => {
   // Azure token function
   getAzureEntraToken: vi.fn(() => Promise.resolve({ success: true, token: 'mock-token' })),
 
+  // Task summarization
+  generateTaskSummary: vi.fn(() => Promise.resolve('Mock task summary')),
+
+  // Message processing functions
+  toTaskMessage: vi.fn((message: unknown) => {
+    const msg = message as { type: string; part?: { text?: string; tool?: string } };
+    if (msg.type === 'text' && msg.part?.text) {
+      return {
+        id: `msg-${Date.now()}`,
+        type: 'assistant',
+        content: msg.part.text,
+        timestamp: new Date().toISOString(),
+      };
+    }
+    if (msg.type === 'tool_call') {
+      return {
+        id: `msg-${Date.now()}`,
+        type: 'tool',
+        content: `Using tool: ${msg.part?.tool}`,
+        toolName: msg.part?.tool,
+        timestamp: new Date().toISOString(),
+      };
+    }
+    return null;
+  }),
+  queueMessage: vi.fn(),
+  flushAndCleanupBatcher: vi.fn(),
+
   // API validation functions
   validateAnthropicApiKey: vi.fn(() => Promise.resolve({ valid: true })),
   validateOpenAIApiKey: vi.fn(() => Promise.resolve({ valid: true })),

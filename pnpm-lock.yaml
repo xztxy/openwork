@@ -225,6 +225,10 @@ importers:
         version: 2.1.9(@types/node@22.19.3)(happy-dom@20.1.0)(jsdom@27.4.0)
 
   packages/shared:
+    dependencies:
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
     devDependencies:
       typescript:
         specifier: ^5.7.2

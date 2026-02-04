@@ -90,3 +90,17 @@ export type {
   AzureFoundryProxyInfo,
   MoonshotProxyInfo,
 } from './proxies/index.js';
+
+export {
+  MESSAGE_BATCH_DELAY_MS,
+  extractScreenshots,
+  sanitizeToolOutput,
+  toTaskMessage,
+  createMessageBatcher,
+  queueMessage,
+  flushAndCleanupBatcher,
+} from './message-processor.js';
+export type {
+  MessageAttachment,
+  MessageBatcher,
+} from './message-processor.js';

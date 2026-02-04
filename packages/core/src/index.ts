@@ -5,3 +5,4 @@ export * from './skills/index.js';
 export * from './storage/index.js';
 export * from './opencode/index.js';
 export * from './browser/index.js';
+export * from './services/index.js';

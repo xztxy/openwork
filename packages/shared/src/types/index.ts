@@ -5,4 +5,5 @@ export * from './provider.js';
 export * from './providerSettings.js';
 export * from './skills.js';
 export * from './task.js';
+export * from './thought-stream.js';
 export * from './todo.js';

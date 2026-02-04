@@ -8,27 +8,12 @@
 
 import http from 'http';
 import type { BrowserWindow } from 'electron';
+import { THOUGHT_STREAM_PORT } from '@accomplish/shared';
+import type { ThoughtEvent, CheckpointEvent } from '@accomplish/shared';
 
-export const THOUGHT_STREAM_PORT = 9228;
-
-// Event types
-export interface ThoughtEvent {
-  taskId: string;
-  content: string;
-  category: 'observation' | 'reasoning' | 'decision' | 'action';
-  agentName: string;
-  timestamp: number;
-}
-
-export interface CheckpointEvent {
-  taskId: string;
-  status: 'progress' | 'complete' | 'stuck';
-  summary: string;
-  nextPlanned?: string;
-  blocker?: string;
-  agentName: string;
-  timestamp: number;
-}
+// Re-export types and constant for backwards compatibility
+export { THOUGHT_STREAM_PORT };
+export type { ThoughtEvent, CheckpointEvent };
 
 // Store reference to main window
 let mainWindow: BrowserWindow | null = null;
