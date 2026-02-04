@@ -104,3 +104,16 @@ export type {
   MessageAttachment,
   MessageBatcher,
 } from './message-processor.js';
+
+export { buildOpenCodeEnvironment } from './environment.js';
+export type { EnvironmentConfig, ApiKeys } from './environment.js';
+
+export {
+  buildProviderConfigs,
+  syncApiKeysToOpenCodeAuth,
+} from './config-builder.js';
+export type {
+  ConfigPaths,
+  ProviderConfigResult,
+  BuildProviderConfigsOptions,
+} from './config-builder.js';

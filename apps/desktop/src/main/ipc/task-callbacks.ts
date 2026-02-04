@@ -13,6 +13,7 @@ import {
   saveTodosForTask,
   clearTodosForTask,
   getDebugMode,
+  mapResultToStatus,
 } from '@accomplish/core';
 import { getTaskManager } from '../opencode';
 import type { TaskCallbacks } from '../opencode';
@@ -78,15 +79,7 @@ export function createTaskCallbacks(options: TaskCallbacksOptions): TaskCallback
         result,
       });
 
-      let taskStatus: TaskStatus;
-      if (result.status === 'success') {
-        taskStatus = 'completed';
-      } else if (result.status === 'interrupted') {
-        taskStatus = 'interrupted';
-      } else {
-        taskStatus = 'failed';
-      }
-
+      const taskStatus = mapResultToStatus(result);
       updateTaskStatus(taskId, taskStatus, new Date().toISOString());
 
       const sessionId = result.sessionId || taskManager.getSessionId(taskId);

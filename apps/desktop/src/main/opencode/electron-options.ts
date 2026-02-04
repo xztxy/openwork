@@ -16,12 +16,14 @@ import {
   resolveCliPath,
   isCliAvailable as coreIsCliAvailable,
   buildCliArgs as coreBuildCliArgs,
+  buildOpenCodeEnvironment,
+  getOpenAiBaseUrl,
   type BrowserServerConfig,
   type CliResolverConfig,
+  type EnvironmentConfig,
 } from '@accomplish/core';
-import type { AzureFoundryCredentials } from '@accomplish/shared';
+import type { AzureFoundryCredentials, BedrockCredentials } from '@accomplish/shared';
 import { getAllApiKeys, getBedrockCredentials } from '../store/secureStorage';
-import { getOpenAiBaseUrl } from '@accomplish/core';
 import { generateOpenCodeConfig, getMcpToolsPath, syncApiKeysToOpenCodeAuth } from './config-generator';
 import { getExtendedNodePath } from '../utils/system-path';
 import { getBundledNodePaths, logBundledNodeInfo } from '../utils/bundled-node';
@@ -84,15 +86,10 @@ export function getBundledOpenCodeVersion(): string | null {
 }
 
 export async function buildEnvironment(taskId: string): Promise<NodeJS.ProcessEnv> {
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-  };
+  // Start with base environment
+  let env: NodeJS.ProcessEnv = { ...process.env };
 
-  if (taskId) {
-    env.ACCOMPLISH_TASK_ID = taskId;
-    console.log('[OpenCode CLI] Task ID in environment:', taskId);
-  }
-
+  // Handle Electron-specific environment setup for packaged app
   if (app.isPackaged) {
     env.ELECTRON_RUN_AS_NODE = '1';
 
@@ -109,7 +106,6 @@ export async function buildEnvironment(taskId: string): Promise<NodeJS.ProcessEn
       if (process.platform === 'win32') {
         env.Path = combinedPath;
       }
-      env.NODE_BIN_PATH = bundledNode.binDir;
       console.log('[OpenCode CLI] Added bundled Node.js to PATH:', bundledNode.binDir);
     }
 
@@ -118,67 +114,39 @@ export async function buildEnvironment(taskId: string): Promise<NodeJS.ProcessEn
     }
   }
 
+  // Gather configuration for the reusable environment builder
   const apiKeys = await getAllApiKeys();
+  const bedrockCredentials = getBedrockCredentials() as BedrockCredentials | null;
+  const bundledNode = getBundledNodePaths();
 
-  if (apiKeys.anthropic) {
-    env.ANTHROPIC_API_KEY = apiKeys.anthropic;
-  }
-  if (apiKeys.openai) {
-    env.OPENAI_API_KEY = apiKeys.openai;
-    const configuredOpenAiBaseUrl = getOpenAiBaseUrl().trim();
-    if (configuredOpenAiBaseUrl) {
-      env.OPENAI_BASE_URL = configuredOpenAiBaseUrl;
-    }
-  }
-  if (apiKeys.google) {
-    env.GOOGLE_GENERATIVE_AI_API_KEY = apiKeys.google;
-  }
-  if (apiKeys.xai) {
-    env.XAI_API_KEY = apiKeys.xai;
-  }
-  if (apiKeys.deepseek) {
-    env.DEEPSEEK_API_KEY = apiKeys.deepseek;
-  }
-  if (apiKeys.moonshot) {
-    env.MOONSHOT_API_KEY = apiKeys.moonshot;
-  }
-  if (apiKeys.zai) {
-    env.ZAI_API_KEY = apiKeys.zai;
-  }
-  if (apiKeys.openrouter) {
-    env.OPENROUTER_API_KEY = apiKeys.openrouter;
-  }
-  if (apiKeys.litellm) {
-    env.LITELLM_API_KEY = apiKeys.litellm;
-  }
-  if (apiKeys.minimax) {
-    env.MINIMAX_API_KEY = apiKeys.minimax;
-  }
+  // Determine OpenAI base URL
+  const configuredOpenAiBaseUrl = apiKeys.openai ? getOpenAiBaseUrl().trim() : undefined;
 
-  const bedrockCredentials = getBedrockCredentials();
-  if (bedrockCredentials) {
-    if (bedrockCredentials.authType === 'apiKey') {
-      env.AWS_BEARER_TOKEN_BEDROCK = bedrockCredentials.apiKey;
-    } else if (bedrockCredentials.authType === 'accessKeys') {
-      env.AWS_ACCESS_KEY_ID = bedrockCredentials.accessKeyId;
-      env.AWS_SECRET_ACCESS_KEY = bedrockCredentials.secretAccessKey;
-      if (bedrockCredentials.sessionToken) {
-        env.AWS_SESSION_TOKEN = bedrockCredentials.sessionToken;
-      }
-    } else if (bedrockCredentials.authType === 'profile') {
-      env.AWS_PROFILE = bedrockCredentials.profileName;
-    }
-    if (bedrockCredentials.region) {
-      env.AWS_REGION = bedrockCredentials.region;
-    }
-  }
-
+  // Determine Ollama host
   const activeModel = getActiveProviderModel();
   const selectedModel = getSelectedModel();
+  let ollamaHost: string | undefined;
   if (activeModel?.provider === 'ollama' && activeModel.baseUrl) {
-    env.OLLAMA_HOST = activeModel.baseUrl;
+    ollamaHost = activeModel.baseUrl;
   } else if (selectedModel?.provider === 'ollama' && selectedModel.baseUrl) {
-    env.OLLAMA_HOST = selectedModel.baseUrl;
+    ollamaHost = selectedModel.baseUrl;
+  }
+
+  // Build environment configuration
+  const envConfig: EnvironmentConfig = {
+    apiKeys,
+    bedrockCredentials: bedrockCredentials || undefined,
+    bundledNodeBinPath: bundledNode?.binDir,
+    taskId: taskId || undefined,
+    openAiBaseUrl: configuredOpenAiBaseUrl || undefined,
+    ollamaHost,
+  };
+
+  // Use the core function to set API keys and credentials
+  env = buildOpenCodeEnvironment(env, envConfig);
+
+  if (taskId) {
+    console.log('[OpenCode CLI] Task ID in environment:', taskId);
   }
 
   return env;

@@ -1,50 +1,17 @@
-import * as net from 'net';
-import * as fs from 'fs';
 import * as pty from 'node-pty';
 import { app, shell } from 'electron';
 import { getOpenCodeCliPath } from './electron-options';
 import { generateOpenCodeConfig } from './config-generator';
+import {
+  stripAnsi,
+  quoteForShell,
+  getPlatformShell,
+  getShellArgs,
+  waitForPortRelease,
+} from '@accomplish/shared';
 
 interface LoginResult {
   openedUrl?: string;
-}
-
-function stripAnsi(input: string): string {
-  return input.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
-}
-
-function quoteForShell(arg: string): string {
-  if (process.platform === 'win32') {
-    if (arg.includes(' ') || arg.includes('"')) {
-      return `"${arg.replace(/"/g, '\\"')}"`;
-    }
-    return arg;
-  }
-  if (arg.includes("'") || arg.includes(' ') || arg.includes('"')) {
-    return `'${arg.replace(/'/g, "'\\''")}'`;
-  }
-  return arg;
-}
-
-function getPlatformShell(): string {
-  if (process.platform === 'win32') {
-    return 'powershell.exe';
-  }
-  if (app.isPackaged && process.platform === 'darwin') {
-    return '/bin/sh';
-  }
-  const userShell = process.env.SHELL;
-  if (userShell) return userShell;
-  if (fs.existsSync('/bin/bash')) return '/bin/bash';
-  if (fs.existsSync('/bin/zsh')) return '/bin/zsh';
-  return '/bin/sh';
-}
-
-function getShellArgs(command: string): string[] {
-  if (process.platform === 'win32') {
-    return ['-NoProfile', '-Command', command];
-  }
-  return ['-c', command];
 }
 
 export class OAuthBrowserFlow {
@@ -59,7 +26,12 @@ export class OAuthBrowserFlow {
     if (this.isInProgress()) {
       console.log('[OAuthBrowserFlow] Cancelling previous flow before starting new one');
       await this.cancel();
-      await this.waitForPortRelease(1455, 2000);
+      try {
+        await waitForPortRelease(1455, 2000);
+        console.log('[OAuthBrowserFlow] Port 1455 released');
+      } catch {
+        console.warn('[OAuthBrowserFlow] Port 1455 still in use after 2000ms');
+      }
     }
 
     await generateOpenCodeConfig();
@@ -68,7 +40,7 @@ export class OAuthBrowserFlow {
     const allArgs = [...baseArgs, 'auth', 'login'];
 
     const fullCommand = [command, ...allArgs].map(quoteForShell).join(' ');
-    const shellCmd = getPlatformShell();
+    const shellCmd = getPlatformShell(app.isPackaged);
     const shellArgs = getShellArgs(fullCommand);
 
     const env: Record<string, string> = {};
@@ -222,39 +194,6 @@ export class OAuthBrowserFlow {
           resolve(false);
         }
       }, timeoutMs);
-    });
-  }
-
-  private async waitForPortRelease(port: number, timeoutMs: number): Promise<void> {
-    const startTime = Date.now();
-    const pollInterval = 100;
-
-    while (Date.now() - startTime < timeoutMs) {
-      const inUse = await this.isPortInUse(port);
-      if (!inUse) {
-        console.log(`[OAuthBrowserFlow] Port ${port} released`);
-        return;
-      }
-      await this.delay(pollInterval);
-    }
-
-    console.warn(`[OAuthBrowserFlow] Port ${port} still in use after ${timeoutMs}ms`);
-  }
-
-  private isPortInUse(port: number): Promise<boolean> {
-    return new Promise((resolve) => {
-      const server = net.createServer();
-
-      server.once('error', (err: NodeJS.ErrnoException) => {
-        resolve(err.code === 'EADDRINUSE');
-      });
-
-      server.once('listening', () => {
-        server.close();
-        resolve(false);
-      });
-
-      server.listen(port, '127.0.0.1');
     });
   }
 
