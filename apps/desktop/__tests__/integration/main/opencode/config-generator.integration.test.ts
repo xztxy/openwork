@@ -132,7 +132,15 @@ Use AskUserQuestion tool for user interaction.`,
     ensureAzureFoundryProxy: vi.fn(() => Promise.resolve()),
     ensureMoonshotProxy: vi.fn(() => Promise.resolve()),
 
-    // Provider settings
+    // Bundled Node.js utilities
+  getBundledNodePaths: vi.fn(() => null),
+  isBundledNodeAvailable: vi.fn(() => false),
+  getNodePath: vi.fn(() => 'node'),
+  getNpmPath: vi.fn(() => 'npm'),
+  getNpxPath: vi.fn(() => 'npx'),
+  logBundledNodeInfo: vi.fn(),
+
+  // Provider settings
   getProviderSettings: vi.fn(() => ({
     activeProviderId: null,
     connectedProviders: {},

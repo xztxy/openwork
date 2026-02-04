@@ -17,6 +17,12 @@ const originalArch = process.arch;
 // Mock electron module
 const mockApp = {
   isPackaged: false,
+  getPath: vi.fn((name: string) => {
+    if (name === 'userData') return '/mock/userData';
+    if (name === 'temp') return '/mock/temp';
+    return '/mock/path';
+  }),
+  getAppPath: vi.fn(() => '/mock/appPath'),
 };
 
 vi.mock('electron', () => ({
