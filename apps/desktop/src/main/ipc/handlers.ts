@@ -120,7 +120,6 @@ import { skillsManager } from '../skills';
 const ALLOWED_API_KEY_PROVIDERS = new Set(['anthropic', 'openai', 'openrouter', 'google', 'xai', 'deepseek', 'moonshot', 'zai', 'azure-foundry', 'custom', 'bedrock', 'litellm', 'minimax', 'lmstudio', 'elevenlabs']);
 const API_KEY_VALIDATION_TIMEOUT_MS = 15000;
 
-// Standard providers that can be validated using core's validateApiKey
 const STANDARD_VALIDATION_PROVIDERS = new Set([
   'anthropic', 'openai', 'google', 'xai', 'deepseek', 'openrouter', 'moonshot', 'zai', 'minimax'
 ]);
@@ -312,7 +311,6 @@ export function registerIPCHandlers(): void {
       return mockTask;
     }
 
-    // Add modelId for progress display
     const activeModel = getActiveProviderModel();
     const selectedModel = activeModel || getSelectedModel();
     if (selectedModel?.model) {
@@ -462,7 +460,6 @@ export function registerIPCHandlers(): void {
       addTaskMessage(validatedExistingTaskId, userMessage);
     }
 
-    // Add modelId for progress display
     const activeModelForResume = getActiveProviderModel();
     const selectedModelForResume = activeModelForResume || getSelectedModel();
 
@@ -736,8 +733,6 @@ export function registerIPCHandlers(): void {
       }
     }
 
-    // For local servers and other providers that don't need validation
-    // (ollama, lmstudio, litellm, bedrock, elevenlabs, custom)
     console.log(`[API Key] Skipping validation for ${provider} (local/custom provider)`);
     return { valid: true };
   });

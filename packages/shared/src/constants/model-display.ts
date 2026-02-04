@@ -1,6 +1,3 @@
-/**
- * Model ID to display name mappings
- */
 export const MODEL_DISPLAY_NAMES: Record<string, string> = {
   // Anthropic
   'claude-opus-4-5': 'Claude Opus 4.5',
@@ -50,9 +47,6 @@ export const MODEL_DISPLAY_NAMES: Record<string, string> = {
   'MiniMax-M2.1': 'MiniMax M2.1',
 };
 
-/**
- * Provider prefixes to strip from model IDs
- */
 export const PROVIDER_PREFIXES = [
   'anthropic/',
   'openai/',
@@ -70,3 +64,49 @@ export const PROVIDER_PREFIXES = [
   'lmstudio/',
   'azure-foundry/',
 ];
+
+/**
+ * Convert a model ID to a human-readable display name
+ */
+export function getModelDisplayName(modelId: string): string {
+  if (!modelId) {
+    return 'AI';
+  }
+
+  // Strip provider prefixes
+  let cleanId = modelId;
+  for (const prefix of PROVIDER_PREFIXES) {
+    if (cleanId.startsWith(prefix)) {
+      cleanId = cleanId.slice(prefix.length);
+      break;
+    }
+  }
+
+  // Handle openrouter format: openrouter/provider/model
+  if (cleanId.includes('/')) {
+    cleanId = cleanId.split('/').pop() || cleanId;
+  }
+
+  // Strip date suffixes (e.g., "-20250514", "-20241022")
+  cleanId = cleanId.replace(/-\d{8}$/, '');
+
+  // Check for known model mapping
+  if (MODEL_DISPLAY_NAMES[cleanId]) {
+    return MODEL_DISPLAY_NAMES[cleanId];
+  }
+
+  // Fallback: capitalize and clean up the model ID
+  return (
+    cleanId
+      .split('-')
+      .map(part => {
+        // Keep version numbers as-is
+        if (/^\d/.test(part)) return part;
+        // Capitalize first letter
+        return part.charAt(0).toUpperCase() + part.slice(1);
+      })
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim() || 'AI'
+  );
+}

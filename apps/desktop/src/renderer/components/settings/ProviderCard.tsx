@@ -1,13 +1,9 @@
-// apps/desktop/src/renderer/components/settings/ProviderCard.tsx
-
 import { memo, useCallback } from 'react';
 import type { ProviderId, ConnectedProvider } from '@accomplish/shared';
 import { PROVIDER_META, isProviderReady } from '@accomplish/shared';
 import { AnimatePresence, motion } from 'framer-motion';
 import { settingsVariants, settingsTransitions } from '@/lib/animations';
 import { PROVIDER_LOGOS } from '@/lib/provider-logos';
-
-// Import connected badge icon
 import connectedKeyIcon from '/assets/icons/connected-key.svg';
 
 interface ProviderCardProps {
@@ -18,8 +14,6 @@ interface ProviderCardProps {
   onSelect: (providerId: ProviderId) => void;
 }
 
-// Memoized to prevent unnecessary re-renders when switching between providers
-// Only re-renders when its own props change (not when sibling cards change)
 export const ProviderCard = memo(function ProviderCard({
   providerId,
   connectedProvider,
@@ -32,11 +26,10 @@ export const ProviderCard = memo(function ProviderCard({
   const providerReady = isProviderReady(connectedProvider);
   const logoSrc = PROVIDER_LOGOS[providerId];
 
-  // Green background should ONLY show for the active provider that is ready (connected + model selected)
-  // isSelected just means the card is clicked for viewing settings - it should only get a border, not green background
+  // Green background = active provider that is ready (connected + model selected)
+  // isSelected = card clicked for viewing settings (border only, not green background)
   const showGreenBackground = isActive && providerReady;
 
-  // Handler calls onSelect with this card's providerId
   const handleClick = useCallback(() => {
     onSelect(providerId);
   }, [onSelect, providerId]);
@@ -53,7 +46,6 @@ export const ProviderCard = memo(function ProviderCard({
             : 'border-border bg-[#f9f8f6] hover:border-ring'
       }`}
     >
-      {/* Connection status badge - always green when connected */}
       <AnimatePresence>
         {isConnected && (
           <motion.div
@@ -75,7 +67,6 @@ export const ProviderCard = memo(function ProviderCard({
         )}
       </AnimatePresence>
 
-      {/* Provider Logo */}
       <div className="mb-2 h-10 w-10 flex items-center justify-center">
         <img
           src={logoSrc}
@@ -84,12 +75,10 @@ export const ProviderCard = memo(function ProviderCard({
         />
       </div>
 
-      {/* Name */}
       <span className="text-sm font-medium text-foreground">
         {meta.name}
       </span>
 
-      {/* Label */}
       <span className="text-xs text-muted-foreground">
         {meta.label}
       </span>

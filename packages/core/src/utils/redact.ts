@@ -1,32 +1,13 @@
-// packages/core/src/utils/redact.ts
-
-/**
- * Patterns for detecting sensitive data in strings.
- */
 const REDACTION_PATTERNS = [
-  // API keys - various formats
-  /sk-[a-zA-Z0-9]{20,}/g,  // OpenAI/Anthropic style
-  /xai-[a-zA-Z0-9]{20,}/g,  // xAI
-  /AIza[a-zA-Z0-9_-]{35}/g,  // Google API keys
-  /AKIA[A-Z0-9]{16}/g,  // AWS Access Key ID
-
-  // Generic patterns
+  /sk-[a-zA-Z0-9]{20,}/g,
+  /xai-[a-zA-Z0-9]{20,}/g,
+  /AIza[a-zA-Z0-9_-]{35}/g,
+  /AKIA[A-Z0-9]{16}/g,
   /(?:api[_-]?key|apikey|secret|token|password|credential)['":\s]*[=:]\s*['"]?([a-zA-Z0-9_-]{16,})['"]?/gi,
-
-  // Bearer tokens
   /Bearer\s+[a-zA-Z0-9._-]+/gi,
-
-  // Base64 encoded secrets (at least 32 chars, likely secrets)
   /(?:secret|password|key)['":\s]*[=:]\s*['"]?([A-Za-z0-9+/=]{32,})['"]?/gi,
 ];
 
-/**
- * Redact sensitive data from a string.
- * Keeps first 4 characters for identification, replaces rest with [REDACTED].
- *
- * @param text - The text to redact
- * @returns Text with sensitive data redacted
- */
 export function redact(text: string): string {
   let result = text;
 

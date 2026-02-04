@@ -49,8 +49,6 @@ export function isOpenCodeBundled(): boolean {
 
 export function getBundledOpenCodeVersion(): string | null {
   const { command } = getOpenCodeCliPath();
-  // getCliVersion is async but we need sync for backwards compatibility
-  // For packaged apps, we can read version from package.json directly
   if (app.isPackaged) {
     try {
       const packageName = process.platform === 'win32' ? 'opencode-windows-x64' : 'opencode-ai';
@@ -67,11 +65,9 @@ export function getBundledOpenCodeVersion(): string | null {
         return pkg.version;
       }
     } catch {
-      // Fall through to command execution
     }
   }
 
-  // For dev mode, execute the CLI to get version
   try {
     const fullCommand = `"${command}" --version`;
     const output = execSync(fullCommand, {
@@ -92,7 +88,6 @@ export async function buildEnvironment(taskId: string): Promise<NodeJS.ProcessEn
     ...process.env,
   };
 
-  // Set task ID for MCP tools to isolate browser tabs and other resources per task
   if (taskId) {
     env.ACCOMPLISH_TASK_ID = taskId;
     console.log('[OpenCode CLI] Task ID in environment:', taskId);
@@ -190,11 +185,9 @@ export async function buildEnvironment(taskId: string): Promise<NodeJS.ProcessEn
 }
 
 export async function buildCliArgs(config: TaskConfig, _taskId: string): Promise<string[]> {
-  // Get model from provider settings (Electron secure storage)
   const activeModel = getActiveProviderModel();
   const selectedModel = activeModel || getSelectedModel();
 
-  // Use core's buildCliArgs with Electron-sourced model info
   return coreBuildCliArgs({
     prompt: config.prompt,
     sessionId: config.sessionId,

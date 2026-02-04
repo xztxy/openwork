@@ -354,7 +354,6 @@ async function buildProviderConfigs(azureFoundryToken?: string): Promise<{
     const zaiRegion = zaiCredentials?.region || 'international';
     const zaiEndpoint = ZAI_ENDPOINTS[zaiRegion];
 
-    // Generate ZAI models from DEFAULT_PROVIDERS
     const zaiProviderConfig = DEFAULT_PROVIDERS.find(p => p.id === 'zai');
     const zaiModels: Record<string, ProviderModelConfig> = {};
     if (zaiProviderConfig) {

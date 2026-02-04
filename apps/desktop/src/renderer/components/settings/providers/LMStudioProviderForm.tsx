@@ -1,5 +1,3 @@
-// apps/desktop/src/renderer/components/settings/providers/LMStudioProviderForm.tsx
-
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { getAccomplish } from '@/lib/accomplish';
@@ -13,7 +11,6 @@ import {
   ModelSelector,
 } from '../shared';
 
-// Import LM Studio logo
 import lmstudioLogo from '/assets/ai-logos/lmstudio.png';
 
 interface LMStudioModel {
@@ -30,9 +27,6 @@ interface LMStudioProviderFormProps {
   showModelError: boolean;
 }
 
-/**
- * Tool support badge component
- */
 function ToolSupportBadge({ status }: { status: ToolSupportStatus }) {
   const config = {
     supported: {
@@ -74,9 +68,6 @@ function ToolSupportBadge({ status }: { status: ToolSupportStatus }) {
   );
 }
 
-/**
- * Custom model selector with tool support indicators
- */
 function LMStudioModelSelector({
   models,
   value,
@@ -88,13 +79,11 @@ function LMStudioModelSelector({
   onChange: (modelId: string) => void;
   error: boolean;
 }) {
-  // Sort models: supported first, then unknown, then unsupported
   const sortedModels = [...models].sort((a, b) => {
     const order: Record<ToolSupportStatus, number> = { supported: 0, unknown: 1, unsupported: 2 };
     return order[a.toolSupport] - order[b.toolSupport];
   });
 
-  // Transform models for ModelSelector with tool support indicators in name
   const selectorModels = sortedModels.map((model) => {
     const toolIcon = model.toolSupport === 'supported' ? '✓' : model.toolSupport === 'unsupported' ? '✗' : '?';
     return {
@@ -118,7 +107,6 @@ function LMStudioModelSelector({
         placeholder="Select a model..."
       />
 
-      {/* Warning for unsupported or unknown models */}
       {hasUnsupportedSelected && (
         <div className="mt-2 flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
           <svg className="h-5 w-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -177,13 +165,6 @@ export function LMStudioProviderForm({
       const models = (result.models || []) as LMStudioModel[];
       setAvailableModels(models);
 
-      // Check if any models support tools
-      const supportedModels = models.filter(m => m.toolSupport === 'supported');
-      if (supportedModels.length === 0 && models.length > 0) {
-        // All models lack tool support - show warning but still allow connection
-        console.warn('[LM Studio] No models with tool support detected');
-      }
-
       const provider: ConnectedProvider = {
         providerId: 'lmstudio',
         connectionStatus: 'connected',
@@ -208,9 +189,7 @@ export function LMStudioProviderForm({
     }
   };
 
-  // Get models from connected provider or local state
   const models: LMStudioModel[] = (connectedProvider?.availableModels || availableModels).map(m => {
-    // Handle both formats: with and without 'lmstudio/' prefix
     const id = m.id.replace(/^lmstudio\//, '');
     return {
       id,
@@ -263,7 +242,6 @@ export function LMStudioProviderForm({
               transition={settingsTransitions.enter}
               className="space-y-3"
             >
-              {/* Display saved server URL */}
               <div>
                 <label className="mb-2 block text-sm font-medium text-foreground">LM Studio Server URL</label>
                 <input
@@ -276,7 +254,6 @@ export function LMStudioProviderForm({
 
               <ConnectedControls onDisconnect={onDisconnect} />
 
-              {/* Model Selector with Tool Support */}
               <LMStudioModelSelector
                 models={models}
                 value={connectedProvider?.selectedModelId || null}
@@ -284,7 +261,6 @@ export function LMStudioProviderForm({
                 error={showModelError && !connectedProvider?.selectedModelId}
               />
 
-              {/* Tool support legend */}
               <div className="flex items-center gap-3 pt-2 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <ToolSupportBadge status="supported" />
@@ -292,7 +268,6 @@ export function LMStudioProviderForm({
                 </span>
               </div>
 
-              {/* Context length hint */}
               <div className="flex items-start gap-2 rounded-md border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-blue-400">
                 <svg className="h-5 w-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />

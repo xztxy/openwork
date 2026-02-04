@@ -1,19 +1,13 @@
-// apps/desktop/src/renderer/components/settings/shared/RegionSelector.tsx
-
 import { SearchableSelect } from '@/components/ui/searchable-select';
 
 const AWS_REGIONS = [
-  // United States
   { id: 'us-east-1', name: 'us-east-1' },
   { id: 'us-east-2', name: 'us-east-2' },
   { id: 'us-west-1', name: 'us-west-1' },
   { id: 'us-west-2', name: 'us-west-2' },
-  // Canada
   { id: 'ca-central-1', name: 'ca-central-1' },
   { id: 'ca-west-1', name: 'ca-west-1' },
-  // South America
   { id: 'sa-east-1', name: 'sa-east-1' },
-  // Europe
   { id: 'eu-north-1', name: 'eu-north-1' },
   { id: 'eu-west-1', name: 'eu-west-1' },
   { id: 'eu-west-2', name: 'eu-west-2' },
@@ -22,13 +16,10 @@ const AWS_REGIONS = [
   { id: 'eu-central-2', name: 'eu-central-2' },
   { id: 'eu-south-1', name: 'eu-south-1' },
   { id: 'eu-south-2', name: 'eu-south-2' },
-  // Middle East
   { id: 'me-south-1', name: 'me-south-1' },
   { id: 'me-central-1', name: 'me-central-1' },
   { id: 'il-central-1', name: 'il-central-1' },
-  // Africa
   { id: 'af-south-1', name: 'af-south-1' },
-  // Asia Pacific
   { id: 'ap-northeast-1', name: 'ap-northeast-1' },
   { id: 'ap-northeast-2', name: 'ap-northeast-2' },
   { id: 'ap-northeast-3', name: 'ap-northeast-3' },
@@ -43,7 +34,6 @@ const AWS_REGIONS = [
   { id: 'ap-south-2', name: 'ap-south-2' },
   { id: 'ap-east-1', name: 'ap-east-1' },
   { id: 'ap-east-2', name: 'ap-east-2' },
-  // Mexico
   { id: 'mx-central-1', name: 'mx-central-1' },
 ];
 

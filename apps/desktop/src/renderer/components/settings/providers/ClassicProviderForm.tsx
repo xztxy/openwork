@@ -1,5 +1,3 @@
-// apps/desktop/src/renderer/components/settings/providers/ClassicProviderForm.tsx
-
 import { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { getAccomplish } from '@/lib/accomplish';
@@ -35,8 +33,6 @@ export function ClassicProviderForm({
   const [apiKey, setApiKey] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // OpenAI-specific state
   const [openAiBaseUrl, setOpenAiBaseUrl] = useState('');
   const [signingIn, setSigningIn] = useState(false);
 
@@ -47,7 +43,6 @@ export function ClassicProviderForm({
   const logoSrc = PROVIDER_LOGOS[providerId];
   const isOpenAI = providerId === 'openai';
 
-  // Fetch OpenAI-specific settings
   useEffect(() => {
     if (!isOpenAI) return;
 
@@ -67,7 +62,6 @@ export function ClassicProviderForm({
     try {
       const accomplish = getAccomplish();
 
-      // Save base URL for OpenAI before validating
       if (isOpenAI) {
         await accomplish.setOpenAiBaseUrl(openAiBaseUrl.trim());
       }
@@ -80,18 +74,15 @@ export function ClassicProviderForm({
         return;
       }
 
-      // Save the API key
       await accomplish.addApiKey(providerId as any, apiKey.trim());
 
-      // Get default model for this provider (if one exists)
       const defaultModel = getDefaultModelForProvider(providerId);
 
-      // Create connected provider - store longer key prefix for display
       const trimmedKey = apiKey.trim();
       const provider: ConnectedProvider = {
         providerId,
         connectionStatus: 'connected',
-        selectedModelId: defaultModel, // Auto-select default model for main providers
+        selectedModelId: defaultModel,
         credentials: {
           type: 'api_key',
           keyPrefix: trimmedKey.length > 40
@@ -119,7 +110,6 @@ export function ClassicProviderForm({
       const status = await accomplish.getOpenAiOauthStatus();
 
       if (status.connected) {
-        // Create connected provider with OAuth credentials
         const defaultModel = getDefaultModelForProvider(providerId);
         const provider: ConnectedProvider = {
           providerId,
@@ -144,10 +134,8 @@ export function ClassicProviderForm({
     <div className="rounded-xl border border-border bg-card p-5" data-testid="provider-settings-panel">
       <ProviderFormHeader logoSrc={logoSrc} providerName={meta.name} />
 
-      {/* OpenAI: Linear OAuth + API Key interface */}
       {isOpenAI && !isConnected && (
         <div className="space-y-4">
-          {/* OAuth login button */}
           <button
             type="button"
             onClick={handleChatGptSignIn}
@@ -159,14 +147,12 @@ export function ClassicProviderForm({
             {signingIn ? 'Signing in...' : 'Login with OpenAI'}
           </button>
 
-          {/* Divider with "or" */}
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-border" />
             <span className="text-sm text-muted-foreground">or</span>
             <div className="flex-1 h-px bg-border" />
           </div>
 
-          {/* API Key section */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium text-foreground">API Key</label>
@@ -204,7 +190,6 @@ export function ClassicProviderForm({
             </div>
           </div>
 
-          {/* Base URL section */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">Base URL (optional)</label>
             <input
@@ -224,7 +209,6 @@ export function ClassicProviderForm({
         </div>
       )}
 
-      {/* Non-OpenAI providers: Standard API Key interface */}
       {!isOpenAI && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -313,7 +297,6 @@ export function ClassicProviderForm({
         </div>
       )}
 
-      {/* Connected state for OpenAI */}
       {isOpenAI && isConnected && (
         <div className="space-y-3">
           <ConnectedControls onDisconnect={onDisconnect} />

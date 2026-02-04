@@ -1,12 +1,3 @@
-/**
- * Fetch with configurable timeout using AbortController.
- *
- * @param url - The URL to fetch
- * @param options - Standard fetch RequestInit options
- * @param timeoutMs - Timeout in milliseconds
- * @returns Response promise
- * @throws AbortError if timeout is reached
- */
 export async function fetchWithTimeout(
   url: string,
   options: RequestInit,

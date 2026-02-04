@@ -1,5 +1,3 @@
-// apps/desktop/src/renderer/components/settings/shared/ModelSelector.tsx
-
 import { SearchableSelect, type SelectItem } from '@/components/ui/searchable-select';
 
 interface ModelSelectorProps {

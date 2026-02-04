@@ -1,5 +1,3 @@
-// apps/desktop/src/renderer/components/settings/providers/BedrockApiKeyTab.tsx
-
 import { RegionSelector } from '../shared';
 
 interface BedrockApiKeyTabProps {

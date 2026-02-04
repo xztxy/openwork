@@ -1,7 +1,3 @@
-/**
- * Log file writer with daily rotation and buffered writes
- */
-
 import fs from 'fs';
 import path from 'path';
 import { app } from 'electron';
@@ -35,39 +31,25 @@ class LogFileWriter {
     this.logDir = path.join(userDataPath, 'logs');
   }
 
-  /**
-   * Initialize the log writer - creates log directory and cleans old files
-   */
   initialize(): void {
-    // Create log directory if it doesn't exist
     if (!fs.existsSync(this.logDir)) {
       fs.mkdirSync(this.logDir, { recursive: true });
     }
 
-    // Clean up old log files
     this.cleanupOldLogs();
-
-    // Set up the current log file
     this.updateCurrentFile();
-
-    // Start the flush timer
     this.flushTimer = setInterval(() => this.flush(), BUFFER_FLUSH_INTERVAL_MS);
   }
 
-  /**
-   * Write a log entry
-   */
   write(level: LogLevel, source: LogSource, message: string): void {
-    // Check for date change to reset file size limit on new day
     if (this.fileSizeExceeded) {
       const today = new Date().toISOString().split('T')[0];
       if (today !== this.currentDate) {
-        // New day - reset and switch to new file
         this.currentDate = today;
         this.currentFilePath = path.join(this.logDir, `app-${today}.log`);
         this.fileSizeExceeded = false;
       } else {
-        return; // Still same day and size exceeded
+        return;
       }
     }
 
@@ -80,41 +62,32 @@ class LogFileWriter {
 
     this.buffer.push(entry);
 
-    // Flush if buffer is full
     if (this.buffer.length >= BUFFER_MAX_ENTRIES) {
       this.flush();
     }
   }
 
-  /**
-   * Flush buffered entries to disk
-   */
   flush(): void {
     if (this.buffer.length === 0) return;
 
-    // Check if date changed (need new file)
     this.updateCurrentFile();
 
-    // Check file size
     if (this.checkFileSize()) {
       this.fileSizeExceeded = true;
       console.error('[LogFileWriter] Max file size exceeded, stopping writes');
       return;
     }
 
-    // Format entries
     const lines = this.buffer.map((entry) =>
       `[${entry.timestamp}] [${entry.level}] [${entry.source}] ${entry.message}`
     );
 
-    // Append to file
     try {
       fs.appendFileSync(this.currentFilePath, lines.join('\n') + '\n');
-      this.buffer = [];  // Only clear on success
+      this.buffer = [];
     } catch (error) {
       console.error('[LogFileWriter] Failed to write logs:', error);
-      // Don't clear buffer - retry on next flush
-      // But prevent unbounded growth
+      // Don't clear buffer on failure - retry on next flush, but prevent unbounded growth
       if (this.buffer.length > BUFFER_MAX_ENTRIES * 10) {
         console.error('[LogFileWriter] Buffer overflow - dropping oldest entries');
         this.buffer = this.buffer.slice(-BUFFER_MAX_ENTRIES);
@@ -122,24 +95,15 @@ class LogFileWriter {
     }
   }
 
-  /**
-   * Get the current log file path for export
-   */
   getCurrentLogPath(): string {
     this.updateCurrentFile();
     return this.currentFilePath;
   }
 
-  /**
-   * Get the log directory path
-   */
   getLogDir(): string {
     return this.logDir;
   }
 
-  /**
-   * Shutdown the writer - flush and stop timer
-   */
   shutdown(): void {
     if (this.flushTimer) {
       clearInterval(this.flushTimer);
@@ -149,16 +113,16 @@ class LogFileWriter {
   }
 
   private updateCurrentFile(): void {
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const today = new Date().toISOString().split('T')[0];
     if (today !== this.currentDate) {
-      // Write any buffered entries to old file directly (don't call flush to avoid recursion)
+      // Write buffered entries to old file directly to avoid recursion from calling flush()
       if (this.currentDate && this.buffer.length > 0 && this.currentFilePath) {
         const lines = this.buffer.map((entry) =>
           `[${entry.timestamp}] [${entry.level}] [${entry.source}] ${entry.message}`
         );
         try {
           fs.appendFileSync(this.currentFilePath, lines.join('\n') + '\n');
-          this.buffer = [];  // Only clear on success
+          this.buffer = [];
         } catch (error) {
           console.error('[LogFileWriter] Failed to write logs on date change:', error);
           // Don't clear buffer - entries will be written to new file
@@ -189,7 +153,6 @@ class LogFileWriter {
       for (const file of files) {
         if (!file.startsWith('app-') || !file.endsWith('.log')) continue;
 
-        // Extract date from filename (app-YYYY-MM-DD.log)
         const dateMatch = file.match(/app-(\d{4}-\d{2}-\d{2})\.log/);
         if (!dateMatch) continue;
 
@@ -206,7 +169,6 @@ class LogFileWriter {
   }
 }
 
-// Singleton instance
 let instance: LogFileWriter | null = null;
 
 export function getLogFileWriter(): LogFileWriter {

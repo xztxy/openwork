@@ -1,5 +1,3 @@
-// apps/desktop/src/renderer/components/ui/searchable-select.tsx
-
 import { useState, useRef, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { settingsVariants, settingsTransitions } from '@/lib/animations';
@@ -8,8 +6,6 @@ export interface SelectItem {
   id: string;
   name: string;
 }
-
-/* ---------------------------------- Subcomponents ---------------------------------- */
 
 function ChevronIcon({ isOpen }: { isOpen: boolean }) {
   return (
@@ -163,8 +159,6 @@ function SelectLoading({ label }: { label: string }) {
   );
 }
 
-/* ---------------------------------- Main Component ---------------------------------- */
-
 interface SearchableSelectProps {
   items: SelectItem[];
   value: string | null;
@@ -197,10 +191,8 @@ export function SearchableSelect({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Show search functionality when there are many items
   const showSearch = items.length > 10;
 
-  // Filter items based on search term
   const filteredItems = search
     ? items.filter(
         (item) =>
@@ -209,11 +201,9 @@ export function SearchableSelect({
       )
     : items;
 
-  // Get display name for selected value
   const selectedItem = items.find((item) => item.id === value);
   const displayValue = selectedItem?.name || '';
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -225,7 +215,6 @@ export function SearchableSelect({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Focus search input when dropdown opens
   useEffect(() => {
     if (isOpen && showSearch && inputRef.current) {
       inputRef.current.focus();

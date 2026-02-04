@@ -1,5 +1,3 @@
-// apps/desktop/src/renderer/components/settings/providers/OllamaProviderForm.tsx
-
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { getAccomplish } from '@/lib/accomplish';
@@ -13,7 +11,6 @@ import {
   ModelSelector,
 } from '../shared';
 
-// Import Ollama logo
 import ollamaLogo from '/assets/ai-logos/ollama.svg';
 
 interface OllamaModel {
@@ -30,9 +27,6 @@ interface OllamaProviderFormProps {
   showModelError: boolean;
 }
 
-/**
- * Tool support badge component
- */
 function ToolSupportBadge({ status }: { status: ToolSupportStatus }) {
   const config = {
     supported: {
@@ -74,9 +68,6 @@ function ToolSupportBadge({ status }: { status: ToolSupportStatus }) {
   );
 }
 
-/**
- * Custom model selector with tool support indicators
- */
 function OllamaModelSelector({
   models,
   value,
@@ -88,7 +79,6 @@ function OllamaModelSelector({
   onChange: (modelId: string) => void;
   error: boolean;
 }) {
-  // Sort models: supported first, then unknown, then unsupported
   const sortedModels = [...models].sort((a, b) => {
     const order: Record<ToolSupportStatus, number> = { supported: 0, unknown: 1, unsupported: 2 };
     const aOrder = order[a.toolSupport || 'unknown'];
@@ -96,7 +86,6 @@ function OllamaModelSelector({
     return aOrder - bOrder;
   });
 
-  // Transform models for ModelSelector with tool support indicators in name
   const selectorModels = sortedModels.map((model) => {
     const toolSupport = model.toolSupport || 'unknown';
     const toolIcon = toolSupport === 'supported' ? '✓' : toolSupport === 'unsupported' ? '✗' : '?';
@@ -119,7 +108,6 @@ function OllamaModelSelector({
         error={error}
       />
 
-      {/* Warning for unsupported or unknown models */}
       {hasUnsupportedSelected && (
         <div className="mt-2 flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
           <svg className="h-5 w-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -206,7 +194,6 @@ export function OllamaProviderForm({
     }
   };
 
-  // Get models from connected provider or local state
   const models: OllamaModel[] = (connectedProvider?.availableModels || availableModels).map(m => ({
     id: m.id,
     name: m.name,
@@ -254,7 +241,6 @@ export function OllamaProviderForm({
               transition={settingsTransitions.enter}
               className="space-y-3"
             >
-              {/* Display saved server URL */}
               <div>
                 <label className="mb-2 block text-sm font-medium text-foreground">Ollama Server URL</label>
                 <input
@@ -267,7 +253,6 @@ export function OllamaProviderForm({
 
               <ConnectedControls onDisconnect={onDisconnect} />
 
-              {/* Model Selector with Tool Support */}
               <OllamaModelSelector
                 models={models}
                 value={connectedProvider?.selectedModelId || null}
@@ -275,7 +260,6 @@ export function OllamaProviderForm({
                 error={showModelError && !connectedProvider?.selectedModelId}
               />
 
-              {/* Tool support legend */}
               <div className="flex items-center gap-3 pt-2 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <ToolSupportBadge status="supported" />

@@ -1,9 +1,4 @@
-// apps/desktop/src/renderer/lib/provider-logos.ts
-// Shared provider logo mappings to avoid duplication across components
-
 import type { ProviderId } from '@accomplish/shared';
-
-// Import provider logos
 import anthropicLogo from '/assets/ai-logos/anthropic.svg';
 import openaiLogo from '/assets/ai-logos/openai.svg';
 import googleLogo from '/assets/ai-logos/google.svg';
@@ -36,11 +31,6 @@ export const PROVIDER_LOGOS: Record<ProviderId, string> = {
   lmstudio: lmstudioLogo,
 };
 
-/**
- * Get the logo URL for a provider
- * @param providerId - The provider ID
- * @returns The logo URL or undefined if not found
- */
 export function getProviderLogo(providerId: ProviderId): string | undefined {
   return PROVIDER_LOGOS[providerId];
 }

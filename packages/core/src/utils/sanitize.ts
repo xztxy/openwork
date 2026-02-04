@@ -1,16 +1,5 @@
-// packages/core/src/utils/sanitize.ts
-
 const DEFAULT_MAX_LENGTH = 8000;
 
-/**
- * Sanitize and validate a string input.
- *
- * @param input - The input value to sanitize
- * @param fieldName - Name of the field for error messages
- * @param maxLength - Maximum allowed length (default: 8000)
- * @returns Trimmed string
- * @throws Error if input is not a non-empty string or exceeds maxLength
- */
 export function sanitizeString(
   input: unknown,
   fieldName: string,
@@ -29,15 +18,6 @@ export function sanitizeString(
   return trimmed;
 }
 
-/**
- * Sanitize an optional string input.
- * Returns undefined if input is null/undefined, otherwise validates.
- *
- * @param input - The optional input value
- * @param fieldName - Name of the field for error messages
- * @param maxLength - Maximum allowed length
- * @returns Trimmed string or undefined
- */
 export function sanitizeOptionalString(
   input: unknown,
   fieldName: string,
