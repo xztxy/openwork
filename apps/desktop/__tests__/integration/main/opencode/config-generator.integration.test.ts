@@ -42,11 +42,8 @@ vi.mock('electron', () => ({
   app: mockApp,
 }));
 
-// Mock permission-api module (internal but exports constants we need)
-vi.mock('@main/permission-api', () => ({
-  PERMISSION_API_PORT: 9999,
-  QUESTION_API_PORT: 9227,
-}));
+// Note: PERMISSION_API_PORT and QUESTION_API_PORT are now imported from @accomplish/shared
+// by config-generator.ts, so no mock needed here
 
 // Mock @accomplish/core (uses SQLite which requires native module)
 // Note: generateConfig mock creates real files in temp directory for integration testing
@@ -351,7 +348,7 @@ describe('OpenCode Config Generator Integration', () => {
       expect(filePermission.enabled).toBe(true);
       expect(filePermission.command[0]).toBe('npx');
       expect(filePermission.command[1]).toBe('tsx');
-      expect(filePermission.environment.PERMISSION_API_PORT).toBe('9999');
+      expect(filePermission.environment.PERMISSION_API_PORT).toBe('9226');
     });
 
     it('should include platform-specific environment instructions', async () => {

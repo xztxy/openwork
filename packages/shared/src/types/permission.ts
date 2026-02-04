@@ -1,4 +1,9 @@
-export type FileOperation = 'create' | 'delete' | 'rename' | 'move' | 'modify' | 'overwrite';
+export const FILE_OPERATIONS = ['create', 'delete', 'rename', 'move', 'modify', 'overwrite'] as const;
+
+export type FileOperation = (typeof FILE_OPERATIONS)[number];
+
+export const FILE_PERMISSION_REQUEST_PREFIX = 'filereq_';
+export const QUESTION_REQUEST_PREFIX = 'questionreq_';
 
 export interface PermissionRequest {
   id: string;

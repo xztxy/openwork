@@ -8,10 +8,19 @@
 
 import http from 'http';
 import type { BrowserWindow } from 'electron';
+import {
+  PERMISSION_API_PORT,
+  QUESTION_API_PORT,
+  PERMISSION_REQUEST_TIMEOUT_MS,
+  FILE_OPERATIONS,
+  createFilePermissionRequestId,
+  createQuestionRequestId,
+  isFilePermissionRequest,
+  isQuestionRequest,
+} from '@accomplish/shared';
 import type { PermissionRequest, FileOperation } from '@accomplish/shared';
 
-export const PERMISSION_API_PORT = 9226;
-export const QUESTION_API_PORT = 9227;
+export { PERMISSION_API_PORT, QUESTION_API_PORT, isFilePermissionRequest, isQuestionRequest };
 
 interface PendingPermission {
   resolve: (allowed: boolean) => void;
@@ -80,20 +89,6 @@ export function resolveQuestion(
 }
 
 /**
- * Generate a unique request ID for file permissions
- */
-function generateRequestId(): string {
-  return `filereq_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-}
-
-/**
- * Generate a unique request ID for questions
- */
-function generateQuestionRequestId(): string {
-  return `questionreq_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-}
-
-/**
  * Create and start the HTTP server for permission requests
  */
 export function startPermissionApiServer(): http.Server {
@@ -147,10 +142,9 @@ export function startPermissionApiServer(): http.Server {
     }
 
     // Validate operation type
-    const validOperations = ['create', 'delete', 'rename', 'move', 'modify', 'overwrite'];
-    if (!validOperations.includes(data.operation)) {
+    if (!FILE_OPERATIONS.includes(data.operation as FileOperation)) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: `Invalid operation. Must be one of: ${validOperations.join(', ')}` }));
+      res.end(JSON.stringify({ error: `Invalid operation. Must be one of: ${FILE_OPERATIONS.join(', ')}` }));
       return;
     }
 
@@ -168,7 +162,7 @@ export function startPermissionApiServer(): http.Server {
       return;
     }
 
-    const requestId = generateRequestId();
+    const requestId = createFilePermissionRequestId();
 
     // Create permission request for the UI
     const permissionRequest: PermissionRequest = {
@@ -187,14 +181,12 @@ export function startPermissionApiServer(): http.Server {
     mainWindow.webContents.send('permission:request', permissionRequest);
 
     // Wait for user response (with 5 minute timeout)
-    const PERMISSION_TIMEOUT_MS = 5 * 60 * 1000;
-
     try {
       const allowed = await new Promise<boolean>((resolve, reject) => {
         const timeoutId = setTimeout(() => {
           pendingPermissions.delete(requestId);
           reject(new Error('Permission request timed out'));
-        }, PERMISSION_TIMEOUT_MS);
+        }, PERMISSION_REQUEST_TIMEOUT_MS);
 
         pendingPermissions.set(requestId, { resolve, timeoutId });
       });
@@ -288,7 +280,7 @@ export function startQuestionApiServer(): http.Server {
       return;
     }
 
-    const requestId = generateQuestionRequestId();
+    const requestId = createQuestionRequestId();
 
     // Create question request for the UI
     const questionRequest: PermissionRequest = {
@@ -306,14 +298,12 @@ export function startQuestionApiServer(): http.Server {
     mainWindow.webContents.send('permission:request', questionRequest);
 
     // Wait for user response (with 5 minute timeout)
-    const QUESTION_TIMEOUT_MS = 5 * 60 * 1000;
-
     try {
       const response = await new Promise<{ selectedOptions?: string[]; customText?: string; denied?: boolean }>((resolve, reject) => {
         const timeoutId = setTimeout(() => {
           pendingQuestions.delete(requestId);
           reject(new Error('Question request timed out'));
-        }, QUESTION_TIMEOUT_MS);
+        }, PERMISSION_REQUEST_TIMEOUT_MS);
 
         pendingQuestions.set(requestId, { resolveWithData: resolve, timeoutId });
       });
@@ -339,18 +329,4 @@ export function startQuestionApiServer(): http.Server {
   });
 
   return server;
-}
-
-/**
- * Check if a request ID is a file permission request from the MCP server
- */
-export function isFilePermissionRequest(requestId: string): boolean {
-  return requestId.startsWith('filereq_');
-}
-
-/**
- * Check if a request ID is a question request from the MCP server
- */
-export function isQuestionRequest(requestId: string): boolean {
-  return requestId.startsWith('questionreq_');
 }

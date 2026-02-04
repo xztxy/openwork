@@ -1,7 +1,6 @@
 import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import { PERMISSION_API_PORT, QUESTION_API_PORT } from '../permission-api';
 import {
   getOllamaConfig,
   getLMStudioConfig,
@@ -17,7 +16,7 @@ import type { ProviderConfig, ProviderModelConfig } from '@accomplish/core';
 import { getApiKey } from '../store/secureStorage';
 import { getNodePath } from '../utils/bundled-node';
 import { skillsManager } from '../skills';
-import { ZAI_ENDPOINTS, DEFAULT_PROVIDERS, PROVIDER_ID_TO_OPENCODE } from '@accomplish/shared';
+import { ZAI_ENDPOINTS, DEFAULT_PROVIDERS, PROVIDER_ID_TO_OPENCODE, PERMISSION_API_PORT, QUESTION_API_PORT } from '@accomplish/shared';
 import type { BedrockCredentials, ProviderId, ZaiCredentials, AzureFoundryCredentials } from '@accomplish/shared';
 
 export { ACCOMPLISH_AGENT_NAME };
