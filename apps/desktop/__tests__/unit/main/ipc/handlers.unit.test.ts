@@ -1543,7 +1543,7 @@ describe('IPC Handlers Integration', () => {
       await invokeHandler('session:resume', sessionId, prompt, existingTaskId);
 
       // Assert
-      const { updateTaskStatus } = await import('@accomplish/core');
+      const { updateTaskStatus } = await import('@accomplish/agent-core');
       expect(updateTaskStatus).toHaveBeenCalledWith(
         existingTaskId,
         'running',

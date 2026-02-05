@@ -22,7 +22,7 @@ export function getMcpToolsPath(): string {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'mcp-tools');
   } else {
-    return path.join(app.getAppPath(), '..', '..', 'packages', 'core', 'mcp-tools');
+    return path.join(app.getAppPath(), '..', '..', 'packages', 'agent-core', 'mcp-tools');
   }
 }
 
@@ -34,7 +34,7 @@ export function getOpenCodeConfigDir(): string {
   if (app.isPackaged) {
     return process.resourcesPath;
   } else {
-    return path.join(app.getAppPath(), '..', '..', 'packages', 'core');
+    return path.join(app.getAppPath(), '..', '..', 'packages', 'agent-core');
   }
 }
 

@@ -193,6 +193,10 @@ Use AskUserQuestion tool for user interaction.`,
     lmstudioConfig: null,
   })),
   clearAppSettings: vi.fn(),
+
+  // Constants needed by config-generator
+  PERMISSION_API_PORT: 9226,
+  QUESTION_API_PORT: 9227,
   };
 });
 
