@@ -1,8 +1,8 @@
 import path from 'path';
 import { app } from 'electron';
-import { createLogWriter, type LogWriterAPI } from '@accomplish/agent-core';
+import { createLogWriter, type LogWriterAPI } from '@accomplish_ai/agent-core';
 
-export type { LogLevel, LogSource, LogEntry } from '@accomplish/agent-core';
+export type { LogLevel, LogSource, LogEntry } from '@accomplish_ai/agent-core';
 
 let instance: LogWriterAPI | null = null;
 

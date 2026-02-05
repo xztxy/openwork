@@ -1,6 +1,6 @@
 import { app } from 'electron';
-import { createStorage, type StorageAPI } from '@accomplish/agent-core';
-import type { ApiKeyProvider } from '@accomplish/agent-core';
+import { createStorage, type StorageAPI } from '@accomplish_ai/agent-core';
+import type { ApiKeyProvider } from '@accomplish_ai/agent-core';
 
 export type { ApiKeyProvider };
 

@@ -1,7 +1,7 @@
-import { type LogWriterAPI } from '@accomplish/agent-core';
+import { type LogWriterAPI } from '@accomplish_ai/agent-core';
 import { getLogFileWriter, shutdownLogFileWriter } from './log-file-writer';
 
-export type { LogLevel, LogSource } from '@accomplish/agent-core';
+export type { LogLevel, LogSource } from '@accomplish_ai/agent-core';
 
 let instance: LogWriterAPI | null = null;
 

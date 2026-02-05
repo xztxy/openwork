@@ -3,7 +3,7 @@ import {
   type SpeechServiceAPI,
   type TranscriptionResult,
   type TranscriptionError,
-} from '@accomplish/agent-core';
+} from '@accomplish_ai/agent-core';
 import { getStorage } from '../store/secureStorage';
 
 export type { TranscriptionResult, TranscriptionError };

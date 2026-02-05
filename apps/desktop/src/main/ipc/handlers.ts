@@ -34,8 +34,8 @@ import {
   queueMessage,
   flushAndCleanupBatcher,
   validateTaskConfig,
-} from '@accomplish/agent-core';
-import { createTaskId, createMessageId } from '@accomplish/agent-core';
+} from '@accomplish_ai/agent-core';
+import { createTaskId, createMessageId } from '@accomplish_ai/agent-core';
 import {
   storeApiKey,
   getApiKey,
@@ -68,8 +68,8 @@ import {
   testLMStudioConnection,
   fetchLMStudioModels,
   validateLMStudioConfig,
-} from '@accomplish/agent-core';
-import { safeParseJson } from '@accomplish/agent-core';
+} from '@accomplish_ai/agent-core';
+import { safeParseJson } from '@accomplish_ai/agent-core';
 import {
   getProviderSettings,
   setActiveProvider,
@@ -81,9 +81,9 @@ import {
   getProviderDebugMode,
   hasReadyProvider,
   getOpenAiOauthStatus,
-} from '@accomplish/agent-core';
+} from '@accomplish_ai/agent-core';
 import { loginOpenAiWithChatGpt } from '../opencode/auth-browser';
-import type { ProviderId, ConnectedProvider, BedrockCredentials } from '@accomplish/agent-core';
+import type { ProviderId, ConnectedProvider, BedrockCredentials } from '@accomplish_ai/agent-core';
 import { getDesktopConfig } from '../config';
 import {
   startPermissionApiServer,
@@ -110,8 +110,8 @@ import type {
   LiteLLMConfig,
   LMStudioConfig,
   ToolSupportStatus,
-} from '@accomplish/agent-core';
-import { DEFAULT_PROVIDERS, ALLOWED_API_KEY_PROVIDERS, STANDARD_VALIDATION_PROVIDERS } from '@accomplish/agent-core';
+} from '@accomplish_ai/agent-core';
+import { DEFAULT_PROVIDERS, ALLOWED_API_KEY_PROVIDERS, STANDARD_VALIDATION_PROVIDERS } from '@accomplish_ai/agent-core';
 import {
   normalizeIpcError,
   permissionResponseSchema,
@@ -505,10 +505,10 @@ export function registerIPCHandlers(): void {
         return { valid: false, error: e instanceof Error ? e.message : 'Invalid API key' };
       }
 
-      const result = await validateApiKey(provider as import('@accomplish/agent-core').ProviderType, sanitizedKey, {
+      const result = await validateApiKey(provider as import('@accomplish_ai/agent-core').ProviderType, sanitizedKey, {
         timeout: API_KEY_VALIDATION_TIMEOUT_MS,
         baseUrl: provider === 'openai' ? getOpenAiBaseUrl().trim() || undefined : undefined,
-        zaiRegion: provider === 'zai' ? (options?.region as import('@accomplish/agent-core').ZaiRegion) || 'international' : undefined,
+        zaiRegion: provider === 'zai' ? (options?.region as import('@accomplish_ai/agent-core').ZaiRegion) || 'international' : undefined,
       });
 
       if (result.valid) {

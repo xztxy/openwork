@@ -7,7 +7,7 @@ import {
   resetDatabase as coreResetDatabase,
   databaseExists as coreDatabaseExists,
   isDatabaseInitialized,
-} from '@accomplish/agent-core';
+} from '@accomplish_ai/agent-core';
 import { importLegacyElectronStoreData } from './electronStoreImport';
 
 export function getDatabasePath(): string {

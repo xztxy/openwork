@@ -2,7 +2,7 @@ export {
   OpenCodeCliNotFoundError,
   createLogWatcher,
   createTaskManager,
-} from '@accomplish/agent-core';
+} from '@accomplish_ai/agent-core';
 
 export type {
   AdapterOptions,
@@ -13,7 +13,7 @@ export type {
   OpenCodeLogError,
   CompletionEnforcerCallbacks,
   TaskManagerAPI,
-} from '@accomplish/agent-core';
+} from '@accomplish_ai/agent-core';
 
 export {
   createElectronAdapterOptions,
@@ -38,7 +38,7 @@ export {
 
 export { loginOpenAiWithChatGpt } from './auth-browser';
 
-import { createTaskManager, type TaskManagerAPI } from '@accomplish/agent-core';
+import { createTaskManager, type TaskManagerAPI } from '@accomplish_ai/agent-core';
 import {
   createElectronAdapterOptions,
   createElectronTaskManagerOptions,

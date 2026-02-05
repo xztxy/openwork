@@ -14,7 +14,7 @@ import {
   type ThoughtStreamAPI,
   type ThoughtStreamEvent as ThoughtEvent,
   type ThoughtStreamCheckpointEvent as CheckpointEvent,
-} from '@accomplish/agent-core';
+} from '@accomplish_ai/agent-core';
 
 export { THOUGHT_STREAM_PORT };
 export type { ThoughtEvent, CheckpointEvent };

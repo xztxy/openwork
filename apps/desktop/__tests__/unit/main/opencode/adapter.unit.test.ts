@@ -7,7 +7,7 @@ import type {
   OpenCodeToolUseMessage,
   OpenCodeStepFinishMessage,
   OpenCodeErrorMessage,
-} from '@accomplish/agent-core';
+} from '@accomplish_ai/agent-core';
 
 const mockApp = {
   isPackaged: false,
@@ -75,7 +75,7 @@ vi.mock('node-pty', () => ({
 
 const mockPtyInstanceRef = { current: null as MockPty | null };
 
-vi.mock('@accomplish/agent-core', async () => {
+vi.mock('@accomplish_ai/agent-core', async () => {
   const { EventEmitter } = await import('events');
   const nodePty = await import('node-pty');
 
@@ -726,7 +726,7 @@ describe('OpenCode Adapter Module', () => {
     mockPtyInstance.removeAllListeners();
 
     const desktopModule = await import('@main/opencode');
-    const agentCoreModule = await import('@accomplish/agent-core');
+    const agentCoreModule = await import('@accomplish_ai/agent-core');
     OpenCodeAdapter = (agentCoreModule as unknown as { OpenCodeAdapter: unknown }).OpenCodeAdapter;
     isOpenCodeCliInstalled = desktopModule.isOpenCodeCliInstalled;
     getOpenCodeCliVersion = desktopModule.getOpenCodeCliVersion;

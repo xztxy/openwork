@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
-import type { TaskConfig, TaskResult, OpenCodeMessage, PermissionRequest } from '@accomplish/agent-core';
-import type { TaskManagerOptions } from '@accomplish/agent-core';
+import type { TaskConfig, TaskResult, OpenCodeMessage, PermissionRequest } from '@accomplish_ai/agent-core';
+import type { TaskManagerOptions } from '@accomplish_ai/agent-core';
 
 const mockApp = {
   isPackaged: false,
@@ -141,8 +141,8 @@ class MockOpenCodeAdapter extends EventEmitter {
 
 const createdAdapters: MockOpenCodeAdapter[] = [];
 
-vi.mock('@accomplish/agent-core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@accomplish/agent-core')>();
+vi.mock('@accomplish_ai/agent-core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@accomplish_ai/agent-core')>();
   return {
     ...actual,
     OpenCodeAdapter: MockOpenCodeAdapter,

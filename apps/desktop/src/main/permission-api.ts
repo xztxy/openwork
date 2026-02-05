@@ -18,7 +18,7 @@ import {
   type PermissionFileRequestData as FilePermissionRequestData,
   type PermissionQuestionRequestData as QuestionRequestData,
   type PermissionQuestionResponseData as QuestionResponseData,
-} from '@accomplish/agent-core';
+} from '@accomplish_ai/agent-core';
 
 export { PERMISSION_API_PORT, QUESTION_API_PORT, isFilePermissionRequest, isQuestionRequest };
 

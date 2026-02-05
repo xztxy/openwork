@@ -20,7 +20,7 @@ importers:
 
   apps/desktop:
     dependencies:
-      '@accomplish/agent-core':
+      '@accomplish_ai/agent-core':
         specifier: workspace:*
         version: link:../../packages/agent-core
       '@aws-sdk/client-bedrock':
