@@ -30,7 +30,6 @@ WORKDIR /app
 
 # Copy package files first for better caching
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY packages/shared/package.json ./packages/shared/
 COPY packages/agent-core/package.json ./packages/agent-core/
 COPY apps/desktop/package.json ./apps/desktop/
 
