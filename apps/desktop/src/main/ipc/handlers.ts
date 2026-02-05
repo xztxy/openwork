@@ -1028,23 +1028,23 @@ export function registerIPCHandlers(): void {
     }
   });
 
-  ipcMain.handle('skills:list', async () => {
+  handle('skills:list', async () => {
     return skillsManager.getAll();
   });
 
-  ipcMain.handle('skills:list-enabled', async () => {
+  handle('skills:list-enabled', async () => {
     return skillsManager.getEnabled();
   });
 
-  ipcMain.handle('skills:set-enabled', async (_, id: string, enabled: boolean) => {
+  handle('skills:set-enabled', async (_event, id: string, enabled: boolean) => {
     await skillsManager.setEnabled(id, enabled);
   });
 
-  ipcMain.handle('skills:get-content', async (_, id: string) => {
+  handle('skills:get-content', async (_event, id: string) => {
     return skillsManager.getContent(id);
   });
 
-  ipcMain.handle('skills:pick-file', async () => {
+  handle('skills:pick-file', async () => {
     const mainWindow = BrowserWindow.getAllWindows()[0];
     const result = await dialog.showOpenDialog(mainWindow, {
       title: 'Select a SKILL.md file',
@@ -1060,28 +1060,28 @@ export function registerIPCHandlers(): void {
     return result.filePaths[0];
   });
 
-  ipcMain.handle('skills:add-from-file', async (_, filePath: string) => {
+  handle('skills:add-from-file', async (_event, filePath: string) => {
     return skillsManager.addFromFile(filePath);
   });
 
-  ipcMain.handle('skills:add-from-github', async (_, rawUrl: string) => {
+  handle('skills:add-from-github', async (_event, rawUrl: string) => {
     return skillsManager.addFromGitHub(rawUrl);
   });
 
-  ipcMain.handle('skills:delete', async (_, id: string) => {
+  handle('skills:delete', async (_event, id: string) => {
     await skillsManager.delete(id);
   });
 
-  ipcMain.handle('skills:resync', async () => {
+  handle('skills:resync', async () => {
     await skillsManager.resync();
     return skillsManager.getAll();
   });
 
-  ipcMain.handle('skills:open-in-editor', async (_, filePath: string) => {
+  handle('skills:open-in-editor', async (_event, filePath: string) => {
     await shell.openPath(filePath);
   });
 
-  ipcMain.handle('skills:show-in-folder', async (_, filePath: string) => {
+  handle('skills:show-in-folder', async (_event, filePath: string) => {
     shell.showItemInFolder(filePath);
   });
 }

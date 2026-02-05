@@ -15,11 +15,16 @@ import { registerIPCHandlers } from './ipc/handlers';
 import {
   flushPendingTasks,
   getProviderSettings,
-  clearProviderSettings,
+  removeConnectedProvider,
   FutureSchemaError,
   stopAzureFoundryProxy,
   stopMoonshotProxy,
 } from '@accomplish/core';
+import {
+  initThoughtStreamApi,
+  startThoughtStreamServer,
+} from './thought-stream-api';
+import type { ProviderId } from '@accomplish/shared';
 import { disposeTaskManager } from './opencode';
 import { oauthBrowserFlow } from './opencode/auth-browser';
 import { migrateLegacyData } from './store/legacyMigration';
@@ -204,14 +209,14 @@ if (!gotTheLock) {
 
     try {
       const settings = getProviderSettings();
-      for (const [providerId, provider] of Object.entries(settings.connectedProviders)) {
+      for (const [id, provider] of Object.entries(settings.connectedProviders)) {
+        const providerId = id as ProviderId;
         if (provider?.credentials?.type === 'api_key') {
           const key = getApiKey(providerId);
           if (!key) {
             console.warn(`[Main] Provider ${providerId} has api_key auth but key not found in secure storage`);
-            clearProviderSettings();
-            console.log('[Main] Cleared provider settings due to missing API keys');
-            break;
+            removeConnectedProvider(providerId);
+            console.log(`[Main] Removed provider ${providerId} due to missing API key`);
           }
         }
       }
@@ -235,6 +240,11 @@ if (!gotTheLock) {
     console.log('[Main] IPC handlers registered');
 
     createWindow();
+
+    if (mainWindow) {
+      initThoughtStreamApi(mainWindow);
+      startThoughtStreamServer();
+    }
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
