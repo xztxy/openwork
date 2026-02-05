@@ -1,19 +1,15 @@
 import { app } from 'electron';
-import { createSecureStorage, type SecureStorageAPI } from '@accomplish/agent-core';
+import { createStorage, type StorageAPI } from '@accomplish/agent-core';
 import type { ApiKeyProvider } from '@accomplish/agent-core';
 
 export type { ApiKeyProvider };
 
-const getFileName = () => (app.isPackaged ? 'secure-storage.json' : 'secure-storage-dev.json');
+let _storage: StorageAPI | null = null;
 
-let _storage: SecureStorageAPI | null = null;
-
-function getStorage(): SecureStorageAPI {
+function getStorage(): StorageAPI {
   if (!_storage) {
-    _storage = createSecureStorage({
-      storagePath: app.getPath('userData'),
-      appId: 'ai.accomplish.desktop',
-      fileName: getFileName(),
+    _storage = createStorage({
+      userDataPath: app.getPath('userData'),
     });
   }
   return _storage;
@@ -45,10 +41,6 @@ export function getBedrockCredentials(): Record<string, string> | null {
 
 export async function hasAnyApiKey(): Promise<boolean> {
   return getStorage().hasAnyApiKey();
-}
-
-export function listStoredCredentials(): Array<{ account: string; password: string }> {
-  return getStorage().listStoredCredentials();
 }
 
 export function clearSecureStorage(): void {

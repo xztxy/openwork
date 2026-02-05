@@ -1,21 +1,22 @@
 /**
  * Electron-specific LogCollector wrapper.
  *
- * This thin wrapper creates a LogCollector instance using the Electron-specific
- * LogFileWriter that injects the correct userData path.
+ * This thin wrapper provides access to the LogWriter which now includes
+ * all LogCollector functionality internally.
  */
 
-import { createLogCollector, type LogCollectorAPI } from '@accomplish/agent-core';
+import { type LogWriterAPI } from '@accomplish/agent-core';
 import { getLogFileWriter, shutdownLogFileWriter } from './log-file-writer';
 
 // Re-export types from shared package for backward compatibility
 export type { LogLevel, LogSource } from '@accomplish/agent-core';
 
-let instance: LogCollectorAPI | null = null;
+// LogWriterAPI now includes all LogCollector methods (log, logMcp, logBrowser, etc.)
+let instance: LogWriterAPI | null = null;
 
-export function getLogCollector(): LogCollectorAPI {
+export function getLogCollector(): LogWriterAPI {
   if (!instance) {
-    instance = createLogCollector(getLogFileWriter());
+    instance = getLogFileWriter();
   }
   return instance;
 }

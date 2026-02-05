@@ -15,23 +15,11 @@
 export {
   createTaskManager,
   createStorage,
-  createSecureStorage,
   createPermissionHandler,
   createThoughtStreamHandler,
   createLogWriter,
-  createLogCollector,
-  createOpenCodeAdapter,
   createSkillsManager,
   createSpeechService,
-} from './factories/index.js';
-
-// Additional factory types
-export type {
-  SecureStorageAPI,
-  SecureStorageOptions,
-  LogCollectorAPI,
-  OpenCodeAdapterAPI,
-  OpenCodeAdapterEvents as OpenCodeAdapterFactoryEvents,
 } from './factories/index.js';
 
 // -----------------------------------------------------------------------------

@@ -52,6 +52,55 @@ export interface LogWriterAPI {
   write(level: LogLevel, source: LogSource, message: string): void;
 
   /**
+   * Log a message with structured metadata
+   * @param level - Severity level
+   * @param source - Source component
+   * @param message - Log message
+   * @param data - Optional additional data to include
+   */
+  log(level: LogLevel, source: LogSource, message: string, data?: unknown): void;
+
+  /**
+   * Log MCP server events
+   * @param level - Severity level
+   * @param message - Log message
+   * @param data - Optional additional data
+   */
+  logMcp(level: LogLevel, message: string, data?: unknown): void;
+
+  /**
+   * Log browser/Playwright events
+   * @param level - Severity level
+   * @param message - Log message
+   * @param data - Optional additional data
+   */
+  logBrowser(level: LogLevel, message: string, data?: unknown): void;
+
+  /**
+   * Log OpenCode CLI events
+   * @param level - Severity level
+   * @param message - Log message
+   * @param data - Optional additional data
+   */
+  logOpenCode(level: LogLevel, message: string, data?: unknown): void;
+
+  /**
+   * Log environment/startup events
+   * @param level - Severity level
+   * @param message - Log message
+   * @param data - Optional additional data
+   */
+  logEnv(level: LogLevel, message: string, data?: unknown): void;
+
+  /**
+   * Log IPC events
+   * @param level - Severity level
+   * @param message - Log message
+   * @param data - Optional additional data
+   */
+  logIpc(level: LogLevel, message: string, data?: unknown): void;
+
+  /**
    * Flush any buffered log entries to disk
    */
   flush(): void;

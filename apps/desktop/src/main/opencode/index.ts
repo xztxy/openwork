@@ -3,7 +3,6 @@ export {
   OpenCodeCliNotFoundError,
   createLogWatcher,
   createTaskManager,
-  createOpenCodeAdapter,
 } from '@accomplish/agent-core';
 
 // Types from agent-core
@@ -16,7 +15,6 @@ export type {
   OpenCodeLogError,
   CompletionEnforcerCallbacks,
   TaskManagerAPI,
-  OpenCodeAdapterAPI,
 } from '@accomplish/agent-core';
 
 export {
@@ -42,7 +40,7 @@ export {
 
 export { loginOpenAiWithChatGpt } from './auth-browser';
 
-import { createTaskManager, createOpenCodeAdapter, type TaskManagerAPI, type OpenCodeAdapterAPI } from '@accomplish/agent-core';
+import { createTaskManager, type TaskManagerAPI } from '@accomplish/agent-core';
 import {
   createElectronAdapterOptions,
   createElectronTaskManagerOptions,
@@ -64,10 +62,6 @@ export function disposeTaskManager(): void {
     taskManagerInstance.dispose();
     taskManagerInstance = null;
   }
-}
-
-export function createAdapter(taskId?: string): OpenCodeAdapterAPI {
-  return createOpenCodeAdapter(createElectronAdapterOptions(), taskId);
 }
 
 export async function isOpenCodeCliInstalled(): Promise<boolean> {
