@@ -115,11 +115,11 @@ jobs:
               // Append new release to existing comment
               const existingBody = botComment.body;
 
-              // Update the install command to latest version
+              // Update the install command to latest version and add new row before the marker
               const updatedBody = existingBody
                 .replace(/npm install @accomplish_ai\/agent-core@0\.\d+\.\d+-pr-\d+-\d+/,
                   `npm install @accomplish_ai/agent-core@${version}`)
-                .replace(/(<!-- RELEASES -->)/, `$1\n${latestEntry}`);
+                .replace(/(<!-- RELEASES_END -->)/, `${latestEntry}\n$1`);
 
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,
@@ -129,21 +129,23 @@ jobs:
               });
             } else {
               // Create new comment with release history table
-              const body = `## 📦 Preview release published!
-
-            Install latest with:
-            \`\`\`bash
-            npm install @accomplish_ai/agent-core@${version}
-            # or
-            npm install @accomplish_ai/agent-core@pr-${prNumber}
-            \`\`\`
-
-            ### Release History
-
-            | Version | Commit | Published |
-            |---------|--------|-----------|
-            <!-- RELEASES -->
-            ${latestEntry}`;
+              const body = [
+                '## 📦 Preview release published!',
+                '',
+                'Install latest with:',
+                '```bash',
+                `npm install @accomplish_ai/agent-core@${version}`,
+                '# or',
+                `npm install @accomplish_ai/agent-core@pr-${prNumber}`,
+                '```',
+                '',
+                '### Release History',
+                '',
+                '| Version | Commit | Published |',
+                '|---------|--------|-----------|',
+                latestEntry,
+                '<!-- RELEASES_END -->',
+              ].join('\n');
 
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
