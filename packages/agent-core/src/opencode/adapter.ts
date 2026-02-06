@@ -205,28 +205,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.emit('debug', { type: 'info', message: cwdMsg });
 
     {
-      const fullCommand = this.buildShellCommand(command, allArgs);
-
-      const shellCmdMsg = `Full shell command: ${fullCommand}`;
-      console.log('[OpenCode CLI]', shellCmdMsg);
-      this.emit('debug', { type: 'info', message: shellCmdMsg });
-
-      const shellCmd = this.getPlatformShell();
-      const shellArgs = this.getShellArgs(fullCommand);
-      const shellMsg = `Using shell: ${shellCmd} ${shellArgs.join(' ')}`;
-      console.log('[OpenCode CLI]', shellMsg);
-      this.emit('debug', { type: 'info', message: shellMsg });
-
-      this.ptyProcess = pty.spawn(shellCmd, shellArgs, {
-        name: 'xterm-256color',
-        cols: 32000,
-        rows: 30,
-        cwd: safeCwd,
-        env: env as { [key: string]: string },
-      });
-      const pidMsg = `PTY Process PID: ${this.ptyProcess.pid}`;
-      console.log('[OpenCode CLI]', pidMsg);
-      this.emit('debug', { type: 'info', message: pidMsg });
+      this.ptyProcess = this.spawnPtyProcess(command, allArgs, safeCwd, env as { [key: string]: string });
 
       this.emit('progress', { stage: 'loading', message: 'Loading agent...' });
 
@@ -365,18 +344,11 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   }
 
   private escapeShellArg(arg: string): string {
-    if (this.options.platform === 'win32') {
-      if (arg.includes(' ') || arg.includes('"')) {
-        return `"${arg.replace(/"/g, '""')}"`;
-      }
-      return arg;
-    } else {
-      const needsEscaping = ["'", ' ', '$', '`', '\\', '"', '\n'].some(c => arg.includes(c));
-      if (needsEscaping) {
-        return `'${arg.replace(/'/g, "'\\''")}'`;
-      }
-      return arg;
+    const needsEscaping = ["'", ' ', '$', '`', '\\', '"', '\n'].some(c => arg.includes(c));
+    if (needsEscaping) {
+      return `'${arg.replace(/'/g, "'\\''")}'`;
     }
+    return arg;
   }
 
   private buildShellCommand(command: string, args: string[]): string {
@@ -671,18 +643,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     const allArgs = [...baseArgs, ...cliArgs];
     const safeCwd = config.workingDirectory || this.options.tempPath;
 
-    const fullCommand = this.buildShellCommand(command, allArgs);
-
-    const shellCmd = this.getPlatformShell();
-    const shellArgs = this.getShellArgs(fullCommand);
-
-    this.ptyProcess = pty.spawn(shellCmd, shellArgs, {
-      name: 'xterm-256color',
-      cols: 32000,
-      rows: 30,
-      cwd: safeCwd,
-      env: env as { [key: string]: string },
-    });
+    this.ptyProcess = this.spawnPtyProcess(command, allArgs, safeCwd, env as { [key: string]: string });
 
     this.ptyProcess.onData((data: string) => {
       const cleanData = data
@@ -755,28 +716,73 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     console.log('[OpenCode Adapter] Emitted synthetic plan message');
   }
 
-  private getPlatformShell(): string {
+  private spawnPtyProcess(
+    command: string,
+    args: string[],
+    cwd: string,
+    env: { [key: string]: string },
+  ): pty.IPty {
+    const ptyOptions: pty.IPtyForkOptions = {
+      name: 'xterm-256color',
+      cols: 32000,
+      rows: 30,
+      cwd,
+      env,
+    };
+
     if (this.options.platform === 'win32') {
-      return 'cmd.exe';
-    } else if (this.options.isPackaged && this.options.platform === 'darwin') {
-      return '/bin/sh';
-    } else {
-      const userShell = process.env.SHELL;
-      if (userShell) {
-        return userShell;
-      }
-      if (fs.existsSync('/bin/bash')) return '/bin/bash';
-      if (fs.existsSync('/bin/zsh')) return '/bin/zsh';
-      return '/bin/sh';
+      // On Windows, avoid passing the full CLI path as a quoted argument to
+      // cmd.exe /s /c. node-pty backslash-escapes quotes (\") when building
+      // the CreateProcess command line, but cmd.exe doesn't understand that
+      // convention — breaking paths that contain spaces (e.g. "C:\Users\Li Yao\...").
+      //
+      // Instead, add the command's directory to PATH and invoke by basename only.
+      // The basename (e.g. "opencode.exe" or "opencode.cmd") never contains
+      // spaces, so cmd.exe handles it correctly in both dev and production.
+      const cmdDir = path.dirname(command);
+      const cmdBasename = path.basename(command);
+      const existingPath = env.PATH || env.Path || '';
+      const patchedEnv = { ...env, PATH: `${cmdDir};${existingPath}` };
+      if (env.Path) patchedEnv.Path = patchedEnv.PATH;
+      const cmdArgs = ['/s', '/c', [cmdBasename, ...args].join(' ')];
+
+      const spawnMsg = `Using cmd.exe with PATH: ${cmdBasename} ${args.join(' ')}`;
+      console.log('[OpenCode CLI]', spawnMsg);
+      this.emit('debug', { type: 'info', message: spawnMsg });
+
+      const proc = pty.spawn('cmd.exe', cmdArgs, { ...ptyOptions, env: patchedEnv });
+      const pidMsg = `PTY Process PID: ${proc.pid}`;
+      console.log('[OpenCode CLI]', pidMsg);
+      this.emit('debug', { type: 'info', message: pidMsg });
+      return proc;
     }
+
+    const fullCommand = this.buildShellCommand(command, args);
+    const shell = this.getPlatformShell();
+    const shellArgs = ['-c', fullCommand];
+
+    const shellMsg = `Using shell: ${shell} ${shellArgs.join(' ')}`;
+    console.log('[OpenCode CLI]', shellMsg);
+    this.emit('debug', { type: 'info', message: shellMsg });
+
+    const proc = pty.spawn(shell, shellArgs, ptyOptions);
+    const pidMsg = `PTY Process PID: ${proc.pid}`;
+    console.log('[OpenCode CLI]', pidMsg);
+    this.emit('debug', { type: 'info', message: pidMsg });
+    return proc;
   }
 
-  private getShellArgs(command: string): string[] {
-    if (this.options.platform === 'win32') {
-      return ['/s', '/c', command];
-    } else {
-      return ['-c', command];
+  private getPlatformShell(): string {
+    if (this.options.isPackaged && this.options.platform === 'darwin') {
+      return '/bin/sh';
     }
+    const userShell = process.env.SHELL;
+    if (userShell) {
+      return userShell;
+    }
+    if (fs.existsSync('/bin/bash')) return '/bin/bash';
+    if (fs.existsSync('/bin/zsh')) return '/bin/zsh';
+    return '/bin/sh';
   }
 }
 
