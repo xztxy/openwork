@@ -142,13 +142,6 @@ export interface TaskManagerAPI {
   isTaskQueued(taskId: string): boolean;
 
   /**
-   * Get the queue position of a task
-   * @param taskId - ID of the task
-   * @returns Position in queue (0-based) or -1 if not queued
-   */
-  getQueuePosition(taskId: string): number;
-
-  /**
    * Get the number of tasks in the queue
    */
   getQueueLength(): number;

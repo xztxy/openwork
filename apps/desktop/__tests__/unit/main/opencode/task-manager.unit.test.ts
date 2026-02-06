@@ -397,31 +397,6 @@ describe('Task Manager Module', () => {
         ).rejects.toThrow('Maximum queued tasks');
       });
 
-      it('should return queue position for queued tasks', async () => {
-        // Arrange
-        const manager = createTaskManager(createMockTaskManagerOptions({ maxConcurrentTasks: 1 }));
-
-        await manager.startTask('task-1', { prompt: 'Task 1' }, createMockCallbacks());
-        await manager.startTask('task-2', { prompt: 'Task 2' }, createMockCallbacks());
-
-        // Act
-        const position = manager.getQueuePosition('task-2');
-
-        // Assert
-        expect(position).toBe(1);
-      });
-
-      it('should return 0 for non-queued task position', async () => {
-        // Arrange
-        const manager = createTaskManager(createMockTaskManagerOptions());
-        await manager.startTask('task-1', { prompt: 'Task 1' }, createMockCallbacks());
-
-        // Act
-        const position = manager.getQueuePosition('task-1');
-
-        // Assert
-        expect(position).toBe(0);
-      });
     });
 
     describe('Task Event Handling', () => {
@@ -793,8 +768,6 @@ describe('Task Manager Module', () => {
       // Assert queue state
       expect(manager.getActiveTaskCount()).toBe(2);
       expect(manager.getQueueLength()).toBe(2);
-      expect(manager.getQueuePosition('task-3')).toBe(1);
-      expect(manager.getQueuePosition('task-4')).toBe(2);
     });
 
     it('should maintain queue integrity during concurrent operations', async () => {
