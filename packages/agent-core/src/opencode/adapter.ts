@@ -2,7 +2,6 @@ import * as pty from 'node-pty';
 import { EventEmitter } from 'events';
 import fs from 'fs';
 import path from 'path';
-import { spawn } from 'child_process';
 import { StreamParser } from './stream-parser.js';
 import { OpenCodeLogWatcher, createLogWatcher, OpenCodeLogError } from './log-watcher.js';
 import { CompletionEnforcer, CompletionEnforcerCallbacks } from './completion/index.js';
@@ -54,6 +53,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   private hasCompleted: boolean = false;
   private isDisposed: boolean = false;
   private wasInterrupted: boolean = false;
+  private isWindowsBatchLaunch: boolean = false;
   private completionEnforcer: CompletionEnforcer;
   private lastWorkingDirectory: string | undefined;
   private currentModelId: string | null = null;
@@ -152,6 +152,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.streamParser.reset();
     this.hasCompleted = false;
     this.wasInterrupted = false;
+    this.isWindowsBatchLaunch = false;
     this.completionEnforcer.reset();
     this.lastWorkingDirectory = config.workingDirectory;
     this.hasReceivedFirstTool = false;
@@ -204,53 +205,33 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.emit('debug', { type: 'info', message: argsMsg, data: { args: allArgs } });
     this.emit('debug', { type: 'info', message: cwdMsg });
 
-    {
-      const fullCommand = this.buildShellCommand(command, allArgs);
+    this.ptyProcess = this.spawnCliProcess(command, allArgs, safeCwd, env);
+    const pidMsg = `PTY Process PID: ${this.ptyProcess.pid}`;
+    console.log('[OpenCode CLI]', pidMsg);
+    this.emit('debug', { type: 'info', message: pidMsg });
 
-      const shellCmdMsg = `Full shell command: ${fullCommand}`;
-      console.log('[OpenCode CLI]', shellCmdMsg);
-      this.emit('debug', { type: 'info', message: shellCmdMsg });
+    this.emit('progress', { stage: 'loading', message: 'Loading agent...' });
 
-      const shellCmd = this.getPlatformShell();
-      const shellArgs = this.getShellArgs(fullCommand);
-      const shellMsg = `Using shell: ${shellCmd} ${shellArgs.join(' ')}`;
-      console.log('[OpenCode CLI]', shellMsg);
-      this.emit('debug', { type: 'info', message: shellMsg });
+    this.ptyProcess.onData((data: string) => {
+      const cleanData = data
+        .replace(/\x1B\[[0-9;?]*[a-zA-Z]/g, '')
+        .replace(/\x1B\][^\x07]*\x07/g, '')
+        .replace(/\x1B\][^\x1B]*\x1B\\/g, '');
+      if (cleanData.trim()) {
+        const truncated = cleanData.substring(0, 500) + (cleanData.length > 500 ? '...' : '');
+        console.log('[OpenCode CLI stdout]:', truncated);
+        this.emit('debug', { type: 'stdout', message: cleanData });
 
-      this.ptyProcess = pty.spawn(shellCmd, shellArgs, {
-        name: 'xterm-256color',
-        cols: 32000,
-        rows: 30,
-        cwd: safeCwd,
-        env: env as { [key: string]: string },
-      });
-      const pidMsg = `PTY Process PID: ${this.ptyProcess.pid}`;
-      console.log('[OpenCode CLI]', pidMsg);
-      this.emit('debug', { type: 'info', message: pidMsg });
+        this.streamParser.feed(cleanData);
+      }
+    });
 
-      this.emit('progress', { stage: 'loading', message: 'Loading agent...' });
-
-      this.ptyProcess.onData((data: string) => {
-        const cleanData = data
-          .replace(/\x1B\[[0-9;?]*[a-zA-Z]/g, '')
-          .replace(/\x1B\][^\x07]*\x07/g, '')
-          .replace(/\x1B\][^\x1B]*\x1B\\/g, '');
-        if (cleanData.trim()) {
-          const truncated = cleanData.substring(0, 500) + (cleanData.length > 500 ? '...' : '');
-          console.log('[OpenCode CLI stdout]:', truncated);
-          this.emit('debug', { type: 'stdout', message: cleanData });
-
-          this.streamParser.feed(cleanData);
-        }
-      });
-
-      this.ptyProcess.onExit(({ exitCode, signal }) => {
-        const exitMsg = `PTY Process exited with code: ${exitCode}, signal: ${signal}`;
-        console.log('[OpenCode CLI]', exitMsg);
-        this.emit('debug', { type: 'exit', message: exitMsg, data: { exitCode, signal } });
-        this.handleProcessExit(exitCode);
-      });
-    }
+    this.ptyProcess.onExit(({ exitCode, signal }) => {
+      const exitMsg = `PTY Process exited with code: ${exitCode}, signal: ${signal}`;
+      console.log('[OpenCode CLI]', exitMsg);
+      this.emit('debug', { type: 'exit', message: exitMsg, data: { exitCode, signal } });
+      this.handleProcessExit(exitCode);
+    });
 
     return {
       id: taskId,
@@ -282,6 +263,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     if (this.ptyProcess) {
       this.ptyProcess.kill();
       this.ptyProcess = null;
+      this.isWindowsBatchLaunch = false;
     }
   }
 
@@ -296,7 +278,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.ptyProcess.write('\x03');
     console.log('[OpenCode CLI] Sent Ctrl+C interrupt signal');
 
-    if (this.options.platform === 'win32') {
+    if (this.options.platform === 'win32' && this.isWindowsBatchLaunch) {
       setTimeout(() => {
         if (this.ptyProcess) {
           this.ptyProcess.write('Y\n');
@@ -343,6 +325,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
         console.error('[OpenCode Adapter] Error killing PTY process:', error);
       }
       this.ptyProcess = null;
+      this.isWindowsBatchLaunch = false;
     }
 
     this.currentSessionId = null;
@@ -383,6 +366,56 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     const escapedCommand = this.escapeShellArg(command);
     const escapedArgs = args.map(arg => this.escapeShellArg(arg));
     return [escapedCommand, ...escapedArgs].join(' ');
+  }
+
+  private shouldSpawnDirectWindowsExe(command: string): boolean {
+    if (this.options.platform !== 'win32') {
+      return false;
+    }
+
+    return path.isAbsolute(command) && command.toLowerCase().endsWith('.exe');
+  }
+
+  private spawnCliProcess(
+    command: string,
+    allArgs: string[],
+    cwd: string,
+    env: NodeJS.ProcessEnv
+  ): pty.IPty {
+    if (this.shouldSpawnDirectWindowsExe(command)) {
+      const directMsg = `Using direct spawn: ${command} ${allArgs.join(' ')}`;
+      console.log('[OpenCode CLI]', directMsg);
+      this.emit('debug', { type: 'info', message: directMsg });
+      this.isWindowsBatchLaunch = false;
+
+      return pty.spawn(command, allArgs, {
+        name: 'xterm-256color',
+        cols: 32000,
+        rows: 30,
+        cwd,
+        env: env as { [key: string]: string },
+      });
+    }
+
+    const fullCommand = this.buildShellCommand(command, allArgs);
+    const shellCmdMsg = `Full shell command: ${fullCommand}`;
+    console.log('[OpenCode CLI]', shellCmdMsg);
+    this.emit('debug', { type: 'info', message: shellCmdMsg });
+
+    const shellCmd = this.getPlatformShell();
+    const shellArgs = this.getShellArgs(fullCommand);
+    const shellMsg = `Using shell: ${shellCmd} ${shellArgs.join(' ')}`;
+    console.log('[OpenCode CLI]', shellMsg);
+    this.emit('debug', { type: 'info', message: shellMsg });
+    this.isWindowsBatchLaunch = this.options.platform === 'win32' && shellCmd.toLowerCase() === 'cmd.exe';
+
+    return pty.spawn(shellCmd, shellArgs, {
+      name: 'xterm-256color',
+      cols: 32000,
+      rows: 30,
+      cwd,
+      env: env as { [key: string]: string },
+    });
   }
 
   private setupStreamParsing(): void {
@@ -611,6 +644,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
   private handleProcessExit(code: number | null): void {
     this.ptyProcess = null;
+    this.isWindowsBatchLaunch = false;
 
     if (this.wasInterrupted && code === 0 && !this.hasCompleted) {
       console.log('[OpenCode CLI] Task was interrupted by user');
@@ -670,19 +704,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
     const allArgs = [...baseArgs, ...cliArgs];
     const safeCwd = config.workingDirectory || this.options.tempPath;
-
-    const fullCommand = this.buildShellCommand(command, allArgs);
-
-    const shellCmd = this.getPlatformShell();
-    const shellArgs = this.getShellArgs(fullCommand);
-
-    this.ptyProcess = pty.spawn(shellCmd, shellArgs, {
-      name: 'xterm-256color',
-      cols: 32000,
-      rows: 30,
-      cwd: safeCwd,
-      env: env as { [key: string]: string },
-    });
+    this.ptyProcess = this.spawnCliProcess(command, allArgs, safeCwd, env);
 
     this.ptyProcess.onData((data: string) => {
       const cleanData = data
@@ -773,7 +795,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
   private getShellArgs(command: string): string[] {
     if (this.options.platform === 'win32') {
-      return ['/s', '/c', command];
+      return ['/d', '/c', command];
     } else {
       return ['-c', command];
     }

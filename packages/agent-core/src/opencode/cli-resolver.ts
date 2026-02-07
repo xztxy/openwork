@@ -47,6 +47,27 @@ function isOpenCodeOnPath(): boolean {
   }
 }
 
+function getLocalDevCliCandidates(appPath: string): string[] {
+  if (process.platform === 'win32') {
+    return [
+      path.join(appPath, 'node_modules', 'opencode-windows-x64', 'bin', 'opencode.exe'),
+      path.join(appPath, 'node_modules', '.bin', 'opencode.cmd'),
+      path.join(appPath, 'node_modules', '.bin', 'opencode'),
+    ];
+  }
+
+  return [path.join(appPath, 'node_modules', '.bin', 'opencode')];
+}
+
+function resolveFirstExistingPath(candidates: string[]): string | null {
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 export function resolveCliPath(config: CliResolverConfig): ResolvedCliPaths | null {
   const { isPackaged, resourcesPath, appPath } = config;
 
@@ -76,9 +97,8 @@ export function resolveCliPath(config: CliResolverConfig): ResolvedCliPaths | nu
   const preferGlobal = process.env.ACCOMPLISH_USE_GLOBAL_OPENCODE === '1';
 
   if (appPath && !preferGlobal) {
-    const binName = process.platform === 'win32' ? 'opencode.cmd' : 'opencode';
-    const devCliPath = path.join(appPath, 'node_modules', '.bin', binName);
-    if (fs.existsSync(devCliPath)) {
+    const devCliPath = resolveFirstExistingPath(getLocalDevCliCandidates(appPath));
+    if (devCliPath) {
       console.log('[CLI Resolver] Using bundled CLI:', devCliPath);
       return {
         cliPath: devCliPath,
@@ -120,9 +140,8 @@ export function resolveCliPath(config: CliResolverConfig): ResolvedCliPaths | nu
   }
 
   if (appPath) {
-    const binName = process.platform === 'win32' ? 'opencode.cmd' : 'opencode';
-    const devCliPath = path.join(appPath, 'node_modules', '.bin', binName);
-    if (fs.existsSync(devCliPath)) {
+    const devCliPath = resolveFirstExistingPath(getLocalDevCliCandidates(appPath));
+    if (devCliPath) {
       console.log('[CLI Resolver] Using bundled CLI:', devCliPath);
       return {
         cliPath: devCliPath,
