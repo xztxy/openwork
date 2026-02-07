@@ -742,11 +742,15 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       const cmdDir = path.dirname(command);
       const cmdBasename = path.basename(command);
       const existingPath = env.PATH || env.Path || '';
-      const patchedEnv = { ...env, PATH: `${cmdDir};${existingPath}` };
+      const patchedEnv: { [key: string]: string } = { ...env, PATH: `${cmdDir};${existingPath}` };
       if (env.Path) patchedEnv.Path = patchedEnv.PATH;
-      const cmdArgs = ['/s', '/c', [cmdBasename, ...args].join(' ')];
+      // Quote args that contain spaces or quotes for cmd.exe
+      const quotedArgs = args.map(a =>
+        a.includes(' ') || a.includes('"') ? `"${a.replace(/"/g, '""')}"` : a
+      );
+      const cmdArgs = ['/s', '/c', [cmdBasename, ...quotedArgs].join(' ')];
 
-      const spawnMsg = `Using cmd.exe with PATH: ${cmdBasename} ${args.join(' ')}`;
+      const spawnMsg = `Using cmd.exe with PATH: ${cmdBasename} ${quotedArgs.join(' ')}`;
       console.log('[OpenCode CLI]', spawnMsg);
       this.emit('debug', { type: 'info', message: spawnMsg });
 
