@@ -21,9 +21,6 @@ import {
   validateHttpUrl,
   sanitizeString,
   generateTaskSummary,
-  toTaskMessage,
-  queueMessage,
-  flushAndCleanupBatcher,
   validateTaskConfig,
 } from '@accomplish_ai/agent-core';
 import { createTaskId, createMessageId } from '@accomplish_ai/agent-core';
@@ -180,9 +177,6 @@ export function registerIPCHandlers(): void {
       taskId,
       window,
       sender,
-      toTaskMessage,
-      queueMessage,
-      flushAndCleanupBatcher,
     });
 
     const task = await taskManager.startTask(taskId, validatedConfig, callbacks);
@@ -326,9 +320,6 @@ export function registerIPCHandlers(): void {
       taskId,
       window,
       sender,
-      toTaskMessage,
-      queueMessage,
-      flushAndCleanupBatcher,
     });
 
     const task = await taskManager.startTask(taskId, {

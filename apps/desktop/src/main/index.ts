@@ -14,8 +14,6 @@ if (process.platform === 'win32') {
 import { registerIPCHandlers } from './ipc/handlers';
 import {
   FutureSchemaError,
-  stopAzureFoundryProxy,
-  stopMoonshotProxy,
 } from '@accomplish_ai/agent-core';
 import {
   initThoughtStreamApi,
@@ -261,14 +259,8 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
-  disposeTaskManager();
+  disposeTaskManager(); // Also cleans up proxies internally
   oauthBrowserFlow.dispose();
-  stopAzureFoundryProxy().catch((err) => {
-    console.error('[Main] Failed to stop Azure Foundry proxy:', err);
-  });
-  stopMoonshotProxy().catch((err) => {
-    console.error('[Main] Failed to stop Moonshot proxy:', err);
-  });
   closeStorage();
   shutdownLogCollector();
 });

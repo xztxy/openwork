@@ -1,6 +1,5 @@
 import type { BrowserWindow } from 'electron';
 import type {
-  OpenCodeMessage,
   TaskMessage,
   TaskResult,
   TaskStatus,
@@ -15,25 +14,10 @@ export interface TaskCallbacksOptions {
   taskId: string;
   window: BrowserWindow;
   sender: Electron.WebContents;
-  toTaskMessage: (message: OpenCodeMessage) => TaskMessage | null;
-  queueMessage: (
-    taskId: string,
-    message: TaskMessage,
-    forwardToRenderer: (channel: string, data: unknown) => void,
-    addTaskMessageFn: (taskId: string, message: TaskMessage) => void
-  ) => void;
-  flushAndCleanupBatcher: (taskId: string) => void;
 }
 
 export function createTaskCallbacks(options: TaskCallbacksOptions): TaskCallbacks {
-  const {
-    taskId,
-    window,
-    sender,
-    toTaskMessage,
-    queueMessage,
-    flushAndCleanupBatcher,
-  } = options;
+  const { taskId, window, sender } = options;
 
   const storage = getStorage();
   const taskManager = getTaskManager();
@@ -45,11 +29,11 @@ export function createTaskCallbacks(options: TaskCallbacksOptions): TaskCallback
   };
 
   return {
-    onMessage: (message: OpenCodeMessage) => {
-      const taskMessage = toTaskMessage(message);
-      if (!taskMessage) return;
-
-      queueMessage(taskId, taskMessage, forwardToRenderer, storage.addTaskMessage);
+    onBatchedMessages: (messages: TaskMessage[]) => {
+      forwardToRenderer('task:update:batch', { taskId, messages });
+      for (const msg of messages) {
+        storage.addTaskMessage(taskId, msg);
+      }
     },
 
     onProgress: (progress: { stage: string; message?: string }) => {
@@ -60,13 +44,10 @@ export function createTaskCallbacks(options: TaskCallbacksOptions): TaskCallback
     },
 
     onPermissionRequest: (request: unknown) => {
-      flushAndCleanupBatcher(taskId);
       forwardToRenderer('permission:request', request);
     },
 
     onComplete: (result: TaskResult) => {
-      flushAndCleanupBatcher(taskId);
-
       forwardToRenderer('task:update', {
         taskId,
         type: 'complete',
@@ -87,8 +68,6 @@ export function createTaskCallbacks(options: TaskCallbacksOptions): TaskCallback
     },
 
     onError: (error: Error) => {
-      flushAndCleanupBatcher(taskId);
-
       forwardToRenderer('task:update', {
         taskId,
         type: 'error',
