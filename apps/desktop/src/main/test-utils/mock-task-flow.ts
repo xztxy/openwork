@@ -1,7 +1,7 @@
 import { BrowserWindow } from 'electron';
 import type { Task, TaskMessage, TaskStatus } from '@accomplish_ai/agent-core';
 import { createMessageId } from '@accomplish_ai/agent-core';
-import { updateTaskStatus } from '@accomplish_ai/agent-core';
+import { getStorage } from '../store/storage';
 
 export type MockScenario =
   | 'success'
@@ -145,7 +145,7 @@ async function executeSuccessScenario(
   });
   await sleep(delayMs);
 
-  updateTaskStatus(taskId, 'completed', new Date().toISOString());
+  getStorage().updateTaskStatus(taskId, 'completed', new Date().toISOString());
 
   sendEvent('task:update', {
     taskId,
@@ -192,7 +192,7 @@ async function executeToolScenario(
   });
   await sleep(delayMs);
 
-  updateTaskStatus(taskId, 'completed', new Date().toISOString());
+  getStorage().updateTaskStatus(taskId, 'completed', new Date().toISOString());
 
   sendEvent('task:update', {
     taskId,
@@ -241,7 +241,7 @@ function executeErrorScenario(
   sendEvent: (channel: string, data: unknown) => void,
   taskId: string
 ): void {
-  updateTaskStatus(taskId, 'failed', new Date().toISOString());
+  getStorage().updateTaskStatus(taskId, 'failed', new Date().toISOString());
 
   sendEvent('task:update', {
     taskId,
@@ -267,7 +267,7 @@ async function executeInterruptedScenario(
   });
   await sleep(delayMs);
 
-  updateTaskStatus(taskId, 'interrupted', new Date().toISOString());
+  getStorage().updateTaskStatus(taskId, 'interrupted', new Date().toISOString());
 
   sendEvent('task:update', {
     taskId,

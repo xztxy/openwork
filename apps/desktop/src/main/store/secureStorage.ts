@@ -1,20 +1,12 @@
-import { app } from 'electron';
-import { createStorage, type StorageAPI } from '@accomplish_ai/agent-core';
+// ---------------------------------------------------------------------------
+// Backward-compatible re-exports from the unified storage module.
+// New code should import from './storage' directly.
+// ---------------------------------------------------------------------------
+
 import type { ApiKeyProvider } from '@accomplish_ai/agent-core';
+import { getStorage } from './storage';
 
 export type { ApiKeyProvider };
-
-let _storage: StorageAPI | null = null;
-
-function getStorage(): StorageAPI {
-  if (!_storage) {
-    _storage = createStorage({
-      userDataPath: app.getPath('userData'),
-      secureStorageFileName: app.isPackaged ? 'secure-storage.json' : 'secure-storage-dev.json',
-    });
-  }
-  return _storage;
-}
 
 export function storeApiKey(provider: string, apiKey: string): void {
   getStorage().storeApiKey(provider, apiKey);
@@ -29,7 +21,7 @@ export function deleteApiKey(provider: string): boolean {
 }
 
 export async function getAllApiKeys(): Promise<Record<ApiKeyProvider, string | null>> {
-  return getStorage().getAllApiKeys();
+  return getStorage().getAllApiKeys() as Promise<Record<ApiKeyProvider, string | null>>;
 }
 
 export function storeBedrockCredentials(credentials: string): void {
@@ -46,5 +38,4 @@ export async function hasAnyApiKey(): Promise<boolean> {
 
 export function clearSecureStorage(): void {
   getStorage().clearSecureStorage();
-  _storage = null;
 }

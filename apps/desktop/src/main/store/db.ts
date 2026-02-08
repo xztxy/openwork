@@ -1,43 +1,35 @@
-import { app } from 'electron';
-import path from 'path';
-import {
-  getDatabase as coreGetDatabase,
-  initializeDatabase as coreInitializeDatabase,
-  closeDatabase as coreCloseDatabase,
-  resetDatabase as coreResetDatabase,
-  databaseExists as coreDatabaseExists,
-  isDatabaseInitialized,
-} from '@accomplish_ai/agent-core';
-import { importLegacyElectronStoreData } from './electronStoreImport';
+// ---------------------------------------------------------------------------
+// Backward-compatible re-exports from the unified storage module.
+// New code should import from './storage' directly.
+// ---------------------------------------------------------------------------
 
-export function getDatabasePath(): string {
-  const dbName = app.isPackaged ? 'accomplish.db' : 'accomplish-dev.db';
-  return path.join(app.getPath('userData'), dbName);
-}
+import fs from 'fs';
+import { getDatabase as coreGetDatabase } from '@accomplish_ai/agent-core/storage/database';
+import {
+  getDatabasePath,
+  initializeStorage,
+  closeStorage,
+  resetStorage,
+} from './storage';
+
+export { getDatabasePath };
 
 export function getDatabase() {
   return coreGetDatabase();
 }
 
+export function initializeDatabase(): void {
+  initializeStorage();
+}
+
 export function closeDatabase(): void {
-  coreCloseDatabase();
+  closeStorage();
 }
 
 export function resetDatabase(): void {
-  coreResetDatabase(getDatabasePath());
+  resetStorage();
 }
 
 export function databaseExists(): boolean {
-  return coreDatabaseExists(getDatabasePath());
-}
-
-export function initializeDatabase(): void {
-  if (!isDatabaseInitialized()) {
-    const db = coreInitializeDatabase({
-      databasePath: getDatabasePath(),
-      runMigrations: true,
-    });
-
-    importLegacyElectronStoreData(db);
-  }
+  return fs.existsSync(getDatabasePath());
 }

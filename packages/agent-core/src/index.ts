@@ -143,71 +143,8 @@ export {
 // Storage Module (from ./storage/)
 // -----------------------------------------------------------------------------
 
-// Database functions
-export {
-  getDatabase,
-  initializeDatabase,
-  closeDatabase,
-  resetDatabase,
-  databaseExists,
-  isDatabaseInitialized,
-} from './storage/database.js';
-
 // Errors
 export { FutureSchemaError } from './storage/migrations/errors.js';
-
-// Task history repository functions
-export {
-  getTasks,
-  getTask,
-  saveTask,
-  updateTaskStatus,
-  addTaskMessage,
-  updateTaskSessionId,
-  updateTaskSummary,
-  deleteTask,
-  clearHistory,
-  getTodosForTask,
-  saveTodosForTask,
-  clearTodosForTask,
-  flushPendingTasks,
-} from './storage/repositories/taskHistory.js';
-
-// App settings repository functions
-export {
-  getDebugMode,
-  setDebugMode,
-  getAppSettings,
-  getOnboardingComplete,
-  setOnboardingComplete,
-  getSelectedModel,
-  setSelectedModel,
-  getOpenAiBaseUrl,
-  setOpenAiBaseUrl,
-  getOllamaConfig,
-  setOllamaConfig,
-  getAzureFoundryConfig,
-  setAzureFoundryConfig,
-  getLiteLLMConfig,
-  setLiteLLMConfig,
-  getLMStudioConfig,
-  setLMStudioConfig,
-} from './storage/repositories/appSettings.js';
-
-// Provider settings repository functions
-export {
-  getProviderSettings,
-  clearProviderSettings,
-  setActiveProvider,
-  getConnectedProvider,
-  setConnectedProvider,
-  removeConnectedProvider,
-  updateProviderModel,
-  setProviderDebugMode,
-  getProviderDebugMode,
-  hasReadyProvider,
-  getActiveProviderModel,
-} from './storage/repositories/providerSettings.js';
 
 // -----------------------------------------------------------------------------
 // Providers Module (from ./providers/)
