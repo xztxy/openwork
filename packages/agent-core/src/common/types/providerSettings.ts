@@ -17,7 +17,8 @@ export type ProviderId =
   | 'nebius'
   | 'together'
   | 'fireworks'
-  | 'groq';
+  | 'groq'
+  | 'custom';
 
 export type ProviderCategory = 'classic' | 'aws' | 'gcp' | 'azure' | 'local' | 'proxy' | 'hybrid';
 
@@ -166,6 +167,7 @@ export const PROVIDER_META: Record<ProviderId, ProviderMeta> = {
     logoKey: 'groq',
     helpUrl: 'https://console.groq.com/keys',
   },
+  custom: { id: 'custom', name: 'Custom Endpoint', category: 'hybrid', label: 'Custom', logoKey: 'custom' },
 };
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -214,6 +216,14 @@ export interface LMStudioCredentials {
   serverUrl: string;
 }
 
+export interface CustomCredentials {
+  type: 'custom';
+  baseUrl: string;
+  modelName: string;
+  hasApiKey: boolean;
+  keyPrefix?: string;
+}
+
 export interface AzureFoundryCredentials {
   type: 'azure-foundry';
   authMethod: 'api-key' | 'entra-id';
@@ -245,7 +255,8 @@ export type ProviderCredentials =
   | ZaiCredentials
   | AzureFoundryCredentials
   | LMStudioCredentials
-  | OAuthCredentials;
+  | OAuthCredentials
+  | CustomCredentials;
 
 export type ToolSupportStatus = 'supported' | 'unsupported' | 'unknown';
 
@@ -330,4 +341,5 @@ export const PROVIDER_ID_TO_OPENCODE: Record<ProviderId, string> = {
   together: 'together',
   fireworks: 'fireworks',
   groq: 'groq',
+  custom: 'custom',
 };

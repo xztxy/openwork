@@ -67,6 +67,7 @@ export type {
   LMStudioCredentials,
   AzureFoundryCredentials,
   OAuthCredentials,
+  CustomCredentials,
   ProviderCredentials,
   ToolSupportStatus,
   ConnectedProvider,

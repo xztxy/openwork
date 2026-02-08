@@ -171,6 +171,8 @@ export {
 export { fetchProviderModels } from './providers/fetch-models.js';
 export type { FetchProviderModelsResult } from './providers/fetch-models.js';
 
+export { testCustomConnection } from './providers/custom.js';
+
 // -----------------------------------------------------------------------------
 // Utils Module (from ./utils/)
 // -----------------------------------------------------------------------------
@@ -305,6 +307,7 @@ export type {
   LMStudioCredentials,
   AzureFoundryCredentials,
   OAuthCredentials,
+  CustomCredentials,
   ProviderCredentials,
   ToolSupportStatus,
   ConnectedProvider,

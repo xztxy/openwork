@@ -274,6 +274,12 @@ interface AccomplishAPI {
     } | null,
   ): Promise<void>;
 
+  // Custom OpenAI-compatible endpoint configuration
+  testCustomConnection(baseUrl: string, apiKey?: string): Promise<{
+    success: boolean;
+    error?: string;
+  }>;
+
   // Bedrock configuration
   validateBedrockCredentials(credentials: string): Promise<{ valid: boolean; error?: string }>;
   saveBedrockCredentials(credentials: string): Promise<ApiKeyConfig>;

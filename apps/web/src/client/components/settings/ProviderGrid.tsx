@@ -26,6 +26,7 @@ const PROVIDER_ORDER: ProviderId[] = [
   'together',
   'fireworks',
   'groq',
+  'custom',
 ];
 
 interface ProviderGridProps {

@@ -612,6 +612,9 @@ export function buildCliArgs(options: BuildCliArgsOptions): string[] {
       // Model IDs stored as "vertex/{publisher}/{model}" — strip publisher for @ai-sdk/google-vertex
       const modelId = selectedModel.model.replace(/^vertex\/[^/]+\//, '');
       args.push('--model', `vertex/${modelId}`);
+    } else if (selectedModel.provider === 'custom') {
+      const modelId = selectedModel.model.replace(/^custom\//, '');
+      args.push('--model', `custom/${modelId}`);
     } else {
       args.push('--model', selectedModel.model);
     }
