@@ -1740,7 +1740,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'browser_screenshot',
-      description: 'Take a screenshot. AVOID using this - browser_script auto-returns a snapshot which is faster and more useful. Only use screenshots to show the user what the page looks like.',
+      description: 'Take a screenshot. Only use screenshots to show the user what the page looks like. browser_script auto-returns a snapshot which is more useful for action workflows.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -2248,10 +2248,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'browser_script',
-      description: `⚡ PREFERRED: Execute complete browser workflows in ONE call. 5-10x faster than individual tools.
+      description: `Execute complete browser workflows in ONE call. More efficient than chaining individual browser tools.
 
-ALWAYS use this for multi-step tasks. Actions find elements at RUNTIME using CSS selectors.
-Final page snapshot is AUTO-RETURNED - no need to add snapshot action.
+Actions find elements at RUNTIME using CSS selectors. Final page snapshot is auto-returned.
 
 Example - complete login:
 {"actions": [
@@ -2322,14 +2321,14 @@ Actions: goto, waitForLoad, waitForSelector, waitForNavigation, findAndFill, fin
     },
     {
       name: 'browser_batch_actions',
-      description: `Extract data from multiple URLs in ONE call. Visits each URL, runs your JS extraction script, returns compact JSON results.
+      description: `Extract data from multiple URLs in one call. Visits each URL, runs a JS extraction script, returns compact JSON results.
 
-Use this when you need to collect data from many pages (e.g. scrape listings, compare products, gather info from search results). Instead of clicking into each page individually, provide all URLs upfront and get structured data back.
+Useful for collecting structured data from many pages (e.g. scrape listings, compare products). Provide all URLs upfront and get results back as JSON.
 
-Example - extract price and address from 10 Zillow listings:
+Example - extract price and address from Zillow listings:
 {"urls": ["https://zillow.com/homedetails/.../1_zpid/", "https://zillow.com/homedetails/.../2_zpid/"], "extractScript": "return { price: document.querySelector('[data-testid=\\"price\\"]')?.textContent, address: document.querySelector('h1')?.textContent }", "waitForSelector": "[data-testid='price']"}
 
-Returns JSON only (no snapshots/screenshots) to minimize token usage. Max 20 URLs per call.`,
+Returns JSON only (no snapshots/screenshots). Max 20 URLs per call.`,
       inputSchema: {
         type: 'object',
         properties: {
