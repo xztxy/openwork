@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { getAccomplish } from '@/lib/accomplish';
 import { settingsVariants, settingsTransitions } from '@/lib/animations';
@@ -37,6 +37,8 @@ export function VertexProviderForm({
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [availableModels, setAvailableModels] = useState<Array<{ id: string; name: string }>>([]);
+  const [customModelInput, setCustomModelInput] = useState('');
+  const [customModelError, setCustomModelError] = useState<string | null>(null);
 
   const isConnected = connectedProvider?.connectionStatus === 'connected';
 
@@ -115,7 +117,74 @@ export function VertexProviderForm({
     }
   };
 
+  const handleAddCustomModel = useCallback(() => {
+    const input = customModelInput.trim();
+    if (!input) {
+      return;
+    }
+
+    // Expect format: publisher/model-id (e.g. anthropic/claude-sonnet-4-5)
+    const parts = input.split('/');
+    if (parts.length !== 2 || !parts[0] || !parts[1]) {
+      setCustomModelError('Format: publisher/model-id (e.g. anthropic/claude-sonnet-4-5)');
+      return;
+    }
+
+    const [publisher, modelId] = parts;
+    const fullId = `vertex/${publisher}/${modelId}`;
+
+    // Check for duplicates
+    const currentModels = connectedProvider?.availableModels || availableModels;
+    if (currentModels.some(m => m.id === fullId)) {
+      setCustomModelError('Model already in list');
+      return;
+    }
+
+    const newModel = { id: fullId, name: `${modelId} (${publisher})` };
+    const updatedModels = [...currentModels, newModel];
+
+    // Persist via onConnect (upserts the ConnectedProvider)
+    if (connectedProvider) {
+      onConnect({
+        ...connectedProvider,
+        availableModels: updatedModels,
+        selectedModelId: fullId,
+      });
+    }
+    onModelChange(fullId);
+
+    setCustomModelInput('');
+    setCustomModelError(null);
+  }, [customModelInput, connectedProvider, availableModels, onConnect, onModelChange]);
+
+  const handleRemoveCustomModel = useCallback((modelId: string) => {
+    const currentModels = connectedProvider?.availableModels || availableModels;
+
+    // Don't allow removing curated models (they have known publishers)
+    const curatedPrefixes = ['vertex/google/'];
+    if (curatedPrefixes.some(p => modelId.startsWith(p))) {
+      return;
+    }
+
+    const updatedModels = currentModels.filter(m => m.id !== modelId);
+
+    if (connectedProvider) {
+      const newSelectedId = connectedProvider.selectedModelId === modelId
+        ? null
+        : connectedProvider.selectedModelId;
+      onConnect({
+        ...connectedProvider,
+        availableModels: updatedModels,
+        selectedModelId: newSelectedId,
+      });
+    }
+  }, [connectedProvider, availableModels, onConnect]);
+
   const models = connectedProvider?.availableModels || availableModels;
+
+  // Identify custom (non-curated) models for the remove buttons
+  const curatedPrefixes = ['vertex/google/'];
+  const customModels = models.filter(m => !curatedPrefixes.some(p => m.id.startsWith(p)));
 
   return (
     <div className="rounded-xl border border-border bg-card p-5" data-testid="provider-settings-panel">
@@ -245,6 +314,69 @@ export function VertexProviderForm({
                 onChange={onModelChange}
                 error={showModelError && !connectedProvider?.selectedModelId}
               />
+
+              {/* Custom model input */}
+              <div>
+                <label className="mb-2 block text-sm font-medium text-foreground">Add Custom Model</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={customModelInput}
+                    onChange={(e) => {
+                      setCustomModelInput(e.target.value);
+                      setCustomModelError(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleAddCustomModel();
+                      }
+                    }}
+                    placeholder="publisher/model-id"
+                    data-testid="vertex-custom-model-input"
+                    className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <button
+                    onClick={handleAddCustomModel}
+                    data-testid="vertex-add-model-btn"
+                    className="rounded-md bg-[#4A7C59] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#3d6749]"
+                  >
+                    Add
+                  </button>
+                </div>
+                {customModelError && (
+                  <p className="mt-1 text-xs text-destructive">{customModelError}</p>
+                )}
+                <p className="mt-1 text-xs text-muted-foreground">
+                  e.g. anthropic/claude-sonnet-4-5, google/gemini-2.0-flash
+                </p>
+              </div>
+
+              {/* Custom models list with remove buttons */}
+              {customModels.length > 0 && (
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">Custom Models</label>
+                  <div className="space-y-1">
+                    {customModels.map((model) => (
+                      <div
+                        key={model.id}
+                        className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-3 py-1.5 text-sm"
+                      >
+                        <span className="text-foreground">{model.name}</span>
+                        <button
+                          onClick={() => handleRemoveCustomModel(model.id)}
+                          className="ml-2 text-muted-foreground transition-colors hover:text-destructive"
+                          title="Remove model"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

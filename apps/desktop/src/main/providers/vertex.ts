@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
 import {
   validateVertexCredentials,
   fetchVertexModels,
@@ -8,6 +8,18 @@ import { storeApiKey, getApiKey } from '../store/secureStorage';
 import { normalizeIpcError } from '../ipc/validation';
 import type { IpcHandler } from '../ipc/types';
 import type { IpcMainInvokeEvent } from 'electron';
+
+function execAsync(command: string, args: string[], timeoutMs = 5000): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, { timeout: timeoutMs, encoding: 'utf-8' }, (error, stdout) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve(stdout.trim());
+      }
+    });
+  });
+}
 
 export function registerVertexHandlers(handle: IpcHandler): void {
   handle('vertex:validate', async (_event: IpcMainInvokeEvent, credentials: string) => {
@@ -82,11 +94,7 @@ export function registerVertexHandlers(handle: IpcHandler): void {
 
     // 2. Try gcloud config
     try {
-      const project = execSync('gcloud config get-value project', {
-        timeout: 10000,
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      }).trim();
+      const project = await execAsync('gcloud', ['config', 'get-value', 'project']);
       if (project) {
         return { success: true, projectId: project };
       }
@@ -99,11 +107,7 @@ export function registerVertexHandlers(handle: IpcHandler): void {
 
   handle('vertex:list-projects', async (_event: IpcMainInvokeEvent) => {
     try {
-      const token = execSync('gcloud auth application-default print-access-token', {
-        timeout: 10000,
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      }).trim();
+      const token = await execAsync('gcloud', ['auth', 'application-default', 'print-access-token']);
 
       if (!token) {
         return { success: false, projects: [], error: 'No ADC token available' };

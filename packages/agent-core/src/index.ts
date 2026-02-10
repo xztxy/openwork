@@ -151,6 +151,7 @@ export {
 export {
   validateVertexCredentials,
   fetchVertexModels,
+  VertexClient,
 } from './providers/vertex.js';
 
 export {

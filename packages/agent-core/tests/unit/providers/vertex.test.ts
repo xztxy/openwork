@@ -6,7 +6,7 @@ vi.mock('child_process', () => ({
 }));
 
 import { execSync } from 'child_process';
-import { validateVertexCredentials, fetchVertexModels } from '../../../src/providers/vertex.js';
+import { validateVertexCredentials, fetchVertexModels, VertexClient } from '../../../src/providers/vertex.js';
 
 const mockedExecSync = vi.mocked(execSync);
 
@@ -115,7 +115,7 @@ describe('Vertex AI Provider', () => {
     describe('ADC flow', () => {
       it('should validate successfully with ADC token', async () => {
         mockedExecSync.mockReturnValue('fake-adc-token\n');
-        // testVertexAccess call
+        // testAccess call
         mockFetchResponses({ ok: true, json: { candidates: [] } });
 
         const result = await validateVertexCredentials(makeAdcCredentialsJson());
@@ -157,7 +157,7 @@ describe('Vertex AI Provider', () => {
       });
     });
 
-    describe('testVertexAccess status codes', () => {
+    describe('testAccess status codes', () => {
       beforeEach(() => {
         mockedExecSync.mockReturnValue('fake-token');
       });
@@ -188,6 +188,14 @@ describe('Vertex AI Provider', () => {
         expect(result.valid).toBe(false);
         expect(result.error).toContain('not found');
         expect(result.error).toContain('my-project');
+      });
+
+      it('should treat 429 as valid (credentials work, just rate-limited)', async () => {
+        mockFetchResponses({ ok: false, status: 429, text: '{"error":{"code":429,"message":"Resource exhausted"}}' });
+
+        const result = await validateVertexCredentials(makeAdcCredentialsJson());
+
+        expect(result.valid).toBe(true);
       });
 
       it('should return error for other error status', async () => {
@@ -243,133 +251,113 @@ describe('Vertex AI Provider', () => {
     });
   });
 
+  describe('VertexClient', () => {
+    describe('constructor', () => {
+      it('should use regional URL for non-global location', () => {
+        const client = new VertexClient('my-project', 'us-central1', 'fake-token');
+        expect(client.baseUrl).toBe('https://us-central1-aiplatform.googleapis.com');
+      });
+
+      it('should use global URL for global location', () => {
+        const client = new VertexClient('my-project', 'global', 'fake-token');
+        expect(client.baseUrl).toBe('https://aiplatform.googleapis.com');
+      });
+    });
+
+    describe('create()', () => {
+      it('should create client with ADC token', async () => {
+        mockedExecSync.mockReturnValue('adc-token');
+
+        const client = await VertexClient.create({
+          authType: 'adc',
+          projectId: 'my-project',
+          location: 'us-central1',
+        });
+
+        expect(client).toBeInstanceOf(VertexClient);
+        expect(client.projectId).toBe('my-project');
+        expect(client.location).toBe('us-central1');
+      });
+
+      it('should throw when token retrieval fails', async () => {
+        mockedExecSync.mockImplementation(() => { throw new Error('gcloud failed'); });
+
+        await expect(VertexClient.create({
+          authType: 'adc',
+          projectId: 'my-project',
+          location: 'us-central1',
+        })).rejects.toThrow('Failed to get ADC token');
+      });
+    });
+  });
+
   describe('fetchVertexModels', () => {
-    it('should return available models with ADC', async () => {
-      mockedExecSync.mockReturnValue('fake-token');
-
-      // All 10 curated models get a fetch call; make first 3 succeed, rest fail
-      const responses: Array<{ ok: boolean }> = [];
-      for (let i = 0; i < 10; i++) {
-        responses.push({ ok: i < 3 });
-      }
-      for (const resp of responses) {
-        vi.mocked(fetch).mockResolvedValueOnce({
-          ok: resp.ok,
-          status: resp.ok ? 200 : 404,
-          json: async () => ({ candidates: [] }),
-          text: async () => '',
-        } as Response);
-      }
-
-      const result = await fetchVertexModels({
+    it('should return the curated model list', () => {
+      const result = fetchVertexModels({
         authType: 'adc',
         projectId: 'my-project',
         location: 'us-central1',
       });
 
       expect(result.success).toBe(true);
-      expect(result.models).toHaveLength(3);
-      // First 3 curated models are google ones
-      expect(result.models[0].id).toBe('vertex/google/gemini-2.5-pro');
-      expect(result.models[1].id).toBe('vertex/google/gemini-2.5-flash');
-      expect(result.models[2].id).toBe('vertex/google/gemini-2.0-flash');
+      expect(result.models.length).toBeGreaterThan(0);
+
+      // Verify model ID format
+      for (const model of result.models) {
+        expect(model.id).toMatch(/^vertex\/.+\/.+$/);
+        expect(model.name).toBeTruthy();
+        expect(model.provider).toBeTruthy();
+      }
     });
 
-    it('should return empty models when all fail', async () => {
-      mockedExecSync.mockReturnValue('fake-token');
-
-      for (let i = 0; i < 10; i++) {
-        vi.mocked(fetch).mockResolvedValueOnce({
-          ok: false,
-          status: 404,
-          json: async () => ({}),
-          text: async () => '',
-        } as Response);
-      }
-
-      const result = await fetchVertexModels({
+    it('should include Google Gemini models', () => {
+      const result = fetchVertexModels({
         authType: 'adc',
         projectId: 'my-project',
         location: 'us-central1',
       });
 
-      expect(result.success).toBe(true);
-      expect(result.models).toHaveLength(0);
+      const googleModels = result.models.filter((m) => m.provider === 'google');
+      expect(googleModels.length).toBeGreaterThanOrEqual(4);
+
+      const ids = googleModels.map((m) => m.id);
+      expect(ids).toContain('vertex/google/gemini-2.5-pro');
+      expect(ids).toContain('vertex/google/gemini-2.5-flash');
+      expect(ids).toContain('vertex/google/gemini-3-pro-preview');
+      expect(ids).toContain('vertex/google/gemini-3-flash-preview');
     });
 
-    it('should return error when token retrieval fails', async () => {
-      mockedExecSync.mockImplementation(() => {
-        throw new Error('gcloud failed');
-      });
-
-      const result = await fetchVertexModels({
+    it('should not include Anthropic models (use custom model input instead)', () => {
+      const result = fetchVertexModels({
         authType: 'adc',
         projectId: 'my-project',
         location: 'us-central1',
       });
 
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Failed to get ADC token');
-      expect(result.models).toHaveLength(0);
+      const anthropicModels = result.models.filter((m) => m.provider === 'anthropic');
+      expect(anthropicModels).toHaveLength(0);
     });
 
-    it('should handle rejected promises in model checks', async () => {
-      mockedExecSync.mockReturnValue('fake-token');
-
-      // Mix of resolved and rejected
-      for (let i = 0; i < 10; i++) {
-        if (i === 0) {
-          vi.mocked(fetch).mockResolvedValueOnce({
-            ok: true,
-            status: 200,
-            json: async () => ({ candidates: [] }),
-            text: async () => '',
-          } as Response);
-        } else {
-          vi.mocked(fetch).mockRejectedValueOnce(new Error('Network error'));
-        }
-      }
-
-      const result = await fetchVertexModels({
+    it('should only include Google models (others added via custom input)', () => {
+      const result = fetchVertexModels({
         authType: 'adc',
         projectId: 'my-project',
         location: 'us-central1',
       });
 
-      expect(result.success).toBe(true);
-      // Only the first model that succeeded
-      expect(result.models).toHaveLength(1);
-      expect(result.models[0].id).toBe('vertex/google/gemini-2.5-pro');
+      const nonGoogleModels = result.models.filter((m) => m.provider !== 'google');
+      expect(nonGoogleModels).toHaveLength(0);
     });
 
-    it('should use correct URL pattern for each model', async () => {
-      mockedExecSync.mockReturnValue('fake-token');
-
-      for (let i = 0; i < 10; i++) {
-        vi.mocked(fetch).mockResolvedValueOnce({
-          ok: false,
-          status: 404,
-          json: async () => ({}),
-          text: async () => '',
-        } as Response);
-      }
-
-      await fetchVertexModels({
+    it('should not make any API calls', () => {
+      fetchVertexModels({
         authType: 'adc',
-        projectId: 'test-proj',
-        location: 'europe-west1',
+        projectId: 'my-project',
+        location: 'us-central1',
       });
 
-      // Check the first call URL pattern
-      expect(fetch).toHaveBeenCalledWith(
-        'https://europe-west1-aiplatform.googleapis.com/v1/projects/test-proj/locations/europe-west1/publishers/google/models/gemini-2.5-pro:generateContent',
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({
-            Authorization: 'Bearer fake-token',
-          }),
-        })
-      );
+      expect(fetch).not.toHaveBeenCalled();
+      expect(mockedExecSync).not.toHaveBeenCalled();
     });
   });
 });

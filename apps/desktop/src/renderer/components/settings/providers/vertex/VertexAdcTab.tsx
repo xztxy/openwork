@@ -18,44 +18,52 @@ export function VertexAdcTab({
 }: VertexAdcTabProps) {
   const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const accomplish = getAccomplish();
 
-    accomplish
-      .listVertexProjects()
-      .then((result) => {
+    Promise.all([
+      accomplish.listVertexProjects(),
+      accomplish.detectVertexProject(),
+    ])
+      .then(([listResult, detectResult]) => {
         if (cancelled) return;
-        if (result.success && result.projects.length > 0) {
-          setProjects(
-            result.projects.map((p) => ({
-              id: p.projectId,
-              name: p.name !== p.projectId ? `${p.projectId} (${p.name})` : p.projectId,
-            }))
+
+        if (!listResult.success || listResult.projects.length === 0) {
+          setError(
+            listResult.error ||
+              'No projects found. Make sure gcloud is installed and ADC is configured.'
           );
-          // Auto-select first project if none selected
-          if (!projectId) {
-            // Prefer the gcloud default project if available
-            accomplish
-              .detectVertexProject()
-              .then((detected) => {
-                if (cancelled) return;
-                if (detected.success && detected.projectId) {
-                  onProjectIdChange(detected.projectId);
-                } else {
-                  onProjectIdChange(result.projects[0].projectId);
-                }
-              })
-              .catch(() => {
-                if (!cancelled) onProjectIdChange(result.projects[0].projectId);
-              });
+          return;
+        }
+
+        setProjects(
+          listResult.projects.map((p) => ({
+            id: p.projectId,
+            name: p.name !== p.projectId ? `${p.projectId} (${p.name})` : p.projectId,
+          }))
+        );
+
+        // Auto-select: prefer detected default project, fall back to first
+        if (!projectId) {
+          if (detectResult.success && detectResult.projectId) {
+            onProjectIdChange(detectResult.projectId);
+          } else {
+            onProjectIdChange(listResult.projects[0].projectId);
           }
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        if (!cancelled) {
+          setError('Failed to load projects. Is gcloud installed and ADC configured?');
+        }
+      })
       .finally(() => {
-        if (!cancelled) setLoadingProjects(false);
+        if (!cancelled) {
+          setLoadingProjects(false);
+        }
       });
 
     return () => {
@@ -70,18 +78,24 @@ export function VertexAdcTab({
       </div>
 
       {/* Project Selector */}
-      <SearchableSelect
-        items={projects}
-        value={projectId || null}
-        onChange={onProjectIdChange}
-        label="Project"
-        placeholder="Select a project..."
-        searchPlaceholder="Search projects..."
-        emptyMessage={loadingProjects ? 'Loading projects...' : 'No projects found'}
-        loading={loadingProjects}
-        loadingMessage="Fetching GCP projects from your account..."
-        testId="vertex-adc-project"
-      />
+      {error ? (
+        <div className="rounded-md bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
+          {error}
+        </div>
+      ) : (
+        <SearchableSelect
+          items={projects}
+          value={projectId || null}
+          onChange={onProjectIdChange}
+          label="Project"
+          placeholder="Select a project..."
+          searchPlaceholder="Search projects..."
+          emptyMessage={loadingProjects ? 'Loading projects...' : 'No projects found'}
+          loading={loadingProjects}
+          loadingMessage="Fetching GCP projects from your account..."
+          testId="vertex-adc-project"
+        />
+      )}
 
       {/* Location */}
       <SearchableSelect
