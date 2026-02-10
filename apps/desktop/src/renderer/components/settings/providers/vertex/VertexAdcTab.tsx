@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getAccomplish } from '@/lib/accomplish';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { LocationSelector } from '../shared';
+import { VERTEX_LOCATIONS } from './locations';
 
 interface VertexAdcTabProps {
   projectId: string;
@@ -84,7 +84,16 @@ export function VertexAdcTab({
       />
 
       {/* Location */}
-      <LocationSelector value={location} onChange={onLocationChange} />
+      <SearchableSelect
+        items={VERTEX_LOCATIONS}
+        value={location}
+        onChange={onLocationChange}
+        label="Location"
+        placeholder="Select location..."
+        searchPlaceholder="Search locations..."
+        emptyMessage="No locations found"
+        testId="vertex-location-select"
+      />
     </div>
   );
 }

@@ -7,4 +7,4 @@ export { OllamaProviderForm } from './OllamaProviderForm';
 export { OpenRouterProviderForm } from './OpenRouterProviderForm';
 export { LiteLLMProviderForm } from './LiteLLMProviderForm';
 export { LMStudioProviderForm } from './LMStudioProviderForm';
-export { VertexProviderForm } from './VertexProviderForm';
+export { VertexProviderForm } from './vertex';

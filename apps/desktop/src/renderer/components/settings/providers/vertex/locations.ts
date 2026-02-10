@@ -1,6 +1,4 @@
-import { SearchableSelect } from '@/components/ui/searchable-select';
-
-const VERTEX_LOCATIONS = [
+export const VERTEX_LOCATIONS = [
   { id: 'global', name: 'global (auto-route)' },
   { id: 'us-central1', name: 'us-central1 (Iowa)' },
   { id: 'us-east1', name: 'us-east1 (South Carolina)' },
@@ -32,23 +30,3 @@ const VERTEX_LOCATIONS = [
   { id: 'me-central2', name: 'me-central2 (Dammam)' },
   { id: 'me-west1', name: 'me-west1 (Tel Aviv)' },
 ];
-
-interface LocationSelectorProps {
-  value: string;
-  onChange: (location: string) => void;
-}
-
-export function LocationSelector({ value, onChange }: LocationSelectorProps) {
-  return (
-    <SearchableSelect
-      items={VERTEX_LOCATIONS}
-      value={value}
-      onChange={onChange}
-      label="Location"
-      placeholder="Select location..."
-      searchPlaceholder="Search locations..."
-      emptyMessage="No locations found"
-      testId="vertex-location-select"
-    />
-  );
-}

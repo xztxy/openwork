@@ -9,7 +9,7 @@ import {
   ConnectedControls,
   ProviderFormHeader,
   FormError,
-} from '../shared';
+} from '../../shared';
 import { VertexServiceAccountTab } from './VertexServiceAccountTab';
 import { VertexAdcTab } from './VertexAdcTab';
 

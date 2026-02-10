@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
-import { LocationSelector } from '../shared';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { VERTEX_LOCATIONS } from './locations';
 
 interface VertexServiceAccountTabProps {
   serviceAccountJson: string;
@@ -176,7 +177,16 @@ export function VertexServiceAccountTab({
       </div>
 
       {/* Location */}
-      <LocationSelector value={location} onChange={onLocationChange} />
+      <SearchableSelect
+        items={VERTEX_LOCATIONS}
+        value={location}
+        onChange={onLocationChange}
+        label="Location"
+        placeholder="Select location..."
+        searchPlaceholder="Search locations..."
+        emptyMessage="No locations found"
+        testId="vertex-location-select"
+      />
     </div>
   );
 }
