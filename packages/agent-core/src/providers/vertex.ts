@@ -87,14 +87,21 @@ function getAdcAccessToken(): string {
  * Obtains an access token based on the credential type.
  */
 async function getVertexAccessToken(credentials: VertexCredentials): Promise<string> {
-  if (credentials.authType === 'serviceAccount') {
-    const parseResult = safeParseJson<ServiceAccountKey>(credentials.serviceAccountJson);
-    if (!parseResult.success) {
-      throw new Error('Invalid service account JSON');
+  switch (credentials.authType) {
+    case 'serviceAccount': {
+      const parseResult = safeParseJson<ServiceAccountKey>(credentials.serviceAccountJson);
+      if (!parseResult.success) {
+        throw new Error('Invalid service account JSON');
+      }
+      return getServiceAccountAccessToken(parseResult.data);
     }
-    return getServiceAccountAccessToken(parseResult.data);
+    case 'adc':
+      return getAdcAccessToken();
+    default: {
+      const _exhaustive: never = credentials;
+      throw new Error(`Unknown authType: ${(_exhaustive as VertexCredentials).authType}`);
+    }
   }
-  return getAdcAccessToken();
 }
 
 export interface VertexModel {

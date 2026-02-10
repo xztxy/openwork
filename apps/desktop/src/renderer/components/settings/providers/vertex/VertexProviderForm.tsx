@@ -338,7 +338,7 @@ export function VertexProviderForm({
                   <button
                     onClick={handleAddCustomModel}
                     data-testid="vertex-add-model-btn"
-                    className="rounded-md bg-[#4A7C59] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#3d6749]"
+                    className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                   >
                     Add
                   </button>
