@@ -125,11 +125,8 @@ export interface FetchVertexModelsResult {
   error?: string;
 }
 
-/** Curated list of models available through Vertex AI, grouped by publisher.
- *  Sources:
- *  - Google: https://docs.cloud.google.com/vertex-ai/generative-ai/docs/models
- *  - Anthropic: https://platform.claude.com/docs/en/about-claude/models/overview
- *  - Mistral: https://docs.cloud.google.com/vertex-ai/generative-ai/docs/partner-models/mistral
+/** Curated list of Google models available through Vertex AI.
+ *  Source: https://docs.cloud.google.com/vertex-ai/generative-ai/docs/models
  */
 const VERTEX_CURATED_MODELS: Array<{ publisher: string; modelId: string; displayName: string }> = [
   // Google — Gemini 3 (preview)
