@@ -1,8 +1,5 @@
 import crypto from 'crypto';
 import { execFile } from 'child_process';
-import { promisify } from 'util';
-
-const execFileAsync = promisify(execFile);
 import type { VertexCredentials } from '../common/types/auth.js';
 import { safeParseJson } from '../utils/json.js';
 import type { ValidationResult } from './validation.js';
@@ -68,12 +65,20 @@ async function getServiceAccountAccessToken(key: ServiceAccountKey): Promise<str
  */
 async function getAdcAccessToken(): Promise<string> {
   try {
-    const { stdout } = await execFileAsync(
-      'gcloud',
-      ['auth', 'application-default', 'print-access-token'],
-      { timeout: VERTEX_TOKEN_TIMEOUT_MS, encoding: 'utf-8' }
-    );
-    const token = stdout.trim();
+    const token = await new Promise<string>((resolve, reject) => {
+      execFile(
+        'gcloud',
+        ['auth', 'application-default', 'print-access-token'],
+        { timeout: VERTEX_TOKEN_TIMEOUT_MS, encoding: 'utf-8' },
+        (error, stdout) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve((stdout as string).trim());
+          }
+        }
+      );
+    });
     if (!token) {
       throw new Error('Empty token returned from gcloud');
     }

@@ -1,14 +1,38 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-// Mock child_process before importing the module under test
-vi.mock('child_process', () => ({
-  execSync: vi.fn(),
+// Must use vi.hoisted so the mock fn is available when vi.mock factory runs (hoisted)
+const { mockExecFile } = vi.hoisted(() => ({
+  mockExecFile: vi.fn(),
 }));
 
-import { execSync } from 'child_process';
+vi.mock('child_process', () => ({
+  execFile: mockExecFile,
+}));
+
 import { validateVertexCredentials, fetchVertexModels, VertexClient } from '../../../src/providers/vertex.js';
 
-const mockedExecSync = vi.mocked(execSync);
+/**
+ * Helper: make mockExecFile resolve with a given stdout value.
+ * promisify(execFile) calls execFile(cmd, args, opts, callback)
+ */
+function mockExecFileSuccess(stdout: string) {
+  mockExecFile.mockImplementation(
+    (_cmd: string, _args: string[], _opts: unknown, cb: (err: Error | null, stdout: string, stderr: string) => void) => {
+      cb(null, stdout, '');
+    }
+  );
+}
+
+/**
+ * Helper: make mockExecFile reject with a given error.
+ */
+function mockExecFileError(error: Error) {
+  mockExecFile.mockImplementation(
+    (_cmd: string, _args: string[], _opts: unknown, cb: (err: Error | null, stdout: string, stderr: string) => void) => {
+      cb(error, '', '');
+    }
+  );
+}
 
 function makeAdcCredentialsJson(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
@@ -52,7 +76,7 @@ function mockFetchResponses(...responses: Array<{ ok: boolean; status?: number; 
 describe('Vertex AI Provider', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
-    mockedExecSync.mockReset();
+    mockExecFile.mockReset();
   });
 
   afterEach(() => {
@@ -114,22 +138,24 @@ describe('Vertex AI Provider', () => {
 
     describe('ADC flow', () => {
       it('should validate successfully with ADC token', async () => {
-        mockedExecSync.mockReturnValue('fake-adc-token\n');
+        mockExecFileSuccess('fake-adc-token\n');
         // testAccess call
         mockFetchResponses({ ok: true, json: { candidates: [] } });
 
         const result = await validateVertexCredentials(makeAdcCredentialsJson());
 
         expect(result.valid).toBe(true);
-        expect(mockedExecSync).toHaveBeenCalledWith(
-          'gcloud auth application-default print-access-token',
-          expect.objectContaining({ timeout: 15000 })
+        expect(mockExecFile).toHaveBeenCalledWith(
+          'gcloud',
+          ['auth', 'application-default', 'print-access-token'],
+          expect.objectContaining({ timeout: 15000 }),
+          expect.any(Function)
         );
       });
 
       it('should return error when gcloud CLI is not found', async () => {
         const error = new Error('spawn gcloud ENOENT');
-        mockedExecSync.mockImplementation(() => { throw error; });
+        mockExecFileError(error);
 
         const result = await validateVertexCredentials(makeAdcCredentialsJson());
 
@@ -138,7 +164,7 @@ describe('Vertex AI Provider', () => {
       });
 
       it('should return error when gcloud returns empty token', async () => {
-        mockedExecSync.mockReturnValue('   \n');
+        mockExecFileSuccess('   \n');
 
         const result = await validateVertexCredentials(makeAdcCredentialsJson());
 
@@ -148,7 +174,7 @@ describe('Vertex AI Provider', () => {
 
       it('should return error when gcloud auth fails', async () => {
         const error = new Error('You do not currently have an active account');
-        mockedExecSync.mockImplementation(() => { throw error; });
+        mockExecFileError(error);
 
         const result = await validateVertexCredentials(makeAdcCredentialsJson());
 
@@ -159,7 +185,7 @@ describe('Vertex AI Provider', () => {
 
     describe('testAccess status codes', () => {
       beforeEach(() => {
-        mockedExecSync.mockReturnValue('fake-token');
+        mockExecFileSuccess('fake-token');
       });
 
       it('should return error for 401 response', async () => {
@@ -246,7 +272,7 @@ describe('Vertex AI Provider', () => {
 
         expect(result.valid).toBe(false);
         // Should NOT fall back to gcloud for service account auth
-        expect(mockedExecSync).not.toHaveBeenCalled();
+        expect(mockExecFile).not.toHaveBeenCalled();
       });
     });
   });
@@ -266,7 +292,7 @@ describe('Vertex AI Provider', () => {
 
     describe('create()', () => {
       it('should create client with ADC token', async () => {
-        mockedExecSync.mockReturnValue('adc-token');
+        mockExecFileSuccess('adc-token');
 
         const client = await VertexClient.create({
           authType: 'adc',
@@ -280,7 +306,7 @@ describe('Vertex AI Provider', () => {
       });
 
       it('should throw when token retrieval fails', async () => {
-        mockedExecSync.mockImplementation(() => { throw new Error('gcloud failed'); });
+        mockExecFileError(new Error('gcloud failed'));
 
         await expect(VertexClient.create({
           authType: 'adc',
@@ -357,7 +383,7 @@ describe('Vertex AI Provider', () => {
       });
 
       expect(fetch).not.toHaveBeenCalled();
-      expect(mockedExecSync).not.toHaveBeenCalled();
+      expect(mockExecFile).not.toHaveBeenCalled();
     });
   });
 });
