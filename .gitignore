@@ -57,6 +57,10 @@ prisma/*.db-journal
 # Docs
 docs/plans/
 
+# Claude Code
+.claude/
+.mcp.json
+
 # Misc
 *.pem
 .turbo/
