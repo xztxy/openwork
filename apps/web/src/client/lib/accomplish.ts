@@ -25,6 +25,9 @@ import type {
   Skill,
   McpConnector,
   FileAttachmentInfo,
+  Workspace,
+  WorkspaceCreateInput,
+  WorkspaceUpdateInput,
 } from '@accomplish_ai/agent-core/common';
 import type { StoredFavorite } from '@accomplish_ai/agent-core';
 
@@ -394,6 +397,18 @@ interface AccomplishAPI {
     appVersion?: string;
     platform?: string;
   }): Promise<{ success: boolean; path?: string; error?: string; reason?: string }>;
+
+  // Workspace management
+  listWorkspaces(): Promise<Workspace[]>;
+  getActiveWorkspaceId(): Promise<string | null>;
+  switchWorkspace(workspaceId: string): Promise<void>;
+  createWorkspace(input: WorkspaceCreateInput): Promise<Workspace>;
+  updateWorkspace(id: string, input: WorkspaceUpdateInput): Promise<Workspace | null>;
+  deleteWorkspace(id: string): Promise<boolean>;
+
+  // Workspace event subscriptions
+  onWorkspaceChanged?(callback: (data: { workspaceId: string }) => void): () => void;
+  onWorkspaceDeleted?(callback: (data: { workspaceId: string }) => void): () => void;
 
   // Skills management
   getSkills(): Promise<Skill[]>;

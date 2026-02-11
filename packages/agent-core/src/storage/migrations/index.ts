@@ -1,5 +1,5 @@
-import type { Database } from 'better-sqlite3';
-import { FutureSchemaError, MigrationError } from './errors.js';
+import type { Database } from "better-sqlite3";
+import { FutureSchemaError, MigrationError } from "./errors.js";
 
 export interface Migration {
   version: number;
@@ -17,16 +17,15 @@ import { migration as v007 } from './v007-connectors.js';
 import { migration as v008 } from './v008-theme.js';
 import { migration as v009 } from './v009-favorites.js';
 import { migration as v010 } from './v010-sandbox.js';
+import { migration as v011 } from './v011-workspace-tasks.js';
 
-const migrations: Migration[] = [v001, v002, v003, v004, v005, v006, v007, v008, v009, v010];
-
+const migrations: Migration[] = [v001, v002, v003, v004, v005, v006, v007, v008, v009, v010, v011];
 export function registerMigration(migration: Migration): void {
   migrations.push(migration);
   migrations.sort((a, b) => a.version - b.version);
 }
 
-export const CURRENT_VERSION = 10;
-
+export const CURRENT_VERSION = 11;
 export function getStoredVersion(db: Database): number {
   try {
     const tableExists = db
@@ -63,7 +62,7 @@ export function runMigrations(db: Database): void {
   }
 
   if (storedVersion === CURRENT_VERSION) {
-    console.log('[Migrations] Database is up to date');
+    console.log("[Migrations] Database is up to date");
     return;
   }
 
@@ -86,7 +85,11 @@ export function runMigrations(db: Database): void {
     }
   }
 
-  console.log('[Migrations] All migrations complete');
+  console.log("[Migrations] All migrations complete");
 }
 
-export { FutureSchemaError, MigrationError, CorruptDatabaseError } from './errors.js';
+export {
+  FutureSchemaError,
+  MigrationError,
+  CorruptDatabaseError,
+} from "./errors.js";
