@@ -28,6 +28,8 @@ export interface ProviderTestConfig {
   providerId: ProviderId;
   /** Human-readable name for test output */
   displayName: string;
+  /** Optional: model ID to use for testing */
+  modelId?: string;
   /** How authentication works for this provider */
   authMethod: AuthMethod;
   /** Optional: timeout override in ms */
@@ -51,6 +53,8 @@ export interface BedrockAccessKeySecrets {
   sessionToken?: string;
   region?: string;
 }
+
+
 
 export interface BedrockProfileSecrets {
   profileName: string;
@@ -119,6 +123,4 @@ export interface SecretsConfig {
 export interface ResolvedProviderTestConfig extends ProviderTestConfig {
   /** Resolved secrets for this provider */
   secrets?: ProviderSecrets;
-  /** Resolved model ID to use */
-  modelId?: string;
 }

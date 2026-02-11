@@ -1,23 +1,7 @@
-/**
- * E2E test: Google (Gemini) provider with real API key.
- *
- * Prerequisites:
- *   - E2E_GOOGLE_API_KEY env var or secrets.json with google.apiKey
- *
- * What this test does:
- *   1. Launches app with CLEAN_START (fresh state, no auth skip)
- *   2. Opens settings via sidebar button
- *   3. Selects the Google provider
- *   4. Enters the real API key
- *   5. Clicks Connect and waits for connection
- *   6. Selects a model
- *   7. Closes settings
- *   8. Submits a task and waits for completion
- */
-
 import { test, expect } from '../fixtures';
 import { SettingsPage, HomePage, ExecutionPage } from '../../pages';
 import { getProviderTestConfig, DEFAULT_TEST_MODELS } from '../provider-test-configs';
+import type { ApiKeySecrets } from '../types';
 
 const config = getProviderTestConfig('google');
 
@@ -25,7 +9,7 @@ test.describe('Google Provider', () => {
   test.skip(!config?.secrets, 'No Google secrets configured — skipping');
 
   test('should connect with API key and complete a task', async ({ window }) => {
-    if (!config?.secrets || !('apiKey' in config.secrets)) return;
+    const secrets = config.secrets as ApiKeySecrets;
 
     const settingsPage = new SettingsPage(window);
     const homePage = new HomePage(window);
@@ -38,7 +22,7 @@ test.describe('Google Provider', () => {
     await settingsPage.selectProvider('google');
 
     // Step 3: Enter the API key
-    await settingsPage.enterApiKey(config.secrets.apiKey);
+    await settingsPage.enterApiKey(secrets.apiKey);
 
     // Step 4: Click Connect
     await settingsPage.clickConnect();
@@ -48,6 +32,7 @@ test.describe('Google Provider', () => {
 
     // Step 6: Select a model
     const modelId = config.modelId || DEFAULT_TEST_MODELS['google'];
+
     if (modelId) {
       await settingsPage.selectModel(modelId);
     }
@@ -56,7 +41,7 @@ test.describe('Google Provider', () => {
     await settingsPage.closeDialog();
 
     // Step 8: Submit a task
-    await homePage.enterTask('What is 2 + 2? Reply with just the number.');
+    await homePage.enterTask('Create a plan and mark it as completed.');
     await homePage.submitTask();
 
     // Step 9: Wait for the task to complete (real API call)
@@ -64,6 +49,7 @@ test.describe('Google Provider', () => {
 
     // Verify it completed (not failed)
     const badgeText = await executionPage.statusBadge.textContent();
+
     expect(badgeText?.toLowerCase()).toContain('completed');
   });
 });

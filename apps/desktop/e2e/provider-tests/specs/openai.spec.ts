@@ -1,26 +1,10 @@
-/**
- * E2E test: OpenAI provider with real API key.
- *
- * Prerequisites:
- *   - E2E_OPENAI_API_KEY env var or secrets.json with openai.apiKey
- *
- * What this test does:
- *   1. Launches app with CLEAN_START (fresh state, no auth skip)
- *   2. Opens settings via sidebar button
- *   3. Selects the OpenAI provider
- *   4. Enters the real API key
- *   5. Clicks Connect and waits for connection
- *   6. Selects a model
- *   7. Closes settings
- *   8. Submits a task and waits for completion
- */
-
 import { test, expect } from '../fixtures';
 import { SettingsPage, HomePage, ExecutionPage } from '../../pages';
 import {
   getProviderTestConfig,
   DEFAULT_TEST_MODELS,
 } from '../provider-test-configs';
+import { ApiKeySecrets } from '../types';
 
 const config = getProviderTestConfig('openai');
 
@@ -28,7 +12,7 @@ test.describe('OpenAI Provider', () => {
   test.skip(!config?.secrets, 'No OpenAI secrets configured — skipping');
 
   test('should connect with API key and complete a task', async ({ window }) => {
-    if (!config?.secrets || !('apiKey' in config.secrets)) return;
+    const secrets = config.secrets as ApiKeySecrets;
 
     const settingsPage = new SettingsPage(window);
     const homePage = new HomePage(window);
@@ -41,7 +25,7 @@ test.describe('OpenAI Provider', () => {
     await settingsPage.selectProvider('openai');
 
     // Step 3: Enter the API key
-    await settingsPage.enterApiKey(config.secrets.apiKey);
+    await settingsPage.enterApiKey(secrets.apiKey);
 
     // Step 4: Click Connect
     await settingsPage.clickConnect();
@@ -51,6 +35,7 @@ test.describe('OpenAI Provider', () => {
 
     // Step 6: Select a model
     const modelId = config.modelId || DEFAULT_TEST_MODELS['openai'];
+    
     if (modelId) {
       await settingsPage.selectModel(modelId);
     }

@@ -1,22 +1,3 @@
-/**
- * E2E test: Ollama provider with local server.
- *
- * Prerequisites:
- *   - Ollama server running (default: http://localhost:11434)
- *   - Optionally E2E_OLLAMA_SERVER_URL and E2E_OLLAMA_MODEL_ID
- *
- * What this test does:
- *   1. Verifies Ollama is running and pulls the test model if needed
- *   2. Launches app with CLEAN_START (fresh state, no auth skip)
- *   3. Opens settings via sidebar button
- *   4. Selects the Ollama provider
- *   5. Enters the server URL
- *   6. Clicks Connect and waits for connection
- *   7. Selects a model
- *   8. Closes settings
- *   9. Submits a task and waits for completion
- */
-
 import { test, expect } from '../fixtures';
 import { SettingsPage, HomePage, ExecutionPage } from '../../pages';
 import { getProviderTestConfig } from '../provider-test-configs';

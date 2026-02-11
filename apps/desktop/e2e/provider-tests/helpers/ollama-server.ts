@@ -200,13 +200,23 @@ export class OllamaTestDriver {
       console.log('[Ollama] Server started successfully');
     }
 
-    console.log(`[Ollama] Checking model '${this._modelId}'...`);
+    try {
+      console.log(`[Ollama] Checking model '${this._modelId}'...`);
 
-    const available = await isModelAvailable(this._serverUrl, this._modelId);
-    if (!available) {
-      await pullModel(this._serverUrl, this._modelId);
-    } else {
-      console.log(`[Ollama] Model '${this._modelId}' is already available`);
+      const available = await isModelAvailable(this._serverUrl, this._modelId);
+      if (!available) {
+        await pullModel(this._serverUrl, this._modelId);
+      } else {
+        console.log(`[Ollama] Model '${this._modelId}' is already available`);
+      }
+    } catch (error) {
+      if (this.serverStartedByUs && this.ollamaProcess) {
+        console.log('[Ollama] Model pull failed, stopping server we started...');
+        this.ollamaProcess.kill('SIGKILL');
+        this.ollamaProcess = null;
+        this.serverStartedByUs = false;
+      }
+      throw error;
     }
   };
 

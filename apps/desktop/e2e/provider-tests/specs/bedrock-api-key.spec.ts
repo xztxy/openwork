@@ -1,22 +1,3 @@
-/**
- * E2E test: AWS Bedrock provider with API key authentication.
- *
- * Prerequisites:
- *   - E2E_BEDROCK_API_KEY env var or secrets.json with bedrock-api-key.apiKey
- *   - Optionally E2E_BEDROCK_REGION (defaults to us-east-1)
- *
- * What this test does:
- *   1. Launches app with CLEAN_START (fresh state, no auth skip)
- *   2. Opens settings via sidebar button
- *   3. Selects the Bedrock provider
- *   4. Selects the API Key auth tab
- *   5. Enters the Bedrock API key
- *   6. Optionally selects a region
- *   7. Clicks Connect and waits for connection
- *   8. Closes settings
- *   9. Submits a task and waits for completion
- */
-
 import { test, expect } from '../fixtures';
 import { SettingsPage, HomePage, ExecutionPage } from '../../pages';
 import { getProviderTestConfig } from '../provider-test-configs';

@@ -26,11 +26,13 @@ export const PROVIDER_TEST_CONFIGS: Record<string, ProviderTestConfig> = {
     providerId: 'openai',
     displayName: 'OpenAI',
     authMethod: 'api-key',
+    
   },
   google: {
     providerId: 'google',
     displayName: 'Google',
     authMethod: 'api-key',
+    modelId: 'gemini-flash-2-5'
   },
   'bedrock-api-key': {
     providerId: 'bedrock',
@@ -49,9 +51,11 @@ export const PROVIDER_TEST_CONFIGS: Record<string, ProviderTestConfig> = {
  * Get a fully resolved provider test config with secrets populated.
  * Returns undefined if the config key is not registered.
  */
-export function getProviderTestConfig(configKey: string): ResolvedProviderTestConfig | undefined {
+export function getProviderTestConfig(configKey: string): ResolvedProviderTestConfig {
   const config = PROVIDER_TEST_CONFIGS[configKey];
-  if (!config) return undefined;
+  if (!config) {
+    throw new Error(`Provider test config not found for key: ${configKey}`);
+  };
 
   const secrets = getProviderSecrets(configKey);
 
