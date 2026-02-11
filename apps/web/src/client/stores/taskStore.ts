@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 import {
   createMessageId,
   STARTUP_STAGES,
@@ -13,7 +13,6 @@ import {
 } from '@accomplish_ai/agent-core/common';
 import type { StoredFavorite } from '@accomplish_ai/agent-core';
 import { getAccomplish } from '../lib/accomplish';
-
 // Request-token counter to guard against stale loadFavorites responses
 let _loadFavoritesToken = 0;
 
@@ -74,8 +73,7 @@ interface TaskState {
     stage: string | null,
     message?: string,
     modelName?: string,
-    isFirstTask?: boolean,
-  ) => void;
+isFirstTask?: boolean,  ) => void;
   clearStartupStage: (taskId: string) => void;
   sendFollowUp: (
     message: string,
@@ -123,15 +121,19 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     let step = useTaskStore.getState().setupDownloadStep;
     if (message) {
       const lowerMsg = message.toLowerCase();
-      if (lowerMsg.includes('downloading chromium headless')) {
+      if (lowerMsg.includes("downloading chromium headless")) {
         step = 3;
-      } else if (lowerMsg.includes('downloading ffmpeg')) {
+      } else if (lowerMsg.includes("downloading ffmpeg")) {
         step = 2;
-      } else if (lowerMsg.includes('downloading chromium')) {
+      } else if (lowerMsg.includes("downloading chromium")) {
         step = 1;
       }
     }
-    set({ setupProgress: message, setupProgressTaskId: taskId, setupDownloadStep: step });
+    set({
+      setupProgress: message,
+      setupProgressTaskId: taskId,
+      setupDownloadStep: step,
+    });
   },
 
   setStartupStage: (
@@ -139,8 +141,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     stage: string | null,
     message?: string,
     modelName?: string,
-    isFirstTask?: boolean,
-  ) => {
+isFirstTask?: boolean,  ) => {
     if (!taskId || !stage) {
       set({ startupStage: null, startupStageTaskId: null });
       return;
@@ -176,35 +177,35 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       void accomplish.logEvent({
-        level: 'info',
+level: 'info',
         message: 'UI start task',
         context: {
           prompt: config.prompt,
           taskId: config.taskId,
           files: config.files?.length,
-        },
-      });
+        },      });
       const task = await accomplish.startTask(config);
       const currentTasks = get().tasks;
       set({
         currentTask: task,
         tasks: [task, ...currentTasks.filter((t) => t.id !== task.id)],
-        isLoading: task.status === 'queued',
+        isLoading: task.status === "queued",
       });
       void accomplish.logEvent({
-        level: 'info',
-        message: task.status === 'queued' ? 'UI task queued' : 'UI task started',
+        level: "info",
+        message:
+          task.status === "queued" ? "UI task queued" : "UI task started",
         context: { taskId: task.id, status: task.status },
       });
       return task;
     } catch (err) {
       set({
-        error: err instanceof Error ? err.message : 'Failed to start task',
+        error: err instanceof Error ? err.message : "Failed to start task",
         isLoading: false,
       });
       void accomplish.logEvent({
-        level: 'error',
-        message: 'UI task start failed',
+        level: "error",
+        message: "UI task start failed",
         context: { error: err instanceof Error ? err.message : String(err) },
       });
       return null;
@@ -218,20 +219,21 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     const accomplish = getAccomplish();
     const { currentTask, startTask } = get();
     if (!currentTask) {
-      set({ error: 'No active task to continue' });
+      set({ error: "No active task to continue" });
       void accomplish.logEvent({
-        level: 'warn',
-        message: 'UI follow-up failed: no active task',
+        level: "warn",
+        message: "UI follow-up failed: no active task",
       });
       return false;
     }
 
     const sessionId = currentTask.result?.sessionId || currentTask.sessionId;
 
-    if (!sessionId && currentTask.status === 'interrupted') {
+    if (!sessionId && currentTask.status === "interrupted") {
       void accomplish.logEvent({
-        level: 'info',
-        message: 'UI follow-up: starting fresh task (no session from interrupted task)',
+        level: "info",
+        message:
+          "UI follow-up: starting fresh task (no session from interrupted task)",
         context: { taskId: currentTask.id },
       });
       const newTask = await startTask({ prompt: message, files: attachments });
@@ -239,10 +241,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     }
 
     if (!sessionId) {
-      set({ error: 'No session to continue - please start a new task' });
+      set({ error: "No session to continue - please start a new task" });
       void accomplish.logEvent({
-        level: 'warn',
-        message: 'UI follow-up failed: missing session',
+        level: "warn",
+        message: "UI follow-up failed: missing session",
         context: { taskId: currentTask.id },
       });
       return false;
@@ -250,7 +252,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
     const userMessage: TaskMessage = {
       id: createMessageId(),
-      type: 'user',
+      type: "user",
       content: message,
       timestamp: new Date().toISOString(),
       // Add attachments visually to the local store history prior to response
@@ -266,19 +268,18 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       currentTask: state.currentTask
         ? {
             ...state.currentTask,
-            status: 'running',
+            status: "running",
             result: undefined,
             messages: [...state.currentTask.messages, userMessage],
           }
         : null,
       tasks: state.tasks.map((t) =>
-        t.id === taskId ? { ...t, status: 'running' as TaskStatus } : t,
-      ),
+t.id === taskId ? { ...t, status: 'running' as TaskStatus } : t,      ),
     }));
 
     try {
       void accomplish.logEvent({
-        level: 'info',
+level: 'info',
         message: 'UI follow-up sent',
         context: { taskId: currentTask.id, message, attachments: attachments?.length },
       });
@@ -288,22 +289,20 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       set((state) => ({
         currentTask: state.currentTask ? { ...state.currentTask, status: task.status } : null,
         isLoading: task.status === 'queued',
-        tasks: state.tasks.map((t) => (t.id === taskId ? { ...t, status: task.status } : t)),
-      }));
+        tasks: state.tasks.map((t) => (t.id === taskId ? { ...t, status: task.status } : t)),      }));
       return true;
     } catch (err) {
       set((state) => ({
-        error: err instanceof Error ? err.message : 'Failed to send message',
+        error: err instanceof Error ? err.message : "Failed to send message",
         isLoading: false,
-        currentTask: state.currentTask ? { ...state.currentTask, status: 'failed' } : null,
+currentTask: state.currentTask ? { ...state.currentTask, status: 'failed' } : null,
         tasks: state.tasks.map((t) =>
           t.id === taskId ? { ...t, status: 'failed' as TaskStatus } : t,
         ),
       }));
       void accomplish.logEvent({
         level: 'error',
-        message: 'UI follow-up failed',
-        context: {
+        message: 'UI follow-up failed',        context: {
           taskId: currentTask.id,
           error: err instanceof Error ? err.message : String(err),
         },
@@ -317,16 +316,15 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     const { currentTask } = get();
     if (currentTask) {
       void accomplish.logEvent({
-        level: 'info',
-        message: 'UI cancel task',
+        level: "info",
+        message: "UI cancel task",
         context: { taskId: currentTask.id },
       });
       await accomplish.cancelTask(currentTask.id);
       set((state) => ({
-        currentTask: state.currentTask ? { ...state.currentTask, status: 'cancelled' } : null,
+currentTask: state.currentTask ? { ...state.currentTask, status: 'cancelled' } : null,
         tasks: state.tasks.map((t) =>
-          t.id === currentTask.id ? { ...t, status: 'cancelled' as TaskStatus } : t,
-        ),
+          t.id === currentTask.id ? { ...t, status: 'cancelled' as TaskStatus } : t,        ),
       }));
     }
   },
@@ -334,10 +332,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   interruptTask: async () => {
     const accomplish = getAccomplish();
     const { currentTask } = get();
-    if (currentTask && currentTask.status === 'running') {
+    if (currentTask && currentTask.status === "running") {
       void accomplish.logEvent({
-        level: 'info',
-        message: 'UI interrupt task',
+        level: "info",
+        message: "UI interrupt task",
         context: { taskId: currentTask.id },
       });
       await accomplish.interruptTask(currentTask.id);
@@ -351,8 +349,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   respondToPermission: async (response: PermissionResponse) => {
     const accomplish = getAccomplish();
     void accomplish.logEvent({
-      level: 'info',
-      message: 'UI permission response',
+      level: "info",
+      message: "UI permission response",
       context: { ...response },
     });
     await accomplish.respondToPermission(response);
@@ -362,8 +360,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   addTaskUpdate: (event: TaskUpdateEvent) => {
     const accomplish = getAccomplish();
     void accomplish.logEvent({
-      level: 'debug',
-      message: 'UI task update received',
+      level: "debug",
+      message: "UI task update received",
       context: { ...event },
     });
     set((state) => {
@@ -373,20 +371,25 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       let updatedTasks = state.tasks;
       let newStatus: TaskStatus | null = null;
 
-      if (event.type === 'message' && event.message && isCurrentTask && state.currentTask) {
+      if (
+        event.type === "message" &&
+        event.message &&
+        isCurrentTask &&
+        state.currentTask
+      ) {
         updatedCurrentTask = {
           ...state.currentTask,
           messages: [...state.currentTask.messages, event.message],
         };
       }
 
-      if (event.type === 'complete' && event.result) {
-        if (event.result.status === 'success') {
-          newStatus = 'completed';
-        } else if (event.result.status === 'interrupted') {
-          newStatus = 'interrupted';
+      if (event.type === "complete" && event.result) {
+        if (event.result.status === "success") {
+          newStatus = "completed";
+        } else if (event.result.status === "interrupted") {
+          newStatus = "interrupted";
         } else {
-          newStatus = 'failed';
+          newStatus = "failed";
         }
 
         if (isCurrentTask && state.currentTask) {
@@ -394,20 +397,23 @@ export const useTaskStore = create<TaskState>((set, get) => ({
             ...state.currentTask,
             status: newStatus,
             result: event.result,
-            completedAt: newStatus === 'interrupted' ? undefined : new Date().toISOString(),
+            completedAt:
+              newStatus === "interrupted"
+                ? undefined
+                : new Date().toISOString(),
             sessionId: event.result.sessionId || state.currentTask.sessionId,
           };
         }
       }
 
-      if (event.type === 'error') {
-        newStatus = 'failed';
+      if (event.type === "error") {
+        newStatus = "failed";
 
         if (isCurrentTask && state.currentTask) {
           updatedCurrentTask = {
             ...state.currentTask,
             status: newStatus,
-            result: { status: 'error', error: event.error },
+            result: { status: "error", error: event.error },
           };
         }
       }
@@ -430,11 +436,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       // Only clear todos if task is fully completed (not interrupted - user can still continue)
       let shouldClearTodos = false;
       if (
-        (event.type === 'complete' || event.type === 'error') &&
+(event.type === 'complete' || event.type === 'error') &&
         state.todosTaskId === event.taskId
       ) {
-        const isInterrupted = event.type === 'complete' && event.result?.status === 'interrupted';
-        shouldClearTodos = !isInterrupted;
+        const isInterrupted = event.type === 'complete' && event.result?.status === 'interrupted';        shouldClearTodos = !isInterrupted;
       }
 
       return {
@@ -449,8 +454,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   addTaskUpdateBatch: (event: TaskUpdateBatchEvent) => {
     const accomplish = getAccomplish();
     void accomplish.logEvent({
-      level: 'debug',
-      message: 'UI task batch update received',
+      level: "debug",
+      message: "UI task batch update received",
       context: { taskId: event.taskId, messageCount: event.messages.length },
     });
     set((state) => {
@@ -475,7 +480,11 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
       const updatedCurrentTask =
         state.currentTask?.id === taskId
-          ? { ...state.currentTask, status, updatedAt: new Date().toISOString() }
+          ? {
+              ...state.currentTask,
+              status,
+              updatedAt: new Date().toISOString(),
+            }
           : state.currentTask;
 
       return {
@@ -510,7 +519,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   loadTaskById: async (taskId: string) => {
     const accomplish = getAccomplish();
     const task = await accomplish.getTask(taskId);
-    set({ currentTask: task, error: task ? null : 'Task not found' });
+    set({ currentTask: task, error: task ? null : "Task not found" });
   },
 
   deleteTask: async (taskId: string) => {
@@ -630,13 +639,12 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     set({ authError: null });
   },
 
-  openLauncher: () => set({ isLauncherOpen: true, launcherInitialPrompt: null }),
+openLauncher: () => set({ isLauncherOpen: true, launcherInitialPrompt: null }),
   openLauncherWithPrompt: (prompt: string) =>
     set({ isLauncherOpen: true, launcherInitialPrompt: prompt }),
-  closeLauncher: () => set({ isLauncherOpen: false, launcherInitialPrompt: null }),
-}));
+  closeLauncher: () => set({ isLauncherOpen: false, launcherInitialPrompt: null }),}));
 
-if (typeof window !== 'undefined' && window.accomplish) {
+if (typeof window !== "undefined" && window.accomplish) {
   window.accomplish.onTaskProgress((progress: unknown) => {
     const event = progress as SetupProgressEvent;
     const state = useTaskStore.getState();
@@ -647,18 +655,17 @@ if (typeof window !== 'undefined' && window.accomplish) {
         event.stage,
         event.message,
         event.modelName,
-        event.isFirstTask,
-      );
+event.isFirstTask,      );
       return;
     }
 
-    if (event.stage === 'tool-use') {
+    if (event.stage === "tool-use") {
       state.clearStartupStage(event.taskId);
       return;
     }
 
-    if (event.stage === 'setup' && event.message) {
-      if (event.message.toLowerCase().includes('installed successfully')) {
+    if (event.stage === "setup" && event.message) {
+      if (event.message.toLowerCase().includes("installed successfully")) {
         state.setSetupProgress(null, null);
       } else {
         state.setSetupProgress(event.taskId, event.message);
@@ -667,9 +674,9 @@ if (typeof window !== 'undefined' && window.accomplish) {
     }
 
     if (event.message) {
-      if (event.message.toLowerCase().includes('installed successfully')) {
+      if (event.message.toLowerCase().includes("installed successfully")) {
         state.setSetupProgress(null, null);
-      } else if (event.message.toLowerCase().includes('download')) {
+      } else if (event.message.toLowerCase().includes("download")) {
         state.setSetupProgress(event.taskId, event.message);
       }
     }
@@ -677,7 +684,7 @@ if (typeof window !== 'undefined' && window.accomplish) {
 
   window.accomplish.onTaskUpdate((event: unknown) => {
     const updateEvent = event as TaskUpdateEvent;
-    if (updateEvent.type === 'complete' || updateEvent.type === 'error') {
+    if (updateEvent.type === "complete" || updateEvent.type === "error") {
       const state = useTaskStore.getState();
       if (state.setupProgressTaskId === updateEvent.taskId) {
         state.setSetupProgress(null, null);
@@ -686,18 +693,37 @@ if (typeof window !== 'undefined' && window.accomplish) {
     }
   });
 
-  window.accomplish.onTaskSummary?.((data: { taskId: string; summary: string }) => {
+window.accomplish.onTaskSummary?.((data: { taskId: string; summary: string }) => {
     useTaskStore.getState().setTaskSummary(data.taskId, data.summary);
   });
-
-  window.accomplish.onTodoUpdate?.((data: { taskId: string; todos: TodoItem[] }) => {
-    const state = useTaskStore.getState();
-    if (state.currentTask?.id === data.taskId) {
-      state.setTodos(data.taskId, data.todos);
+  window.accomplish.onTodoUpdate?.(
+    (data: { taskId: string; todos: TodoItem[] }) => {
+      const state = useTaskStore.getState();
+      if (state.currentTask?.id === data.taskId) {
+        state.setTodos(data.taskId, data.todos);
+      }
     }
-  });
+  );
 
-  window.accomplish.onAuthError?.((data: { providerId: string; message: string }) => {
-    useTaskStore.getState().setAuthError(data);
+  window.accomplish.onAuthError?.(
+    (data: { providerId: string; message: string }) => {
+      useTaskStore.getState().setAuthError(data);
+    }
+  );
+
+  // Reload tasks when workspace changes, then navigate to most recent task or home
+  window.accomplish.onWorkspaceChanged?.(async () => {
+    const state = useTaskStore.getState();
+    state.reset();
+    await state.loadTasks();
+
+    const tasks = useTaskStore.getState().tasks;
+    if (tasks.length > 0) {
+      // Navigate to the most recent conversation
+      window.location.hash = `#/execution/${tasks[0].id}`;
+    } else {
+      // No tasks in this workspace - go to new conversation
+      window.location.hash = "#/";
+    }
   });
 }

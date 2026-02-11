@@ -1,6 +1,11 @@
-import type { Task, TaskMessage, TaskStatus, TaskAttachment } from '../../common/types/task.js';
-import type { TodoItem } from '../../common/types/todo.js';
-import { getDatabase } from '../database.js';
+import type {
+  Task,
+  TaskMessage,
+  TaskStatus,
+  TaskAttachment,
+} from "../../common/types/task.js";
+import type { TodoItem } from "../../common/types/todo.js";
+import { getDatabase } from "../database.js";
 
 export interface StoredTask {
   id: string;
@@ -67,13 +72,13 @@ function getMessagesForTask(taskId: string): TaskMessage[] {
 
   for (const row of messageRows) {
     const attachmentRows = db
-      .prepare('SELECT * FROM task_attachments WHERE message_id = ?')
+      .prepare("SELECT * FROM task_attachments WHERE message_id = ?")
       .all(row.id) as AttachmentRow[];
 
     const attachments: TaskAttachment[] | undefined =
       attachmentRows.length > 0
         ? attachmentRows.map((a) => ({
-            type: a.type as 'screenshot' | 'json',
+            type: a.type as "screenshot" | "json",
             data: a.data,
             label: a.label || undefined,
           }))
@@ -81,7 +86,7 @@ function getMessagesForTask(taskId: string): TaskMessage[] {
 
     messages.push({
       id: row.id,
-      type: row.type as TaskMessage['type'],
+      type: row.type as TaskMessage["type"],
       content: row.content,
       toolName: row.tool_name || undefined,
       toolInput: row.tool_input ? JSON.parse(row.tool_input) : undefined,
@@ -107,11 +112,20 @@ function rowToTask(row: TaskRow): StoredTask {
   };
 }
 
-export function getTasks(): StoredTask[] {
+export function getTasks(workspaceId?: string | null): StoredTask[] {
   const db = getDatabase();
-  const rows = db
-    .prepare('SELECT * FROM tasks ORDER BY created_at DESC LIMIT ?')
-    .all(MAX_HISTORY_ITEMS) as TaskRow[];
+  let rows: TaskRow[];
+  if (workspaceId) {
+    rows = db
+      .prepare(
+        "SELECT * FROM tasks WHERE workspace_id = ? ORDER BY created_at DESC LIMIT ?"
+      )
+      .all(workspaceId, MAX_HISTORY_ITEMS) as TaskRow[];
+  } else {
+    rows = db
+      .prepare("SELECT * FROM tasks ORDER BY created_at DESC LIMIT ?")
+      .all(MAX_HISTORY_ITEMS) as TaskRow[];
+  }
 
   return rows.map(rowToTask);
 }
@@ -123,14 +137,14 @@ export function getTask(taskId: string): StoredTask | undefined {
   return row ? rowToTask(row) : undefined;
 }
 
-export function saveTask(task: Task): void {
+export function saveTask(task: Task, workspaceId?: string | null): void {
   const db = getDatabase();
 
   db.transaction(() => {
     db.prepare(
       `INSERT OR REPLACE INTO tasks
-        (id, prompt, summary, status, session_id, created_at, started_at, completed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, prompt, summary, status, session_id, created_at, started_at, completed_at, workspace_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       task.id,
       task.prompt,
@@ -140,9 +154,10 @@ export function saveTask(task: Task): void {
       task.createdAt,
       task.startedAt || null,
       task.completedAt || null,
+      workspaceId || null,
     );
 
-    db.prepare('DELETE FROM task_messages WHERE task_id = ?').run(task.id);
+    db.prepare("DELETE FROM task_messages WHERE task_id = ?").run(task.id);
 
     const insertMessage = db.prepare(
       `INSERT INTO task_messages
@@ -192,7 +207,7 @@ export function updateTaskStatus(taskId: string, status: TaskStatus, completedAt
       taskId,
     );
   } else {
-    db.prepare('UPDATE tasks SET status = ? WHERE id = ?').run(status, taskId);
+    db.prepare("UPDATE tasks SET status = ? WHERE id = ?").run(status, taskId);
   }
 }
 
@@ -201,7 +216,9 @@ export function addTaskMessage(taskId: string, message: TaskMessage): void {
 
   db.transaction(() => {
     const maxOrder = db
-      .prepare('SELECT MAX(sort_order) as max FROM task_messages WHERE task_id = ?')
+      .prepare(
+        "SELECT MAX(sort_order) as max FROM task_messages WHERE task_id = ?"
+      )
       .get(taskId) as { max: number | null };
 
     const sortOrder = (maxOrder.max ?? -1) + 1;
@@ -235,22 +252,25 @@ export function addTaskMessage(taskId: string, message: TaskMessage): void {
 
 export function updateTaskSessionId(taskId: string, sessionId: string): void {
   const db = getDatabase();
-  db.prepare('UPDATE tasks SET session_id = ? WHERE id = ?').run(sessionId, taskId);
+  db.prepare("UPDATE tasks SET session_id = ? WHERE id = ?").run(
+    sessionId,
+    taskId
+  );
 }
 
 export function updateTaskSummary(taskId: string, summary: string): void {
   const db = getDatabase();
-  db.prepare('UPDATE tasks SET summary = ? WHERE id = ?').run(summary, taskId);
+  db.prepare("UPDATE tasks SET summary = ? WHERE id = ?").run(summary, taskId);
 }
 
 export function deleteTask(taskId: string): void {
   const db = getDatabase();
-  db.prepare('DELETE FROM tasks WHERE id = ?').run(taskId);
+  db.prepare("DELETE FROM tasks WHERE id = ?").run(taskId);
 }
 
 export function clearHistory(): void {
   const db = getDatabase();
-  db.prepare('DELETE FROM tasks').run();
+  db.prepare("DELETE FROM tasks").run();
 }
 
 export function setMaxHistoryItems(_max: number): void {}
@@ -265,14 +285,16 @@ export function getTodosForTask(taskId: string): TodoItem[] {
   const db = getDatabase();
 
   const rows = db
-    .prepare('SELECT * FROM task_todos WHERE task_id = ? ORDER BY sort_order ASC')
+    .prepare(
+      "SELECT * FROM task_todos WHERE task_id = ? ORDER BY sort_order ASC"
+    )
     .all(taskId) as TodoRow[];
 
   return rows.map((row) => ({
     id: row.todo_id,
     content: row.content,
-    status: row.status as TodoItem['status'],
-    priority: row.priority as TodoItem['priority'],
+    status: row.status as TodoItem["status"],
+    priority: row.priority as TodoItem["priority"],
   }));
 }
 
@@ -280,7 +302,7 @@ export function saveTodosForTask(taskId: string, todos: TodoItem[]): void {
   const db = getDatabase();
 
   db.transaction(() => {
-    db.prepare('DELETE FROM task_todos WHERE task_id = ?').run(taskId);
+    db.prepare("DELETE FROM task_todos WHERE task_id = ?").run(taskId);
 
     const insert = db.prepare(
       `INSERT INTO task_todos (task_id, todo_id, content, status, priority, sort_order)
@@ -288,12 +310,19 @@ export function saveTodosForTask(taskId: string, todos: TodoItem[]): void {
     );
 
     todos.forEach((todo, index) => {
-      insert.run(taskId, todo.id, todo.content, todo.status, todo.priority, index);
+      insert.run(
+        taskId,
+        todo.id,
+        todo.content,
+        todo.status,
+        todo.priority,
+        index
+      );
     });
   })();
 }
 
 export function clearTodosForTask(taskId: string): void {
   const db = getDatabase();
-  db.prepare('DELETE FROM task_todos WHERE task_id = ?').run(taskId);
+  db.prepare("DELETE FROM task_todos WHERE task_id = ?").run(taskId);
 }
