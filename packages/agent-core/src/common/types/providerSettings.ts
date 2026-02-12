@@ -12,9 +12,10 @@ export type ProviderId =
   | 'openrouter'
   | 'litellm'
   | 'minimax'
-  | 'lmstudio';
+  | 'lmstudio'
+  | 'vertex';
 
-export type ProviderCategory = 'classic' | 'aws' | 'azure' | 'local' | 'proxy' | 'hybrid';
+export type ProviderCategory = 'classic' | 'aws' | 'gcp' | 'azure' | 'local' | 'proxy' | 'hybrid';
 
 export interface ProviderMeta {
   id: ProviderId;
@@ -34,6 +35,7 @@ export const PROVIDER_META: Record<ProviderId, ProviderMeta> = {
   moonshot: { id: 'moonshot', name: 'Moonshot AI', category: 'classic', label: 'Service', logoKey: 'moonshot', helpUrl: 'https://platform.moonshot.ai/docs/guide/start-using-kimi-api' },
   zai: { id: 'zai', name: 'Z-AI', category: 'classic', label: 'Service', logoKey: 'z-ai' },
   bedrock: { id: 'bedrock', name: 'AWS Bedrock', category: 'aws', label: 'Service', logoKey: 'aws-bedrock' },
+  vertex: { id: 'vertex', name: 'Vertex AI', category: 'gcp', label: 'Service', logoKey: 'vertex' },
   'azure-foundry': { id: 'azure-foundry', name: 'Azure AI Foundry', category: 'azure', label: 'Service', logoKey: 'azure', helpUrl: 'https://ai.azure.com' },
   ollama: { id: 'ollama', name: 'Ollama', category: 'local', label: 'Local Models', logoKey: 'olama' },
   openrouter: { id: 'openrouter', name: 'OpenRouter', category: 'proxy', label: 'Service', logoKey: 'open-router', helpUrl: 'https://openrouter.ai/keys' },
@@ -96,6 +98,14 @@ export interface AzureFoundryCredentials {
   keyPrefix?: string;
 }
 
+export interface VertexProviderCredentials {
+  type: 'vertex';
+  authMethod: 'serviceAccount' | 'adc';
+  projectId: string;
+  location: string;
+  serviceAccountEmail?: string;
+}
+
 export interface OAuthCredentials {
   type: 'oauth';
   oauthProvider: 'chatgpt';
@@ -104,6 +114,7 @@ export interface OAuthCredentials {
 export type ProviderCredentials =
   | ApiKeyCredentials
   | BedrockProviderCredentials
+  | VertexProviderCredentials
   | OllamaCredentials
   | OpenRouterCredentials
   | LiteLLMCredentials
@@ -144,13 +155,21 @@ export function getActiveProvider(settings: ProviderSettings | null | undefined)
   return settings.connectedProviders?.[settings.activeProviderId] ?? null;
 }
 
+/**
+ * Default model for each provider.
+ * For providers with `defaultModelId` in DEFAULT_PROVIDERS, that value is canonical.
+ * This map covers providers that don't have modelsEndpoint (bedrock) or as fallback.
+ */
 export const DEFAULT_MODELS: Partial<Record<ProviderId, string>> = {
-  anthropic: 'anthropic/claude-opus-4-5',
+  anthropic: 'anthropic/claude-opus-4-6',
   openai: 'openai/gpt-5.2',
   google: 'google/gemini-3-pro-preview',
   xai: 'xai/grok-4',
+  deepseek: 'deepseek/deepseek-chat',
+  moonshot: 'moonshot/kimi-k2.5',
+  zai: 'zai/glm-4.7-flashx',
+  minimax: 'minimax/MiniMax-M2',
   bedrock: 'amazon-bedrock/anthropic.claude-opus-4-5-20251101-v1:0',
-  moonshot: 'moonshot/kimi-latest',
 };
 
 export function getDefaultModelForProvider(providerId: ProviderId): string | null {
@@ -176,4 +195,5 @@ export const PROVIDER_ID_TO_OPENCODE: Record<ProviderId, string> = {
   litellm: 'litellm',
   minimax: 'minimax',
   lmstudio: 'lmstudio',
+  vertex: 'vertex',
 };
