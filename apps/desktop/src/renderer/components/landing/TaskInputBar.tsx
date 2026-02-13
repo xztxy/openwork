@@ -227,7 +227,7 @@ export default function TaskInputBar({
                   });
                   onSubmit();
                 }}
-                disabled={isDisabled || speechInput.isRecording || isOverLimit}
+                disabled={!value.trim() || isDisabled || speechInput.isRecording || isOverLimit}
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-all duration-200 ease-accomplish hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {isLoading ? (
