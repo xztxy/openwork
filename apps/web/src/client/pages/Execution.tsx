@@ -19,10 +19,7 @@ import {
   Square,
   Download,
   ChevronDown,
-  ThumbsUp,
-  ThumbsDown,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { isWaitingForUser } from '../lib/waiting-detection';
 import { SettingsDialog } from '../components/layout/SettingsDialog';
 import { TodoSidebar } from '../components/TodoSidebar';
@@ -44,50 +41,6 @@ function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): T 
   }) as T;
 }
 
-function FeedbackThumbs({
-  feedback,
-  setFeedback,
-}: {
-  feedback: 'up' | 'down' | null;
-  setFeedback: (v: 'up' | 'down' | null) => void;
-}) {
-  return (
-    <div className="flex flex-col items-center gap-1.5">
-      <span className="text-xs text-muted-foreground">How did we do?</span>
-      <div className="flex items-center gap-2">
-        <motion.button
-          type="button"
-          onClick={() => setFeedback(feedback === 'up' ? null : 'up')}
-          whileHover={{ scale: 1.15 }}
-          whileTap={{ scale: 0.95 }}
-          transition={springs.snappy}
-          className={cn(
-            'h-8 w-8 flex items-center justify-center rounded-md transition-colors',
-            feedback === 'up' ? 'text-green-500' : 'text-muted-foreground hover:text-foreground',
-          )}
-        >
-          <ThumbsUp className="h-5 w-5" />
-        </motion.button>
-        <motion.button
-          type="button"
-          onClick={() => setFeedback(feedback === 'down' ? null : 'down')}
-          whileHover={{ scale: 1.15 }}
-          whileTap={{ scale: 0.95 }}
-          transition={springs.snappy}
-          className={cn(
-            'h-8 w-8 flex items-center justify-center rounded-md transition-colors',
-            feedback === 'down'
-              ? 'text-destructive'
-              : 'text-muted-foreground hover:text-foreground',
-          )}
-        >
-          <ThumbsDown className="h-5 w-5" />
-        </motion.button>
-      </div>
-    </div>
-  );
-}
-
 export function ExecutionPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -106,7 +59,6 @@ export function ExecutionPage() {
     'providers' | 'voice' | 'skills' | 'connectors'
   >('providers');
   const [pendingFollowUp, setPendingFollowUp] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const pendingSpeechFollowUpRef = useRef<string | null>(null);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -198,7 +150,6 @@ export function ExecutionPage() {
       setDebugLogs([]);
       setCurrentTool(null);
       setCurrentToolInput(null);
-      setFeedback(null);
       accomplish.getTodosForTask(id).then((todos) => {
         useTaskStore.getState().setTodos(id, todos);
       });
@@ -737,7 +688,6 @@ export function ExecutionPage() {
         {canFollowUp && (
           <div className="flex-shrink-0 border-t border-border bg-card/50 px-6 py-4">
             <div className="max-w-4xl mx-auto space-y-2">
-              <FeedbackThumbs feedback={feedback} setFeedback={setFeedback} />
               {speechInput.error && (
                 <Alert
                   variant="destructive"
