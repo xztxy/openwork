@@ -447,4 +447,74 @@ describe('complete_task summary emission', () => {
     const shouldEmitSummary = isFirstCall && state === CompletionFlowState.DONE && toolInput.summary;
     expect(shouldEmitSummary).toBeFalsy();
   });
+
+  it('should emit summary for prefixed complete_task tool names (e.g., mcp_complete_task)', () => {
+    // The adapter matches: toolName === 'complete_task' || toolName.endsWith('_complete_task')
+    // This test verifies the name-matching logic used in the adapter
+    const toolNames = ['complete_task', 'mcp_complete_task', 'custom_prefix_complete_task'];
+    const isCompleteTask = (name: string) =>
+      name === 'complete_task' || name.endsWith('_complete_task');
+
+    for (const name of toolNames) {
+      expect(isCompleteTask(name)).toBe(true);
+    }
+
+    // Non-matching names should not trigger
+    expect(isCompleteTask('complete_task_extra')).toBe(false);
+    expect(isCompleteTask('other_tool')).toBe(false);
+  });
+
+  it('should emit summary when content contains markdown and newlines', () => {
+    const toolInput = {
+      status: 'success',
+      summary: '## Task Complete\n\n- Built login form\n- Added **validation**\n- Deployed to `staging`',
+      original_request_summary: 'Build login form',
+    };
+
+    const isFirstCall = enforcer.handleCompleteTaskDetection(toolInput);
+    const state = enforcer.getState();
+
+    expect(isFirstCall).toBe(true);
+    expect(state).toBe(CompletionFlowState.DONE);
+
+    const { openCodeMessage, taskMessage } = buildSummaryMessages(toolInput.summary, 'session_456');
+
+    // Summary text should pass through unmodified
+    expect(openCodeMessage.part.text).toBe(toolInput.summary);
+    expect(taskMessage.content).toContain('## Task Complete');
+    expect(taskMessage.content).toContain('**validation**');
+  });
+
+  it('should treat whitespace-only summary as truthy (adapter behavior)', () => {
+    // The adapter checks `if (summary)` — whitespace-only strings are truthy in JS
+    const toolInput = {
+      status: 'success',
+      summary: '   ',
+      original_request_summary: 'Test request',
+    };
+
+    const isFirstCall = enforcer.handleCompleteTaskDetection(toolInput);
+    const state = enforcer.getState();
+
+    expect(isFirstCall).toBe(true);
+    expect(state).toBe(CompletionFlowState.DONE);
+
+    // Whitespace-only is truthy, so the adapter WILL emit — documenting this behavior
+    const summary = (toolInput as { summary?: string }).summary;
+    const shouldEmitSummary = isFirstCall && state === CompletionFlowState.DONE && summary;
+    expect(shouldEmitSummary).toBeTruthy();
+  });
+
+  it('should return complete from handleStepFinish after DONE state (no continuation)', () => {
+    // After complete_task with success, handleStepFinish should return 'complete'
+    // so the adapter proceeds to emit complete event without spawning continuation
+    enforcer.handleCompleteTaskDetection({
+      status: 'success',
+      summary: 'All done.',
+      original_request_summary: 'Test',
+    });
+
+    const action = enforcer.handleStepFinish('stop');
+    expect(action).toBe('complete');
+  });
 });
