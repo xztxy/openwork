@@ -531,8 +531,10 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
     if (this.isStartTaskTool(toolName)) {
       this.startTaskCalled = true;
-      this.completionEnforcer.markStructuredTaskStarted();
       const startInput = toolInput as StartTaskInput;
+      if (startInput?.needs_planning) {
+        this.completionEnforcer.markStructuredTaskStarted();
+      }
       if (startInput?.goal && startInput?.steps) {
         this.emitPlanMessage(startInput, sessionID || this.currentSessionId || '');
         const todos: TodoItem[] = startInput.steps.map((step, i) => ({

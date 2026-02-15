@@ -134,8 +134,8 @@ You MUST call start_task before any other tool. This is enforced - other tools w
 
 **Decide: Does this request need planning?**
 
-Set \`needs_planning: true\` for multi-step tasks that require a plan (file operations, coding, research, browser workflows).
-Set \`needs_planning: false\` for simple messages that need no plan (greetings, quick questions, factual lookups, one-line answers).
+Set \`needs_planning: true\` if completing the request will require tools beyond start_task and complete_task (e.g., file operations, browser actions, bash commands).
+Set \`needs_planning: false\` if you can answer from knowledge alone using only start_task → text response → complete_task. This includes greetings, knowledge questions, meta-questions about your capabilities, help requests, and conversational messages.
 
 **When needs_planning is TRUE** — provide goal, steps, verification:
 
@@ -166,6 +166,27 @@ Then update todos as you progress:
 \`\`\`
 
 Then respond directly and call complete_task when done.
+
+**More examples:**
+
+\`\`\`json
+{
+  "original_request": "What is the capital of France?",
+  "needs_planning": false,
+  "skills": []
+}
+\`\`\`
+
+\`\`\`json
+{
+  "original_request": "Find the top 3 Italian restaurants downtown",
+  "needs_planning": true,
+  "goal": "Find top 3 Italian restaurants",
+  "steps": ["Search for Italian restaurants", "Compare ratings", "Present top 3"],
+  "verification": ["3 restaurants listed with ratings"],
+  "skills": []
+}
+\`\`\`
 
 ##############################################################################
 </behavior>

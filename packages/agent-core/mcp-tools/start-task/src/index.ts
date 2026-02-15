@@ -68,6 +68,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     skills: string[];
   };
 
+  if (needs_planning && (!goal || !steps?.length || !verification?.length)) {
+    return {
+      content: [{ type: 'text', text: 'Error: goal, steps, and verification are required when needs_planning is true.' }],
+      isError: true,
+    };
+  }
+
   console.error(`[start-task] original_request=${original_request}`);
   console.error(`[start-task] needs_planning=${needs_planning}`);
   if (goal) console.error(`[start-task] goal=${goal}`);
