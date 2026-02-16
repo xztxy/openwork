@@ -2419,10 +2419,15 @@ The page has loaded. Use browser_snapshot() to see the page elements and find in
           ? Infinity
           : Math.min(Math.max(max_tokens ?? 8000, 1000), 50000);
 
+        // Default viewport_only to true for coordinate-click apps (Gmail, Drive, etc.)
+        // to reduce DOM noise that causes model confabulation.
+        const isCoordApp = isCoordinateClickApp(page.url());
+        const effectiveViewportOnly = viewport_only ?? (isCoordApp ? true : false);
+
         const snapshotOptions: SnapshotOptions = {
           interactiveOnly: interactive_only ?? true,
           maxElements: validatedMaxElements,
-          viewportOnly: viewport_only ?? false,
+          viewportOnly: effectiveViewportOnly,
           maxTokens: validatedMaxTokens,
         };
 
@@ -2440,7 +2445,7 @@ The page has loaded. Use browser_snapshot() to see the page elements and find in
         const url = page.url();
         const title = await page.title();
 
-        const detectedCoordApp = isCoordinateClickApp(url);
+        const detectedCoordApp = isCoordApp;
 
         const manager = getSnapshotManager();
         const result = manager.processSnapshot(rawSnapshot, url, title, {
@@ -2469,8 +2474,8 @@ The page has loaded. Use browser_snapshot() to see the page elements and find in
         }
 
         if (detectedCoordApp) {
-          output += `\n⚠️ COORDINATE-CLICK APP DETECTED: ${detectedCoordApp}\n`;
-          output += `Ref-based clicks automatically use coordinate-based clicking for reliability.\n`;
+          output += `\n⚠️ COORDINATE-CLICK APP: ${detectedCoordApp}\n`;
+          output += `Showing viewport-only elements. Scroll to reveal more. Clicks use coordinate-based clicking.\n`;
         }
 
         if (result.type === 'diff') {
