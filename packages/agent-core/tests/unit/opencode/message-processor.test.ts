@@ -49,10 +49,7 @@ describe('sanitizeAssistantTextForDisplay', () => {
 
   it('strips text after lone opening <thought> tag (streaming edge)', () => {
     const text = 'Visible text\n<thought>partial thinking with no close';
-    // The orphan tag regex strips the opening <thought>, leaving the inner text
-    // but the INTERNAL_LINES_RE won't match it. Let's verify actual behavior.
     const result = sanitizeAssistantTextForDisplay(text);
-    // The thought block regex won't match (no closing tag), but ORPHAN_TAGS_RE strips <thought>
     expect(result).not.toContain('<thought>');
     expect(result).toContain('Visible text');
   });
@@ -107,14 +104,14 @@ describe('toTaskMessage', () => {
 });
 
 describe('sanitizeToolOutput', () => {
-  it('strips [ref=eNN] patterns', () => {
+  it('strips [ref=eNN] patterns and collapses extra spaces', () => {
     const result = sanitizeToolOutput('Click [ref=e42] button', false);
-    expect(result).toBe('Click  button');
+    expect(result).toBe('Click button');
   });
 
-  it('strips [cursor=pointer] attributes', () => {
+  it('strips [cursor=pointer] attributes and collapses extra spaces', () => {
     const result = sanitizeToolOutput('Element [cursor=pointer] here', false);
-    expect(result).toBe('Element  here');
+    expect(result).toBe('Element here');
   });
 });
 

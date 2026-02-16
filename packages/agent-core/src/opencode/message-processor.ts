@@ -123,6 +123,7 @@ export function sanitizeToolOutput(text: string, isError: boolean): string {
   result = result.replace(/\[cursor=\w+\]/g, '');
 
   result = result.replace(/\s*Call log:[\s\S]*/i, '');
+  result = result.replace(/ {2,}/g, ' ');
 
   if (isError) {
     const timeoutMatch = result.match(/timed? ?out after (\d+)ms/i);
