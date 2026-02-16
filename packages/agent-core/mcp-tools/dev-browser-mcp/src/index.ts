@@ -110,6 +110,9 @@ async function getElementCoordinates(element: ElementHandle): Promise<{
   centerX: number; centerY: number;
 } | null> {
   try {
+    // Scroll element into view first — boundingBox() returns viewport-relative
+    // coordinates, so the element must be visible for page.mouse.click() to work.
+    await element.scrollIntoViewIfNeeded();
     const box = await element.boundingBox();
     if (!box) return null;
     return {
