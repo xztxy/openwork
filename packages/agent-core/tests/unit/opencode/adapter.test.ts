@@ -6,6 +6,7 @@ import {
 } from '../../../src/opencode/completion/index.js';
 import type { CompletionEnforcerCallbacks } from '../../../src/opencode/completion/index.js';
 import type { TodoItem } from '../../../src/common/types/todo.js';
+import { serializeError } from '../../../src/utils/error.js';
 
 /**
  * Tests for OpenCodeAdapter module.
@@ -482,3 +483,31 @@ describe('Integration flow: conversational turn', () => {
   });
 });
 
+describe('serializeError', () => {
+  it('should pass through string errors unchanged', () => {
+    expect(serializeError('API rate limit exceeded')).toBe('API rate limit exceeded');
+  });
+
+  it('should serialize an object error to JSON', () => {
+    const objectError = { name: 'APIError', data: { message: 'Bad request', statusCode: 400 } };
+    const result = serializeError(objectError);
+    expect(typeof result).toBe('string');
+    expect(result).toContain('APIError');
+    expect(result).toContain('400');
+  });
+
+  it('should handle error with nested data', () => {
+    const nested = { message: 'timeout', details: { retryAfter: 30 } };
+    const result = serializeError(nested);
+    expect(typeof result).toBe('string');
+    expect(result).toContain('timeout');
+  });
+
+  it('should handle numeric error codes', () => {
+    expect(serializeError(500)).toBe('500');
+  });
+
+  it('should handle null error', () => {
+    expect(serializeError(null)).toBe('null');
+  });
+});
