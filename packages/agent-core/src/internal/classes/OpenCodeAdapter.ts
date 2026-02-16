@@ -398,9 +398,6 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   }
 
   private handleMessage(message: OpenCodeMessage): void {
-    if (this.hasCompleted && message.type !== 'text') {
-      return;
-    }
 
     console.log('[OpenCode Adapter] Handling message type:', message.type);
 
@@ -576,6 +573,23 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
     if (toolName === 'complete_task' || toolName.endsWith('_complete_task')) {
       this.completionEnforcer.handleCompleteTaskDetection(toolInput);
+      const completeInput = toolInput as { summary?: string };
+      if (completeInput?.summary) {
+        this.emit('message', {
+          type: 'text',
+          part: {
+            type: 'text',
+            text: completeInput.summary,
+            sessionID: sessionID || this.currentSessionId || '',
+          },
+        } as OpenCodeMessage);
+        this.messages.push({
+          id: this.generateMessageId(),
+          type: 'assistant',
+          content: completeInput.summary,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
 
     if (toolName === 'todowrite' || toolName.endsWith('_todowrite')) {
