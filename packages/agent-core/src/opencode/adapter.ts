@@ -476,9 +476,6 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
           this.emit('tool-result', toolUseOutput);
         }
 
-        if (toolUseName === 'AskUserQuestion') {
-          this.handleAskUserQuestion(toolUseInput as AskUserQuestionInput);
-        }
         break;
 
       case 'tool_result':
@@ -585,29 +582,6 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       message: `Using ${toolName}`,
     });
 
-    if (toolName === 'AskUserQuestion') {
-      this.handleAskUserQuestion(toolInput as AskUserQuestionInput);
-    }
-  }
-
-  private handleAskUserQuestion(input: AskUserQuestionInput): void {
-    const question = input.questions?.[0];
-    if (!question) return;
-
-    const permissionRequest: PermissionRequest = {
-      id: this.generateRequestId(),
-      taskId: this.currentTaskId || '',
-      type: 'question',
-      question: question.question,
-      options: question.options?.map((o) => ({
-        label: o.label,
-        description: o.description,
-      })),
-      multiSelect: question.multiSelect,
-      createdAt: new Date().toISOString(),
-    };
-
-    this.emit('permission-request', permissionRequest);
   }
 
   private handleProcessExit(code: number | null): void {
@@ -779,15 +753,6 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       return ['-c', command];
     }
   }
-}
-
-interface AskUserQuestionInput {
-  questions?: Array<{
-    question: string;
-    header?: string;
-    options?: Array<{ label: string; description?: string }>;
-    multiSelect?: boolean;
-  }>;
 }
 
 interface StartTaskInput {
