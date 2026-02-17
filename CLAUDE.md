@@ -71,6 +71,7 @@ pnpm lint && pnpm typecheck && pnpm -F @accomplish/desktop test && pnpm -F @acco
 See [docs/architecture.md](docs/architecture.md) for full architecture details (monorepo layout, package structure, IPC flow, storage, bundled Node.js).
 
 Key packages:
+
 - `@accomplish_ai/agent-core` — Core business logic, types, storage, MCP tools (ESM, published to npm)
 - `@accomplish/desktop` — Electron app (main/preload/renderer)
 
@@ -84,7 +85,7 @@ Key packages:
 - IPC handlers in `src/main/ipc/handlers.ts` must match `window.accomplish` API in preload
 - **Always use braces for `if`/`else`/`for`/`while`** - No single-line braceless statements (enforced by `curly` ESLint rule)
 - **Avoid nested ternaries** - Use mapper objects or if/else for readability
-- **No unnecessary comments** - Don't add comments that restate what the code does. Comments should explain *why*, not *what*
+- **No unnecessary comments** - Don't add comments that restate what the code does. Comments should explain _why_, not _what_
 - **Reuse UI components** - Check `src/renderer/components/ui/` before creating new ones
 
 ### Image Assets in Renderer
@@ -155,6 +156,7 @@ Static assets go in `apps/desktop/public/assets/`.
 ## Testing
 
 ### E2E Tests (Playwright)
+
 - Config: `apps/desktop/e2e/playwright.config.ts`
 - Tests: `apps/desktop/e2e/specs/`
 - Page objects: `apps/desktop/e2e/pages/`
@@ -162,6 +164,7 @@ Static assets go in `apps/desktop/public/assets/`.
 - Docker support: `apps/desktop/e2e/docker/`
 
 ### Unit/Integration Tests (Vitest)
+
 - Desktop config: `apps/desktop/vitest.config.ts`
 - Agent-core config: `packages/agent-core/vitest.config.ts`
 - Coverage thresholds (desktop): 80% statements/functions/lines, 70% branches
@@ -177,6 +180,7 @@ Static assets go in `apps/desktop/public/assets/`.
 ## CI/CD
 
 GitHub Actions workflows in `.github/workflows/`:
+
 - `ci.yml` - Core tests, unit tests, integration tests, typecheck, E2E
 - `release.yml` - Desktop app build and publish to GitHub releases
 - `commitlint.yml` - Conventional commit validation
