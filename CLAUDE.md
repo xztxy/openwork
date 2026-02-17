@@ -17,9 +17,12 @@ pnpm dev:clean                                  # Dev mode with CLEAN_START=1 (c
 pnpm build                                      # Build all workspaces
 pnpm build:desktop                              # Build desktop app only
 
-# Type checking
-pnpm lint                                       # TypeScript checks (all workspaces)
+# Type checking & linting
+pnpm lint                                       # TypeScript + ESLint (all workspaces)
 pnpm typecheck                                  # Type validation (all workspaces)
+pnpm lint:eslint                                # ESLint only (flat config)
+pnpm format:check                               # Prettier check (no writes)
+pnpm format                                     # Prettier write (auto-fix)
 
 # Testing (desktop workspace — no root-level test scripts exist)
 pnpm -F @accomplish/desktop test                # Run all Vitest tests
@@ -41,8 +44,8 @@ pnpm clean                                      # Clean build outputs and node_m
 Always verify before committing. Run the relevant commands for what you changed:
 
 ```bash
-# After ANY code change — always run typecheck
-pnpm typecheck
+# After ANY code change — always run typecheck + lint
+pnpm typecheck && pnpm lint:eslint && pnpm format:check
 
 # After changing agent-core code
 pnpm -F @accomplish_ai/agent-core test
@@ -51,10 +54,10 @@ pnpm -F @accomplish_ai/agent-core test
 pnpm -F @accomplish/desktop test
 
 # After changing both packages
-pnpm lint && pnpm typecheck
+pnpm lint && pnpm format:check
 
 # Full verification before PR
-pnpm lint && pnpm typecheck && pnpm -F @accomplish/desktop test && pnpm -F @accomplish_ai/agent-core test
+pnpm lint && pnpm format:check && pnpm -F @accomplish/desktop test && pnpm -F @accomplish_ai/agent-core test
 ```
 
 ## Do NOT
