@@ -11,9 +11,9 @@
   },
   "scripts": {
     "predev": "node scripts/check-deps.cjs",
-    "dev": "pnpm -F @accomplish/desktop dev",
+    "dev": "node scripts/dev.cjs",
     "predev:clean": "node scripts/check-deps.cjs",
-    "dev:clean": "pnpm -F @accomplish/desktop dev:clean",
+    "dev:clean": "CLEAN_START=1 node scripts/dev.cjs",
     "postinstall": "node scripts/save-lockfile-hash.cjs",
     "build": "pnpm -r build",
     "build:desktop": "pnpm -F @accomplish/desktop build",
@@ -61,6 +61,7 @@
     "prettier": "^3.8.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "typescript-eslint": "^8.55.0"
+    "typescript-eslint": "^8.55.0",
+    "wait-on": "^9.0.4"
   }
 }
