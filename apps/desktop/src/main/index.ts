@@ -74,8 +74,16 @@ config({ path: envPath });
 process.env.APP_ROOT = path.join(__dirname, '../..');
 
 export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron');
-export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist');
-export const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
+
+// In dev mode, web's Vite dev server runs on localhost:5173.
+// vite-plugin-electron sets VITE_DEV_SERVER_URL for the desktop renderer,
+// but since the renderer is now in apps/web, we hardcode the web dev server URL.
+const WEB_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
+
+// In production, web's build output is copied to extraResources/web-ui
+const WEB_DIST = app.isPackaged
+  ? path.join(process.resourcesPath, 'web-ui')
+  : path.join(process.env.APP_ROOT, '../web/dist/client');
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -156,11 +164,11 @@ function createWindow() {
     mainWindow.webContents.openDevTools({ mode: 'right' });
   }
 
-  if (VITE_DEV_SERVER_URL) {
-    console.log('[Main] Loading from Vite dev server:', VITE_DEV_SERVER_URL);
-    mainWindow.loadURL(VITE_DEV_SERVER_URL);
+  if (!app.isPackaged) {
+    console.log('[Main] Loading from web dev server:', WEB_DEV_SERVER_URL);
+    mainWindow.loadURL(WEB_DEV_SERVER_URL);
   } else {
-    const indexPath = path.join(RENDERER_DIST, 'index.html');
+    const indexPath = path.join(WEB_DIST, 'index.html');
     console.log('[Main] Loading from file:', indexPath);
     mainWindow.loadFile(indexPath);
   }
