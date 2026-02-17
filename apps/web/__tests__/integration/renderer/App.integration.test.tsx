@@ -16,7 +16,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import { createMemoryRouter, RouterProvider, Navigate } from 'react-router-dom';
+import { createMemoryRouter, RouterProvider, Navigate } from 'react-router';
 
 // Create mock functions for accomplish API
 const mockSetOnboardingComplete = vi.fn();

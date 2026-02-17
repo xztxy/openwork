@@ -1,9 +1,7 @@
-'use client';
-
 import { useEffect, useState, useCallback } from 'react';
-import { useOutlet, useLocation } from 'react-router-dom';
+import { useOutlet, useLocation } from 'react-router';
 import { AnimatePresence, motion } from 'framer-motion';
-import { getAccomplish } from './lib/accomplish';
+import { isRunningInElectron, getAccomplish } from './lib/accomplish';
 import { springs, variants } from './lib/animations';
 import type { ProviderId } from '@accomplish_ai/agent-core/common';
 
@@ -50,7 +48,7 @@ function AnimatedOutletWrapper() {
 
 export function App() {
   const [status, setStatus] = useState<AppStatus>('loading');
-  const [errorMessage, _setErrorMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [authSettingsOpen, setAuthSettingsOpen] = useState(false);
   const [authSettingsProvider, setAuthSettingsProvider] = useState<ProviderId | undefined>(
     undefined,
@@ -94,14 +92,18 @@ export function App() {
 
   useEffect(() => {
     const checkStatus = async () => {
+      if (!isRunningInElectron()) {
+        setErrorMessage('This application must be run inside the Accomplish desktop app.');
+        setStatus('error');
+        return;
+      }
+
       try {
         const accomplish = getAccomplish();
-        // Mark onboarding as complete (no welcome screen needed)
         await accomplish.setOnboardingComplete(true);
         setStatus('ready');
       } catch (error) {
         console.error('Failed to initialize app:', error);
-        // Still allow app to run even if setting fails
         setStatus('ready');
       }
     };
@@ -162,5 +164,3 @@ export function App() {
     </div>
   );
 }
-
-export default App;
