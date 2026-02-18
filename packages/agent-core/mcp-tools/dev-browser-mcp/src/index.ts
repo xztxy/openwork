@@ -1006,8 +1006,8 @@ const SNAPSHOT_SCRIPT = `
     beginAriaCaches();
     try { visit(snapshot.root, rootElement, true); }
     finally { endAriaCaches(); }
-    if (!externalOptions.includeAllTextNodes) normalizeStringChildren(snapshot.root);
-    if (!externalOptions.preserveSubtrees) normalizeGenericRoles(snapshot.root);
+    if (!externalOptions.includeAllTextNodes) { normalizeStringChildren(snapshot.root); }
+    if (!externalOptions.preserveSubtrees) { normalizeGenericRoles(snapshot.root); }
     return snapshot;
   }
 
@@ -1035,7 +1035,7 @@ const SNAPSHOT_SCRIPT = `
     const name = normalizeWhiteSpace(getElementAccessibleName(element, false) || "");
     const receivesPointerEventsValue = receivesPointerEvents(element);
     const box = computeBox(element);
-    if (!options.preserveSubtrees && role === "generic" && box.inline && element.childNodes.length === 1 && element.childNodes[0].nodeType === Node.TEXT_NODE) return null;
+    if (!options.preserveSubtrees && role === "generic" && box.inline && element.childNodes.length === 1 && element.childNodes[0].nodeType === Node.TEXT_NODE) { return null; }
     const result = { role, name, children: [], props: {}, element, box, receivesPointerEvents: receivesPointerEventsValue, active };
     computeAriaRef(result, options);
     if (kAriaCheckedRoles.includes(role)) result.checked = getAriaChecked(element);
@@ -1238,7 +1238,7 @@ const SNAPSHOT_SCRIPT = `
     const isInteractiveRole = (role) => INTERACTIVE_ROLES.includes(role);
 
     const visitText = (text, indent) => {
-      if (snapshotOptions.interactiveOnly && !snapshotOptions.includeAllTextNodes) return;
+      if (snapshotOptions.interactiveOnly && !snapshotOptions.includeAllTextNodes) { return; }
       const escaped = yamlEscapeValueIfNeeded(text);
       if (escaped) lines.push(indent + "- text: " + escaped);
     };
