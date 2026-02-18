@@ -533,7 +533,6 @@ describe('CompletionEnforcer', () => {
     });
 
     it('should return true during a partial continuation session', async () => {
-      // Simulate: agent has in_progress todo, calls complete_task → downgraded to partial
       const todos: TodoItem[] = [
         { id: '1', content: 'Navigate to figma.com', status: 'in_progress', priority: 'medium' },
       ];
@@ -545,13 +544,10 @@ describe('CompletionEnforcer', () => {
         original_request_summary: 'Go to the Figma website',
       });
 
-      // State is PARTIAL_CONTINUATION_PENDING after downgrade
       expect(enforcer.getState()).toBe(CompletionFlowState.PARTIAL_CONTINUATION_PENDING);
 
-      // Process exits, continuation starts
       await enforcer.handleProcessExit(0);
 
-      // During continuation, isInContinuation should be true
       expect(enforcer.isInContinuation()).toBe(true);
     });
 
@@ -570,7 +566,6 @@ describe('CompletionEnforcer', () => {
       await enforcer.handleProcessExit(0);
       expect(enforcer.isInContinuation()).toBe(true);
 
-      // Continuation session marks todo complete and calls complete_task again
       enforcer.updateTodos([
         { id: '1', content: 'Navigate to figma.com', status: 'completed', priority: 'medium' },
       ]);
@@ -580,7 +575,6 @@ describe('CompletionEnforcer', () => {
         original_request_summary: 'Test',
       });
 
-      // Now that completion succeeded, isInContinuation should be false
       expect(enforcer.isInContinuation()).toBe(false);
     });
 

@@ -75,7 +75,7 @@ export class CompletionEnforcer {
 
     this.state.recordCompleteTaskCall(completeTaskArgs);
 
-    if (this.state.isDone()) {
+    if (this.shouldComplete()) {
       this.inContinuation = false;
     }
 
