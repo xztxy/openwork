@@ -851,7 +851,8 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       }
 
       const fullCommand = this.buildShellCommand(command, args);
-      return { file: 'cmd.exe', args: ['/s', '/c', fullCommand] };
+      // Preserve full-command outer quotes for cmd.exe /s /c parsing.
+      return { file: 'cmd.exe', args: ['/s', '/c', `"${fullCommand}"`] };
     }
 
     const shell =
