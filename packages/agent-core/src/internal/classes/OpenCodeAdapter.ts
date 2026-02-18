@@ -843,16 +843,12 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
   private buildPtySpawnArgs(command: string, args: string[]): { file: string; args: string[] } {
     if (this.options.platform === 'win32') {
-      // Direct-spawn .exe to avoid cmd.exe quoting edge-cases.
-      // For .cmd/PATH commands keep cmd.exe, since direct CreateProcess
-      // execution of batch wrappers is unreliable.
+      // Windows policy: always spawn the real .exe, never cmd wrappers.
       if (command.toLowerCase().endsWith('.exe')) {
         return { file: command, args };
       }
 
-      const fullCommand = this.buildShellCommand(command, args);
-      // Preserve full-command outer quotes for cmd.exe /s /c parsing.
-      return { file: 'cmd.exe', args: ['/s', '/c', `"${fullCommand}"`] };
+      throw new Error(`Windows CLI command must resolve to an .exe path. Received: ${command}`);
     }
 
     const shell =
