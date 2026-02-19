@@ -107,6 +107,16 @@ importers:
       zod:
         specifier: 'catalog:'
         version: 3.25.76
+    optionalDependencies:
+      opencode-darwin-arm64:
+        specifier: 1.2.6
+        version: 1.2.6
+      opencode-darwin-x64:
+        specifier: 1.2.6
+        version: 1.2.6
+      opencode-darwin-x64-baseline:
+        specifier: 1.2.6
+        version: 1.2.6
     devDependencies:
       '@electron/rebuild':
         specifier: ^4.0.2
