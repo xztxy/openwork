@@ -121,21 +121,10 @@ describe('CLI Resolver', () => {
       });
 
       it('should return null when not found in node_modules', () => {
-        // Don't use ACCOMPLISH_USE_GLOBAL_OPENCODE for this test
-        const originalEnv = process.env.ACCOMPLISH_USE_GLOBAL_OPENCODE;
-        delete process.env.ACCOMPLISH_USE_GLOBAL_OPENCODE;
-
         const result = resolveCliPath({
           isPackaged: false,
           appPath: path.join(testDir, 'app-without-cli'),
         });
-
-        // Restore env
-        if (originalEnv !== undefined) {
-          process.env.ACCOMPLISH_USE_GLOBAL_OPENCODE = originalEnv;
-        } else {
-          delete process.env.ACCOMPLISH_USE_GLOBAL_OPENCODE;
-        }
 
         expect(result).toBeNull();
       });
@@ -157,33 +146,6 @@ describe('CLI Resolver', () => {
         expect(result).not.toBeNull();
         expect(result?.source).toBe('local');
         expect(result?.cliPath).toBe(nestedCli?.cliPath);
-      });
-    });
-
-    describe('global preference', () => {
-      it('should respect ACCOMPLISH_USE_GLOBAL_OPENCODE environment variable', () => {
-        const appRoot = path.join(testDir, 'app');
-        createLocalCli(appRoot);
-
-        // Set prefer global
-        const originalEnv = process.env.ACCOMPLISH_USE_GLOBAL_OPENCODE;
-        process.env.ACCOMPLISH_USE_GLOBAL_OPENCODE = '1';
-
-        const result = resolveCliPath({
-          isPackaged: false,
-          appPath: appRoot,
-        });
-
-        // Restore env
-        if (originalEnv !== undefined) {
-          process.env.ACCOMPLISH_USE_GLOBAL_OPENCODE = originalEnv;
-        } else {
-          delete process.env.ACCOMPLISH_USE_GLOBAL_OPENCODE;
-        }
-
-        // When preferGlobal is set, it tries global first but falls back to local
-        // Since we don't have global installed, it should still find local
-        expect(result).not.toBeNull();
       });
     });
 

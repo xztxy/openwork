@@ -17,7 +17,7 @@ export interface CliResolverConfig {
 export interface ResolvedCliPaths {
   cliPath: string;
   cliDir: string;
-  source: 'bundled' | 'local' | 'global';
+  source: 'bundled' | 'local';
 }
 
 export interface BundledNodePaths {

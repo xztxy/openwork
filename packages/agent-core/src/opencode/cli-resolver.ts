@@ -16,28 +16,6 @@ function getOpenCodePlatformInfo(): { packageName: string; binaryName: string } 
   };
 }
 
-function getNvmOpenCodePaths(): string[] {
-  const homeDir = process.env.HOME || '';
-  const nvmVersionsDir = path.join(homeDir, '.nvm/versions/node');
-  const paths: string[] = [];
-
-  try {
-    if (fs.existsSync(nvmVersionsDir)) {
-      const versions = fs.readdirSync(nvmVersionsDir);
-      for (const version of versions) {
-        const opencodePath = path.join(nvmVersionsDir, version, 'bin', 'opencode');
-        if (fs.existsSync(opencodePath)) {
-          paths.push(opencodePath);
-        }
-      }
-    }
-  } catch {
-    // intentionally empty
-  }
-
-  return paths;
-}
-
 function getWindowsNodeModulesExeCandidates(basePath: string): string[] {
   return [
     path.join(basePath, 'node_modules', 'opencode-windows-x64', 'bin', 'opencode.exe'),
@@ -79,37 +57,6 @@ function getFirstExistingPath(paths: string[]): string | null {
   return null;
 }
 
-function resolveOpenCodeExeOnPath(): string | null {
-  try {
-    const output = execSync('where opencode.exe', {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    const candidates = output
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
-    for (const candidate of candidates) {
-      if (fs.existsSync(candidate)) {
-        return candidate;
-      }
-    }
-  } catch {
-    // intentionally empty
-  }
-  return null;
-}
-
-function isOpenCodeOnPath(): boolean {
-  try {
-    const command = process.platform === 'win32' ? 'where opencode' : 'which opencode';
-    execSync(command, { stdio: ['pipe', 'pipe', 'pipe'] });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export function resolveCliPath(config: CliResolverConfig): ResolvedCliPaths | null {
   const { isPackaged, resourcesPath, appPath } = config;
 
@@ -136,68 +83,9 @@ export function resolveCliPath(config: CliResolverConfig): ResolvedCliPaths | nu
     return null;
   }
 
-  const preferGlobal = process.env.ACCOMPLISH_USE_GLOBAL_OPENCODE === '1';
-
   if (process.platform === 'win32') {
     const localExeCandidates = appPath ? getWindowsNodeModulesExeCandidates(appPath) : [];
     const localExePath = getFirstExistingPath(localExeCandidates);
-
-    if (!preferGlobal) {
-      if (localExePath) {
-        console.log('[CLI Resolver] Using local OpenCode CLI executable:', localExePath);
-        return {
-          cliPath: localExePath,
-          cliDir: path.dirname(localExePath),
-          source: 'local',
-        };
-      }
-      return null;
-    }
-
-    const globalExeCandidates = [
-      path.join(
-        process.env.APPDATA || '',
-        'npm',
-        'node_modules',
-        'opencode-windows-x64',
-        'bin',
-        'opencode.exe',
-      ),
-      path.join(
-        process.env.APPDATA || '',
-        'npm',
-        'node_modules',
-        'opencode-windows-x64-baseline',
-        'bin',
-        'opencode.exe',
-      ),
-      path.join(
-        process.env.LOCALAPPDATA || '',
-        'npm',
-        'node_modules',
-        'opencode-windows-x64',
-        'bin',
-        'opencode.exe',
-      ),
-      path.join(
-        process.env.LOCALAPPDATA || '',
-        'npm',
-        'node_modules',
-        'opencode-windows-x64-baseline',
-        'bin',
-        'opencode.exe',
-      ),
-    ];
-
-    const globalExePath = getFirstExistingPath(globalExeCandidates);
-    if (globalExePath) {
-      console.log('[CLI Resolver] Using global OpenCode CLI executable:', globalExePath);
-      return {
-        cliPath: globalExePath,
-        cliDir: path.dirname(globalExePath),
-        source: 'global',
-      };
-    }
 
     if (localExePath) {
       console.log('[CLI Resolver] Using local OpenCode CLI executable:', localExePath);
@@ -208,56 +96,11 @@ export function resolveCliPath(config: CliResolverConfig): ResolvedCliPaths | nu
       };
     }
 
-    const pathExe = resolveOpenCodeExeOnPath();
-    if (pathExe) {
-      console.log('[CLI Resolver] Using OpenCode executable on PATH:', pathExe);
-      return {
-        cliPath: pathExe,
-        cliDir: path.dirname(pathExe),
-        source: 'global',
-      };
-    }
-
     return null;
   }
 
   const localCliCandidates = appPath ? getUnixNodeModulesCliCandidates(appPath) : [];
   const localCliPath = getFirstExistingPath(localCliCandidates);
-
-  if (!preferGlobal) {
-    if (localCliPath) {
-      console.log('[CLI Resolver] Using local OpenCode CLI:', localCliPath);
-      return {
-        cliPath: localCliPath,
-        cliDir: path.dirname(localCliPath),
-        source: 'local',
-      };
-    }
-    return null;
-  }
-
-  const nvmPaths = getNvmOpenCodePaths();
-  for (const opencodePath of nvmPaths) {
-    console.log('[CLI Resolver] Using nvm OpenCode CLI:', opencodePath);
-    return {
-      cliPath: opencodePath,
-      cliDir: path.dirname(opencodePath),
-      source: 'global',
-    };
-  }
-
-  const globalOpenCodePaths = ['/usr/local/bin/opencode', '/opt/homebrew/bin/opencode'];
-
-  for (const opencodePath of globalOpenCodePaths) {
-    if (fs.existsSync(opencodePath)) {
-      console.log('[CLI Resolver] Using global OpenCode CLI:', opencodePath);
-      return {
-        cliPath: opencodePath,
-        cliDir: path.dirname(opencodePath),
-        source: 'global',
-      };
-    }
-  }
 
   if (localCliPath) {
     console.log('[CLI Resolver] Using local OpenCode CLI:', localCliPath);
@@ -265,15 +108,6 @@ export function resolveCliPath(config: CliResolverConfig): ResolvedCliPaths | nu
       cliPath: localCliPath,
       cliDir: path.dirname(localCliPath),
       source: 'local',
-    };
-  }
-
-  if (isOpenCodeOnPath()) {
-    console.log('[CLI Resolver] Using opencode command on PATH');
-    return {
-      cliPath: 'opencode',
-      cliDir: '',
-      source: 'global',
     };
   }
 

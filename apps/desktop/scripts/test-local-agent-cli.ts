@@ -1,6 +1,6 @@
 #!/usr/bin/env npx tsx
 
-import { spawn, ChildProcess, execSync } from 'child_process';
+import { spawn, ChildProcess } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -97,33 +97,43 @@ Set it with:
 }
 
 function findOpenCodeCli(): string {
-  const localBin = path.resolve(__dirname, '..', 'node_modules', '.bin', 'opencode');
-  if (fs.existsSync(localBin)) {
-    return localBin;
-  }
+  const appRoot = path.resolve(__dirname, '..');
+  const localCandidates =
+    process.platform === 'win32'
+      ? [
+          path.join(appRoot, 'node_modules', 'opencode-windows-x64', 'bin', 'opencode.exe'),
+          path.join(appRoot, 'node_modules', 'opencode-windows-x64-baseline', 'bin', 'opencode.exe'),
+          path.join(
+            appRoot,
+            'node_modules',
+            'opencode-ai',
+            'node_modules',
+            'opencode-windows-x64',
+            'bin',
+            'opencode.exe',
+          ),
+          path.join(
+            appRoot,
+            'node_modules',
+            'opencode-ai',
+            'node_modules',
+            'opencode-windows-x64-baseline',
+            'bin',
+            'opencode.exe',
+          ),
+        ]
+      : [
+          path.join(appRoot, 'node_modules', '.bin', 'opencode'),
+          path.join(appRoot, 'node_modules', 'opencode-ai', 'bin', 'opencode'),
+        ];
 
-  try {
-    const globalPath = execSync('which opencode', { encoding: 'utf-8' }).trim();
-    if (globalPath && fs.existsSync(globalPath)) {
-      return globalPath;
+  for (const candidate of localCandidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
     }
-  } catch {
-    // ignore - fall through to other lookup methods
   }
 
-  const homeDir = process.env.HOME || '';
-  const nvmDir = path.join(homeDir, '.nvm', 'versions', 'node');
-  if (fs.existsSync(nvmDir)) {
-    const versions = fs.readdirSync(nvmDir);
-    for (const version of versions) {
-      const nvmPath = path.join(nvmDir, version, 'bin', 'opencode');
-      if (fs.existsSync(nvmPath)) {
-        return nvmPath;
-      }
-    }
-  }
-
-  logError('OpenCode CLI not found. Make sure opencode-ai is installed.');
+  logError('OpenCode CLI not found in workspace node_modules. Run "pnpm install".');
   process.exit(1);
 }
 

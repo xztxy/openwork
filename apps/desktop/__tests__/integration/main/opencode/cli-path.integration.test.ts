@@ -63,8 +63,6 @@ vi.mock('@accomplish_ai/agent-core', async (importOriginal) => {
 });
 
 describe('OpenCode CLI Path Module', () => {
-  let originalPreferGlobal: string | undefined;
-
   const getLocalDevCliPath = (appPath: string): string =>
     process.platform === 'win32'
       ? path.join(appPath, 'node_modules', 'opencode-windows-x64', 'bin', 'opencode.exe')
@@ -101,16 +99,9 @@ describe('OpenCode CLI Path Module', () => {
     mockApp.isPackaged = false;
     // Reset HOME environment variable
     process.env.HOME = '/Users/testuser';
-    originalPreferGlobal = process.env.ACCOMPLISH_USE_GLOBAL_OPENCODE;
-    delete process.env.ACCOMPLISH_USE_GLOBAL_OPENCODE;
   });
 
   afterEach(() => {
-    if (originalPreferGlobal !== undefined) {
-      process.env.ACCOMPLISH_USE_GLOBAL_OPENCODE = originalPreferGlobal;
-    } else {
-      delete process.env.ACCOMPLISH_USE_GLOBAL_OPENCODE;
-    }
     vi.restoreAllMocks();
   });
 
@@ -161,7 +152,7 @@ describe('OpenCode CLI Path Module', () => {
         expect(result.args).toEqual([]);
       });
 
-      it('should throw when only global CLI path exists and global fallback is disabled', async () => {
+      it('should throw when only global CLI path exists', async () => {
         // Arrange
         mockApp.isPackaged = false;
         const globalPath = getPrimaryGlobalDevCliPath();
@@ -173,23 +164,6 @@ describe('OpenCode CLI Path Module', () => {
 
         // Assert
         expect(() => getOpenCodeCliPath()).toThrow('OpenCode CLI executable not found');
-      });
-
-      it('should allow global fallback only when ACCOMPLISH_USE_GLOBAL_OPENCODE is enabled', async () => {
-        // Arrange
-        mockApp.isPackaged = false;
-        process.env.ACCOMPLISH_USE_GLOBAL_OPENCODE = '1';
-        const globalPath = getPrimaryGlobalDevCliPath();
-        mockFs.existsSync.mockImplementation((p: string) => p === globalPath);
-        mockFs.readdirSync.mockReturnValue([]);
-
-        // Act
-        const { getOpenCodeCliPath } = await import('@main/opencode/electron-options');
-        const result = getOpenCodeCliPath();
-
-        // Assert
-        expect(result.command).toBe(globalPath);
-        expect(result.args).toEqual([]);
       });
 
       it('should throw when no local OpenCode CLI path can be resolved', async () => {
@@ -312,7 +286,7 @@ describe('OpenCode CLI Path Module', () => {
         expect(result).toBe(true);
       });
 
-      it('should return false when only global CLI is available and fallback is disabled', async () => {
+      it('should return false when only global CLI is available', async () => {
         // Arrange
         mockApp.isPackaged = false;
         const globalPath = getPrimaryGlobalDevCliPath();
@@ -325,22 +299,6 @@ describe('OpenCode CLI Path Module', () => {
 
         // Assert
         expect(result).toBe(false);
-      });
-
-      it('should return true when global fallback is explicitly enabled', async () => {
-        // Arrange
-        mockApp.isPackaged = false;
-        process.env.ACCOMPLISH_USE_GLOBAL_OPENCODE = '1';
-        const globalPath = getPrimaryGlobalDevCliPath();
-        mockFs.existsSync.mockImplementation((p: string) => p === globalPath);
-        mockFs.readdirSync.mockReturnValue([]);
-
-        // Act
-        const { isOpenCodeBundled } = await import('@main/opencode/electron-options');
-        const result = isOpenCodeBundled();
-
-        // Assert
-        expect(result).toBe(true);
       });
 
       it('should return false when no CLI is found anywhere', async () => {
@@ -540,51 +498,4 @@ describe('OpenCode CLI Path Module', () => {
     });
   });
 
-  describe('Global Fallback Opt-In', () => {
-    it('should scan multiple nvm versions and return first found when opt-in is enabled', async () => {
-      // Arrange
-      mockApp.isPackaged = false;
-      process.env.ACCOMPLISH_USE_GLOBAL_OPENCODE = '1';
-      const nvmVersionsDir = '/Users/testuser/.nvm/versions/node';
-      const v18Path = path.join(nvmVersionsDir, 'v18.17.0', 'bin', 'opencode');
-      const v20Path = path.join(nvmVersionsDir, 'v20.10.0', 'bin', 'opencode');
-
-      mockFs.existsSync.mockImplementation((p: string) => {
-        if (p === nvmVersionsDir) return true;
-        if (p === v20Path) return true;
-        if (p === v18Path) return false;
-        return false;
-      });
-      mockFs.readdirSync.mockImplementation((p: string) => {
-        if (p === nvmVersionsDir) return ['v18.17.0', 'v20.10.0'];
-        return [];
-      });
-
-      // Act
-      const { getOpenCodeCliPath } = await import('@main/opencode/electron-options');
-      const result = getOpenCodeCliPath();
-
-      // Assert
-      expect(result.command).toBe(v20Path);
-    });
-
-    it('should handle missing nvm directory gracefully when opt-in is enabled', async () => {
-      // Arrange
-      mockApp.isPackaged = false;
-      process.env.ACCOMPLISH_USE_GLOBAL_OPENCODE = '1';
-      process.env.HOME = '/Users/testuser';
-
-      mockFs.existsSync.mockReturnValue(false);
-      mockFs.readdirSync.mockReturnValue([]);
-      mockExecSync.mockImplementation(() => {
-        throw new Error('Command not found');
-      });
-
-      // Act
-      const { getOpenCodeCliPath } = await import('@main/opencode/electron-options');
-
-      // Assert
-      expect(() => getOpenCodeCliPath()).toThrow('OpenCode CLI executable not found');
-    });
-  });
 });
