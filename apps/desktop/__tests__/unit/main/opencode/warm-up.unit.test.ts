@@ -104,6 +104,26 @@ describe('warm-up', () => {
     await expect(getWarmUpPromise()).resolves.toBeUndefined();
   });
 
+  it('resolves and kills child when spawn times out', async () => {
+    vi.useFakeTimers();
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    mockResolveCliPath.mockReturnValue({
+      cliPath: '/mock/opencode.exe',
+      cliDir: '/mock',
+      source: 'bundled',
+    });
+
+    warmUpCliExecutable();
+
+    // Advance past the 60s timeout
+    vi.advanceTimersByTime(60_000);
+
+    expect(mockChildProcess.kill).toHaveBeenCalled();
+    await expect(getWarmUpPromise()).resolves.toBeUndefined();
+
+    vi.useRealTimers();
+  });
+
   it('returns resolved promise when getWarmUpPromise called before warmUp', async () => {
     await expect(getWarmUpPromise()).resolves.toBeUndefined();
   });
