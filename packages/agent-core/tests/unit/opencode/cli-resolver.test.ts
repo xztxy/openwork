@@ -29,6 +29,25 @@ describe('CLI Resolver', () => {
     return { cliPath, cliDir, binName };
   }
 
+  function createWindowsNestedLocalCli(appRoot: string): { cliPath: string; cliDir: string } | null {
+    if (process.platform !== 'win32') {
+      return null;
+    }
+
+    const cliDir = path.join(
+      appRoot,
+      'node_modules',
+      'opencode-ai',
+      'node_modules',
+      'opencode-windows-x64',
+      'bin',
+    );
+    const cliPath = path.join(cliDir, 'opencode.exe');
+    fs.mkdirSync(cliDir, { recursive: true });
+    fs.writeFileSync(cliPath, 'binary');
+    return { cliPath, cliDir };
+  }
+
   beforeEach(() => {
     // Create a unique temporary directory for each test
     testDir = path.join(
@@ -114,14 +133,30 @@ describe('CLI Resolver', () => {
         // Restore env
         if (originalEnv !== undefined) {
           process.env.ACCOMPLISH_USE_GLOBAL_OPENCODE = originalEnv;
+        } else {
+          delete process.env.ACCOMPLISH_USE_GLOBAL_OPENCODE;
         }
 
-        // Result depends on whether opencode is on system PATH
-        // If not installed globally, this should be null (or could be 'global' if on PATH)
-        // This is acceptable - we're testing the local resolution logic
-        if (result !== null) {
-          expect(result.source).toBe('global'); // Only global could be found
+        expect(result).toBeNull();
+      });
+
+      it('should find Windows CLI in nested opencode-ai optional dependency path', () => {
+        if (process.platform !== 'win32') {
+          return;
         }
+
+        const appRoot = path.join(testDir, 'app');
+        const nestedCli = createWindowsNestedLocalCli(appRoot);
+
+        const result = resolveCliPath({
+          isPackaged: false,
+          appPath: appRoot,
+        });
+
+        expect(nestedCli).not.toBeNull();
+        expect(result).not.toBeNull();
+        expect(result?.source).toBe('local');
+        expect(result?.cliPath).toBe(nestedCli?.cliPath);
       });
     });
 

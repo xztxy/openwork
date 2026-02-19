@@ -65,7 +65,7 @@ export function getOpenCodeCliPath(): { command: string; args: string[] } {
     return { command: resolved.cliPath, args: [] };
   }
   throw new Error(
-    '[CLI Path] OpenCode CLI executable not found. Reinstall dependencies to restore platform binaries.',
+    '[CLI Path] OpenCode CLI executable not found. Run "pnpm install" to restore local platform binaries. Global fallback is disabled by default (set ACCOMPLISH_USE_GLOBAL_OPENCODE=1 to opt in).',
   );
 }
 
