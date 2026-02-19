@@ -36,7 +36,6 @@ const VERTEX_SA_KEY_FILENAME = 'vertex-sa-key.json';
 const CLI_PREWARM_TIMEOUT_MS = 15000;
 
 let coldStartPrewarmStarted = false;
-let browserServerReady = false;
 let browserServerWarmupPromise: Promise<void> | null = null;
 let cliPrewarmAttempted = false;
 let cliPrewarmPromise: Promise<void> | null = null;
@@ -269,10 +268,6 @@ function getBrowserServerConfig(): BrowserServerConfig {
 async function ensureBrowserServerReady(
   onProgress?: (progress: { stage: string; message?: string }) => void,
 ): Promise<void> {
-  if (browserServerReady) {
-    return;
-  }
-
   if (!browserServerWarmupPromise) {
     const startedAt = Date.now();
     const browserConfig = getBrowserServerConfig();
@@ -280,7 +275,6 @@ async function ensureBrowserServerReady(
       .then((result) => {
         const durationMs = Date.now() - startedAt;
         if (result.ready) {
-          browserServerReady = true;
           console.log(`[OpenCode Warmup] Browser server ready in ${durationMs}ms`);
           return;
         }
@@ -292,9 +286,7 @@ async function ensureBrowserServerReady(
         console.warn('[OpenCode Warmup] Browser server warmup failed:', error);
       })
       .finally(() => {
-        if (!browserServerReady) {
-          browserServerWarmupPromise = null;
-        }
+        browserServerWarmupPromise = null;
       });
   }
 
