@@ -10,7 +10,7 @@ import {
   cleanupVertexServiceAccountKey,
 } from '../opencode';
 import { getLogCollector } from '../logging';
-import { getWarmUpPromise } from '../opencode/warm-up';
+import { getWarmUpPromise } from '../opencode';
 import {
   validateApiKey,
   validateBedrockCredentials,
