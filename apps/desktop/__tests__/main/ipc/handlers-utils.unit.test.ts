@@ -55,16 +55,19 @@ function extractScreenshots(output: string): {
     });
   }
 
-  // Also check for raw base64 image blobs (PNG/JPEG/WEBP/GIF signatures)
   const rawBase64Regex =
     /(?<![;,])(?:^|["\s])?((?:iVBORw0|\/9j\/|UklGR|R0lGOD)[A-Za-z0-9+/=]{100,})(?:["\s]|$)/g;
   while ((match = rawBase64Regex.exec(output)) !== null) {
     const base64Data = match[1];
     if (base64Data && base64Data.length > 100) {
       let mimeType = 'image/png';
-      if (base64Data.startsWith('/9j/')) mimeType = 'image/jpeg';
-      else if (base64Data.startsWith('UklGR')) mimeType = 'image/webp';
-      else if (base64Data.startsWith('R0lGOD')) mimeType = 'image/gif';
+      if (base64Data.startsWith('/9j/')) {
+        mimeType = 'image/jpeg';
+      } else if (base64Data.startsWith('UklGR')) {
+        mimeType = 'image/webp';
+      } else if (base64Data.startsWith('R0lGOD')) {
+        mimeType = 'image/gif';
+      }
 
       attachments.push({
         type: 'screenshot',
