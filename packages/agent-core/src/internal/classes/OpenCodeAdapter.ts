@@ -829,9 +829,9 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       }
 
       // Fallback for JS launchers (for example opencode-ai/bin/opencode).
-      // Use process.execPath with ELECTRON_RUN_AS_NODE=1 from buildEnvironment().
+      // Use `node` from PATH (buildEnvironment prepends bundled node on desktop).
       if (fs.existsSync(command)) {
-        return { file: process.execPath, args: [command, ...args] };
+        return { file: 'node', args: [command, ...args] };
       }
 
       throw new Error(`Windows CLI command path does not exist: ${command}`);

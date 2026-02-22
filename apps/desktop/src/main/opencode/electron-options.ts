@@ -30,7 +30,7 @@ import {
   syncApiKeysToOpenCodeAuth,
 } from './config-generator';
 import { getExtendedNodePath } from '../utils/system-path';
-import { getBundledNodePaths, logBundledNodeInfo } from '../utils/bundled-node';
+import { getBundledNodePaths, logBundledNodeInfo, getNodePath } from '../utils/bundled-node';
 
 const VERTEX_SA_KEY_FILENAME = 'vertex-sa-key.json';
 const BROWSER_RECOVERY_COOLDOWN_MS = 10000;
@@ -64,6 +64,11 @@ function getCliResolverConfig(): CliResolverConfig {
 export function getOpenCodeCliPath(): { command: string; args: string[] } {
   const resolved = resolveCliPath(getCliResolverConfig());
   if (resolved) {
+    if (process.platform === 'win32' && !resolved.cliPath.toLowerCase().endsWith('.exe')) {
+      // opencode-ai on Windows can resolve to a JS launcher (bin/opencode).
+      // Run it explicitly via bundled node.exe for stable PTY spawning.
+      return { command: getNodePath(), args: [resolved.cliPath] };
+    }
     return { command: resolved.cliPath, args: [] };
   }
   throw new Error(
