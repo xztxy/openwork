@@ -144,6 +144,35 @@ describe('CLI Resolver', () => {
       expect(result?.source).toBe('local');
       expect(result?.cliPath).toBe(cliPath);
     });
+
+    it('resolves Windows CLI from pnpm store layout', () => {
+      if (process.platform !== 'win32') {
+        return;
+      }
+
+      const appRoot = path.join(testDir, 'app');
+      const cliPath = path.join(
+        appRoot,
+        'node_modules',
+        '.pnpm',
+        'opencode-windows-x64-baseline@1.2.6',
+        'node_modules',
+        'opencode-windows-x64-baseline',
+        'bin',
+        'opencode.exe',
+      );
+      fs.mkdirSync(path.dirname(cliPath), { recursive: true });
+      fs.writeFileSync(cliPath, 'binary');
+
+      const result = resolveCliPath({
+        isPackaged: false,
+        appPath: appRoot,
+      });
+
+      expect(result).not.toBeNull();
+      expect(result?.source).toBe('local');
+      expect(result?.cliPath).toBe(cliPath);
+    });
   });
 
   describe('isCliAvailable', () => {

@@ -6,7 +6,8 @@ import type { CliResolverConfig, ResolvedCliPaths } from '../types.js';
 function getOpenCodePlatformInfo(): { packageNames: string[]; binaryNames: string[] } {
   if (process.platform === 'win32') {
     return {
-      packageNames: ['opencode-windows-x64', 'opencode-windows-x64-baseline', 'opencode-ai'],
+      // Prefer baseline first for maximum CPU compatibility.
+      packageNames: ['opencode-windows-x64-baseline', 'opencode-windows-x64', 'opencode-ai'],
       // opencode-ai publishes a JS launcher at bin/opencode on Windows.
       binaryNames: ['opencode.exe', 'opencode'],
     };
@@ -78,6 +79,41 @@ function resolveLocalCliPath(appPath?: string): ResolvedCliPaths | null {
               source: 'local',
             };
           }
+        }
+      }
+
+      // pnpm often keeps optional platform binaries only in node_modules/.pnpm.
+      const pnpmDir = path.join(root, 'node_modules', '.pnpm');
+      if (fs.existsSync(pnpmDir)) {
+        try {
+          const entries = fs.readdirSync(pnpmDir, { withFileTypes: true });
+          for (const packageName of packageNames) {
+            const packageEntries = entries.filter(
+              (entry) => entry.isDirectory() && entry.name.startsWith(`${packageName}@`),
+            );
+            for (const packageEntry of packageEntries) {
+              for (const binaryName of binaryNames) {
+                const cliPath = path.join(
+                  pnpmDir,
+                  packageEntry.name,
+                  'node_modules',
+                  packageName,
+                  'bin',
+                  binaryName,
+                );
+                if (fs.existsSync(cliPath)) {
+                  console.log('[CLI Resolver] Using local OpenCode CLI executable:', cliPath);
+                  return {
+                    cliPath,
+                    cliDir: path.dirname(cliPath),
+                    source: 'local',
+                  };
+                }
+              }
+            }
+          }
+        } catch {
+          // ignore pnpm store scanning failures and continue fallback resolution
         }
       }
       continue;
