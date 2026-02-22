@@ -49,11 +49,11 @@ This skill provides patterns and best practices for automating Google Sheets int
 Before writing anything, read what's already there:
 
 - **Screenshot first** — Get a visual overview of the data layout
-- **`get_page_text`** — Extracts cell text content; useful for reading values without clicking
+- **`browser_get_text`** — Extracts cell text content; useful for reading values without clicking
 - **`Cmd+End`** — Jumps to the last cell with data; tells you the extent of the dataset
 - **`Cmd+Home`** — Returns to A1
 
-**To read a specific cell's value:** Click the cell and read the formula bar (visible in screenshot), or use `get_page_text` and parse the result.
+**To read a specific cell's value:** Click the cell and read the formula bar (visible in screenshot), or use `browser_get_text` and parse the result.
 
 ---
 
