@@ -50,10 +50,25 @@ export function createTaskCallbacks(options: TaskCallbacksOptions): TaskCallback
   let browserFailureCount = 0;
   let browserFailureWindowStart = 0;
   let browserRecoveryInFlight = false;
+  let hasRendererSendFailure = false;
 
   const forwardToRenderer = (channel: string, data: unknown) => {
-    if (!window.isDestroyed() && !sender.isDestroyed()) {
+    if (hasRendererSendFailure) {
+      return;
+    }
+    if (window.isDestroyed() || sender.isDestroyed()) {
+      return;
+    }
+    try {
       sender.send(channel, data);
+    } catch (error) {
+      hasRendererSendFailure = true;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[TaskCallbacks] Failed to send IPC event to renderer', {
+        taskId,
+        channel,
+        error: errorMessage,
+      });
     }
   };
 
