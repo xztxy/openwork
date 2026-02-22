@@ -77,6 +77,11 @@ export class BrowserManager {
       return this.browser;
     }
 
+    // Drop stale browser references before attempting a fresh connection.
+    if (this.browser && !this.browser.isConnected()) {
+      this.browser = null;
+    }
+
     if (this.connectingPromise) {
       return this.connectingPromise;
     }
@@ -111,12 +116,12 @@ export class BrowserManager {
         const errorMessage = toErrorMessage(error);
         console.error(
           `[dev-browser-mcp] ${context} failed with recoverable connection error. ` +
-            `Resetting connection and retrying (${retryNumber}/${this.maxRecoveryAttempts - 1}): ${errorMessage}`,
+            `Resetting connection and attempting retry ` +
+            `(attempt ${retryNumber} of ${this.maxRecoveryAttempts - 1}): ${errorMessage}`,
         );
 
         this.clearConnectionState({ preserveConnectingPromise: true });
-        const backoffMs =
-          this.recoveryBaseDelayMs * Math.pow(2, attempt) + Math.random() * 50;
+        const backoffMs = this.recoveryBaseDelayMs * Math.pow(2, attempt) + Math.random() * 50;
         await delay(backoffMs);
       }
     }

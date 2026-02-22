@@ -5,22 +5,34 @@ import { getTaskManager, recoverDevBrowserServer } from '../opencode';
 import type { TaskCallbacks } from '../opencode';
 import { getStorage } from '../store/storage';
 
-const DEV_BROWSER_TOOL_PREFIX = 'dev-browser-mcp_';
+const DEV_BROWSER_TOOL_PREFIXES = ['dev-browser-mcp_', 'dev_browser_mcp_', 'browser_'];
 const BROWSER_FAILURE_WINDOW_MS = 12000;
 const BROWSER_FAILURE_THRESHOLD = 2;
 const BROWSER_CONNECTION_ERROR_PATTERNS = [
-  /error:\s*fetch failed/i,
+  /fetch failed/i,
   /\bECONNREFUSED\b/i,
+  /\bECONNRESET\b/i,
   /\bUND_ERR\b/i,
-  /\bsocket\b/i,
+  /socket hang up/i,
+  /\bwebsocket\b/i,
   /browserType\.connectOverCDP/i,
+  /Target closed/i,
+  /Session closed/i,
+  /Page closed/i,
 ];
 
 function isDevBrowserToolCall(toolName: string): boolean {
-  return toolName.startsWith(DEV_BROWSER_TOOL_PREFIX);
+  return DEV_BROWSER_TOOL_PREFIXES.some((prefix) => toolName.startsWith(prefix));
 }
 
 function isBrowserConnectionFailure(output: string): boolean {
+  // Guard against false positives from successful outputs that mention words
+  // like "WebSocket" while not being an actual error.
+  const isExplicitErrorOutput = /^\s*Error:/i.test(output) || /"isError"\s*:\s*true/.test(output);
+  if (!isExplicitErrorOutput) {
+    return false;
+  }
+
   return BROWSER_CONNECTION_ERROR_PATTERNS.some((pattern) => pattern.test(output));
 }
 
