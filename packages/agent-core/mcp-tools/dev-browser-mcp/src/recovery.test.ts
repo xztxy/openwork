@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { isTransportError, attemptRecovery, _resetRecoveryState } from './recovery.js';
+import { toAIFriendlyError } from './errors.js';
 import * as connection from './connection.js';
 
 describe('isTransportError', () => {
@@ -33,6 +34,75 @@ describe('isTransportError', () => {
     expect(isTransportError('fetch failed as a string')).toBe(true);
     expect(isTransportError(42)).toBe(false);
     expect(isTransportError(null)).toBe(false);
+  });
+});
+
+describe('isTransportError after error transformation', () => {
+  const selector = '#test';
+
+  describe('transport errors through toAIFriendlyError fallback', () => {
+    it('detects "fetch failed" after toAIFriendlyError', () => {
+      const transformed = toAIFriendlyError(new Error('fetch failed'), selector);
+      expect(isTransportError(transformed.message)).toBe(true);
+    });
+
+    it('detects "ECONNREFUSED" after toAIFriendlyError', () => {
+      const transformed = toAIFriendlyError(
+        new Error('connect ECONNREFUSED 127.0.0.1:9224'),
+        selector,
+      );
+      expect(isTransportError(transformed.message)).toBe(true);
+    });
+
+    it('detects "ECONNRESET" after toAIFriendlyError', () => {
+      const transformed = toAIFriendlyError(new Error('read ECONNRESET'), selector);
+      expect(isTransportError(transformed.message)).toBe(true);
+    });
+
+    it('detects "socket hang up" after toAIFriendlyError', () => {
+      const transformed = toAIFriendlyError(new Error('socket hang up'), selector);
+      expect(isTransportError(transformed.message)).toBe(true);
+    });
+
+    it('detects "UND_ERR" after toAIFriendlyError', () => {
+      const transformed = toAIFriendlyError(new Error('UND_ERR_SOCKET'), selector);
+      expect(isTransportError(transformed.message)).toBe(true);
+    });
+  });
+
+  describe('transport errors through generic catch wrapper', () => {
+    it('detects "fetch failed" in "Error: ..." wrapper', () => {
+      const wrapped = `Error: fetch failed`;
+      expect(isTransportError(wrapped)).toBe(true);
+    });
+
+    it('detects "ECONNREFUSED" in "Error: ..." wrapper', () => {
+      const wrapped = `Error: connect ECONNREFUSED 127.0.0.1:9224`;
+      expect(isTransportError(wrapped)).toBe(true);
+    });
+
+    it('detects "ECONNRESET" in "Error: ..." wrapper', () => {
+      const wrapped = `Error: read ECONNRESET`;
+      expect(isTransportError(wrapped)).toBe(true);
+    });
+
+    it('detects "socket hang up" in "Error: ..." wrapper', () => {
+      const wrapped = `Error: socket hang up`;
+      expect(isTransportError(wrapped)).toBe(true);
+    });
+
+    it('detects "UND_ERR" in "Error: ..." wrapper', () => {
+      const wrapped = `Error: UND_ERR_SOCKET`;
+      expect(isTransportError(wrapped)).toBe(true);
+    });
+  });
+
+  it('does not false-positive on non-transport toAIFriendlyError output', () => {
+    const transformed = toAIFriendlyError(
+      new Error('strict mode violation: resolved to 5 elements'),
+      selector,
+    );
+    expect(isTransportError(transformed.message)).toBe(false);
   });
 });
 
