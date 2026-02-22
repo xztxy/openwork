@@ -5,6 +5,15 @@ import {
   disposeWindowsPowerShellPool,
   getWindowsPowerShellPool,
 } from './WindowsPowerShellPool.js';
+import {
+  disposeDarwinOpenCodeServerPool,
+  disposeWindowsOpenCodeServerPool,
+  getDarwinOpenCodeServerPool,
+  getWindowsOpenCodeServerPool,
+  type OpenCodeServerLease,
+  type DarwinOpenCodeServerPoolOptions,
+  type WindowsOpenCodeServerPoolOptions,
+} from './OpenCodeServerPool.js';
 import type {
   TaskConfig,
   Task,
@@ -64,6 +73,8 @@ export interface TaskCallbacks {
 export interface TaskManagerOptions {
   adapterOptions: Omit<AdapterOptions, 'buildCliArgs'> & {
     buildCliArgs: (config: TaskConfig, taskId: string) => Promise<string[]>;
+    windowsOpenCodeServerPool?: WindowsOpenCodeServerPoolOptions;
+    darwinOpenCodeServerPool?: DarwinOpenCodeServerPoolOptions;
   };
   defaultWorkingDirectory: string;
   maxConcurrentTasks?: number;
@@ -94,21 +105,49 @@ export class TaskManager {
   private maxConcurrentTasks: number;
   private options: TaskManagerOptions;
   private isFirstTask: boolean = true;
+  private acquireOpenCodeServerLease: (() => Promise<OpenCodeServerLease | null>) | null = null;
 
   constructor(options: TaskManagerOptions) {
     this.options = options;
     this.maxConcurrentTasks = options.maxConcurrentTasks ?? DEFAULT_MAX_CONCURRENT_TASKS;
+    const shouldWarmOpenCodeServers = process.env.NODE_ENV !== 'test';
 
     if (this.options.adapterOptions.platform === 'win32') {
       getWindowsPowerShellPool(
         this.options.adapterOptions.tempPath,
         this.options.adapterOptions.windowsPowerShellPool,
       );
+      if (shouldWarmOpenCodeServers) {
+        const pool = getWindowsOpenCodeServerPool(
+          {
+            getCliCommand: this.options.adapterOptions.getCliCommand,
+            cwd: this.options.defaultWorkingDirectory,
+            buildEnvironment: () =>
+              this.options.adapterOptions.buildEnvironment('open_code_server_warm'),
+            onBeforeStart: this.options.adapterOptions.onBeforeStart,
+          },
+          this.options.adapterOptions.windowsOpenCodeServerPool,
+        );
+        this.acquireOpenCodeServerLease = () => pool.acquire();
+      }
     } else if (this.options.adapterOptions.platform === 'darwin') {
       getDarwinPowerShellPool(
         this.options.adapterOptions.tempPath,
         this.options.adapterOptions.darwinPowerShellPool,
       );
+      if (shouldWarmOpenCodeServers) {
+        const pool = getDarwinOpenCodeServerPool(
+          {
+            getCliCommand: this.options.adapterOptions.getCliCommand,
+            cwd: this.options.defaultWorkingDirectory,
+            buildEnvironment: () =>
+              this.options.adapterOptions.buildEnvironment('open_code_server_warm'),
+            onBeforeStart: this.options.adapterOptions.onBeforeStart,
+          },
+          this.options.adapterOptions.darwinOpenCodeServerPool,
+        );
+        this.acquireOpenCodeServerLease = () => pool.acquire();
+      }
     }
   }
 
@@ -170,6 +209,7 @@ export class TaskManager {
     const adapterOptions: AdapterOptions = {
       ...this.options.adapterOptions,
       buildCliArgs: (taskConfig) => this.options.adapterOptions.buildCliArgs(taskConfig, taskId),
+      acquireOpenCodeServerLease: this.acquireOpenCodeServerLease || undefined,
     };
 
     const adapter = new OpenCodeAdapter(adapterOptions, taskId);
@@ -517,8 +557,10 @@ export class TaskManager {
 
     if (this.options.adapterOptions.platform === 'win32') {
       disposeWindowsPowerShellPool();
+      disposeWindowsOpenCodeServerPool();
     } else if (this.options.adapterOptions.platform === 'darwin') {
       disposeDarwinPowerShellPool();
+      disposeDarwinOpenCodeServerPool();
     }
 
     console.log('[TaskManager] All tasks disposed');

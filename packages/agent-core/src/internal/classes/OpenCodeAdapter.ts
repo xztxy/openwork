@@ -19,6 +19,7 @@ import {
   type WindowsPowerShellLease,
   type WindowsPowerShellPoolOptions,
 } from './WindowsPowerShellPool.js';
+import type { OpenCodeServerLease } from './OpenCodeServerPool.js';
 import type { TaskConfig, Task, TaskMessage, TaskResult } from '../../common/types/task.js';
 import type { OpenCodeMessage } from '../../common/types/opencode.js';
 import type { PermissionRequest } from '../../common/types/permission.js';
@@ -43,6 +44,7 @@ export interface AdapterOptions {
   getCliCommand: () => { command: string; args: string[] };
   buildEnvironment: (taskId: string) => Promise<NodeJS.ProcessEnv>;
   buildCliArgs: (config: TaskConfig) => Promise<string[]>;
+  acquireOpenCodeServerLease?: () => Promise<OpenCodeServerLease | null>;
   onBeforeStart?: () => Promise<void>;
   getModelDisplayName?: (modelId: string) => string;
   windowsPowerShellPool?: WindowsPowerShellPoolOptions;
@@ -100,6 +102,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   private waitingTransitionTimer: ReturnType<typeof setTimeout> | null = null;
   private hasReceivedFirstTool: boolean = false;
   private startTaskCalled: boolean = false;
+  private activeOpenCodeServerLease: OpenCodeServerLease | null = null;
   private options: AdapterOptions;
 
   constructor(options: AdapterOptions, taskId?: string) {
@@ -174,6 +177,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
             console.warn('[OpenCode Adapter] Error killing PTY after log error:', err);
           }
           this.ptyProcess = null;
+          this.releaseOpenCodeServerLease(true);
         }
       }
     });
@@ -193,6 +197,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.hasCompleted = false;
     this.wasInterrupted = false;
     this.completionEnforcer.reset();
+    this.releaseOpenCodeServerLease(true);
     this.lastWorkingDirectory = config.workingDirectory;
     this.hasReceivedFirstTool = false;
     this.startTaskCalled = false;
@@ -210,15 +215,17 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     }
 
     const cliArgs = await this.options.buildCliArgs(config);
+    let openCodeServerLease: OpenCodeServerLease | null = await this.acquireOpenCodeServerLease();
+    const effectiveCliArgs = this.withAttachServer(cliArgs, openCodeServerLease?.attachUrl);
 
     const { command, args: baseArgs } = this.options.getCliCommand();
-    const startMsg = `Starting: ${command} ${[...baseArgs, ...cliArgs].join(' ')}`;
+    const startMsg = `Starting: ${command} ${[...baseArgs, ...effectiveCliArgs].join(' ')}`;
     console.log('[OpenCode CLI]', startMsg);
     this.emit('debug', { type: 'info', message: startMsg });
 
     const env = await this.options.buildEnvironment(taskId);
 
-    const allArgs = [...baseArgs, ...cliArgs];
+    const allArgs = [...baseArgs, ...effectiveCliArgs];
     const cmdMsg = `Command: ${command}`;
     const argsMsg = `Args: ${allArgs.join(' ')}`;
     const safeCwd = config.workingDirectory || this.options.tempPath;
@@ -247,7 +254,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.emit('debug', { type: 'info', message: argsMsg, data: { args: allArgs } });
     this.emit('debug', { type: 'info', message: cwdMsg });
 
-    {
+    try {
       const { ptyProcess, spawnDescription, deferredCommand, lease } =
         await this.spawnPtyForCommand(command, allArgs, safeCwd, env);
 
@@ -256,6 +263,8 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       this.emit('debug', { type: 'info', message: spawnMsg });
 
       this.ptyProcess = ptyProcess;
+      this.activeOpenCodeServerLease = openCodeServerLease;
+      openCodeServerLease = null;
       const pidMsg = `PTY Process PID: ${this.ptyProcess.pid}`;
       console.log('[OpenCode CLI]', pidMsg);
       this.emit('debug', { type: 'info', message: pidMsg });
@@ -292,10 +301,16 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
           this.ptyProcess.write(deferredCommand + '\r\n');
         } catch (error) {
           lease?.retire();
+          this.releaseOpenCodeServerLease(true);
           this.ptyProcess = null;
           throw error;
         }
       }
+    } catch (error) {
+      if (openCodeServerLease) {
+        openCodeServerLease.release();
+      }
+      throw error;
     }
 
     return {
@@ -328,6 +343,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     if (this.ptyProcess) {
       this.ptyProcess.kill();
       this.ptyProcess = null;
+      this.releaseOpenCodeServerLease(true);
     }
   }
 
@@ -380,7 +396,9 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
         console.error('[OpenCode Adapter] Error killing PTY process:', error);
       }
       this.ptyProcess = null;
+      this.releaseOpenCodeServerLease(true);
     }
+    this.releaseOpenCodeServerLease(true);
 
     this.currentSessionId = null;
     this.currentTaskId = null;
@@ -676,6 +694,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
   private handleProcessExit(code: number | null): void {
     this.ptyProcess = null;
+    this.releaseOpenCodeServerLease(true);
 
     if (this.wasInterrupted && code === 0 && !this.hasCompleted) {
       console.log('[OpenCode CLI] Task was interrupted by user');
@@ -727,58 +746,70 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     };
 
     const cliArgs = await this.options.buildCliArgs(config);
+    let openCodeServerLease: OpenCodeServerLease | null = await this.acquireOpenCodeServerLease();
+    const effectiveCliArgs = this.withAttachServer(cliArgs, openCodeServerLease?.attachUrl);
 
     const { command, args: baseArgs } = this.options.getCliCommand();
     console.log(
       '[OpenCode Adapter] Session resumption command:',
       command,
-      [...baseArgs, ...cliArgs].join(' '),
+      [...baseArgs, ...effectiveCliArgs].join(' '),
     );
 
     const env = await this.options.buildEnvironment(this.currentTaskId || 'default');
 
-    const allArgs = [...baseArgs, ...cliArgs];
+    const allArgs = [...baseArgs, ...effectiveCliArgs];
     const safeCwd = config.workingDirectory || this.options.tempPath;
 
-    const { ptyProcess, deferredCommand, lease } = await this.spawnPtyForCommand(
-      command,
-      allArgs,
-      safeCwd,
-      env,
-    );
+    try {
+      const { ptyProcess, deferredCommand, lease } = await this.spawnPtyForCommand(
+        command,
+        allArgs,
+        safeCwd,
+        env,
+      );
 
-    this.ptyProcess = ptyProcess;
+      this.ptyProcess = ptyProcess;
+      this.activeOpenCodeServerLease = openCodeServerLease;
+      openCodeServerLease = null;
 
-    this.ptyProcess.onData((data: string) => {
-      /* eslint-disable no-control-regex */
-      const cleanData = data
-        .replace(/\x1B\[[0-9;?]*[a-zA-Z]/g, '')
-        .replace(/\x1B\][^\x07]*\x07/g, '')
-        .replace(/\x1B\][^\x1B]*\x1B\\/g, '');
-      /* eslint-enable no-control-regex */
-      if (cleanData.trim()) {
-        const truncated =
-          cleanData.substring(0, LOG_TRUNCATION_LIMIT) +
-          (cleanData.length > LOG_TRUNCATION_LIMIT ? '...' : '');
-        console.log('[OpenCode CLI stdout]:', truncated);
-        this.emit('debug', { type: 'stdout', message: cleanData });
+      this.ptyProcess.onData((data: string) => {
+        /* eslint-disable no-control-regex */
+        const cleanData = data
+          .replace(/\x1B\[[0-9;?]*[a-zA-Z]/g, '')
+          .replace(/\x1B\][^\x07]*\x07/g, '')
+          .replace(/\x1B\][^\x1B]*\x1B\\/g, '');
+        /* eslint-enable no-control-regex */
+        if (cleanData.trim()) {
+          const truncated =
+            cleanData.substring(0, LOG_TRUNCATION_LIMIT) +
+            (cleanData.length > LOG_TRUNCATION_LIMIT ? '...' : '');
+          console.log('[OpenCode CLI stdout]:', truncated);
+          this.emit('debug', { type: 'stdout', message: cleanData });
 
-        this.streamParser.feed(cleanData);
+          this.streamParser.feed(cleanData);
+        }
+      });
+
+      this.ptyProcess.onExit(({ exitCode }) => {
+        this.handleProcessExit(exitCode);
+      });
+
+      if (deferredCommand) {
+        try {
+          this.ptyProcess.write(deferredCommand + '\r\n');
+        } catch (error) {
+          lease?.retire();
+          this.releaseOpenCodeServerLease(true);
+          this.ptyProcess = null;
+          throw error;
+        }
       }
-    });
-
-    this.ptyProcess.onExit(({ exitCode }) => {
-      this.handleProcessExit(exitCode);
-    });
-
-    if (deferredCommand) {
-      try {
-        this.ptyProcess.write(deferredCommand + '\r\n');
-      } catch (error) {
-        lease?.retire();
-        this.ptyProcess = null;
-        throw error;
+    } catch (error) {
+      if (openCodeServerLease) {
+        openCodeServerLease.release();
       }
+      throw error;
     }
   }
 
@@ -933,6 +964,44 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
   private quotePowerShellLiteral(value: string): string {
     return `'${value.replace(/'/g, "''")}'`;
+  }
+
+  private async acquireOpenCodeServerLease(): Promise<OpenCodeServerLease | null> {
+    if (!this.options.acquireOpenCodeServerLease) {
+      return null;
+    }
+    return this.options.acquireOpenCodeServerLease();
+  }
+
+  private withAttachServer(cliArgs: string[], attachUrl?: string): string[] {
+    if (!attachUrl) {
+      return cliArgs;
+    }
+
+    const args = [...cliArgs];
+    const runIndex = args.indexOf('run');
+    if (runIndex === -1) {
+      args.push('--attach', attachUrl);
+      return args;
+    }
+
+    const insertIndex = args.length > runIndex + 1 ? args.length - 1 : args.length;
+    args.splice(insertIndex, 0, '--attach', attachUrl);
+    return args;
+  }
+
+  private releaseOpenCodeServerLease(retire = false): void {
+    if (!this.activeOpenCodeServerLease) {
+      return;
+    }
+
+    const lease = this.activeOpenCodeServerLease;
+    this.activeOpenCodeServerLease = null;
+    if (retire) {
+      lease.retire();
+      return;
+    }
+    lease.release();
   }
 
   private buildPtySpawnArgs(command: string, args: string[]): { file: string; args: string[] } {

@@ -361,10 +361,28 @@ function getPowerShellPoolOptions() {
   };
 }
 
+function getOpenCodeServerPoolOptions() {
+  if (process.platform !== 'win32' && process.platform !== 'darwin') {
+    return undefined;
+  }
+
+  return {
+    enabled: parseBooleanEnv('ACCOMPLISH_OPENCODE_SERVER_POOL_ENABLED', true),
+    minIdle: parsePositiveEnvInt('ACCOMPLISH_OPENCODE_SERVER_POOL_MIN_IDLE', 1),
+    maxTotal: parsePositiveEnvInt('ACCOMPLISH_OPENCODE_SERVER_POOL_MAX_TOTAL', 2),
+    coldStartFallback: parseBooleanEnv('ACCOMPLISH_OPENCODE_SERVER_POOL_COLD_START_FALLBACK', true),
+    startupTimeoutMs: parsePositiveEnvInt(
+      'ACCOMPLISH_OPENCODE_SERVER_POOL_STARTUP_TIMEOUT_MS',
+      60000,
+    ),
+  };
+}
+
 export function createElectronTaskManagerOptions(): TaskManagerOptions {
   assertPowerShellRuntimeAvailable();
 
   const powerShellPoolOptions = getPowerShellPoolOptions();
+  const openCodeServerPoolOptions = getOpenCodeServerPoolOptions();
 
   return {
     adapterOptions: {
@@ -378,6 +396,10 @@ export function createElectronTaskManagerOptions(): TaskManagerOptions {
       buildCliArgs,
       windowsPowerShellPool: process.platform === 'win32' ? powerShellPoolOptions : undefined,
       darwinPowerShellPool: process.platform === 'darwin' ? powerShellPoolOptions : undefined,
+      windowsOpenCodeServerPool:
+        process.platform === 'win32' ? openCodeServerPoolOptions : undefined,
+      darwinOpenCodeServerPool:
+        process.platform === 'darwin' ? openCodeServerPoolOptions : undefined,
     },
     defaultWorkingDirectory: app.getPath('temp'),
     maxConcurrentTasks: 10,

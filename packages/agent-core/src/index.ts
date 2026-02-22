@@ -35,6 +35,9 @@ export type {
   TaskAdapterOptions,
   WindowsPowerShellPoolConfig,
   DarwinPowerShellPoolConfig,
+  OpenCodeServerPoolConfig,
+  WindowsOpenCodeServerPoolConfig,
+  DarwinOpenCodeServerPoolConfig,
   TaskCallbacks as TaskManagerCallbacks,
   TaskProgressEvent as TaskManagerProgressEvent,
   // Storage API

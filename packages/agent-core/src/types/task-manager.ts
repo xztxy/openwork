@@ -91,6 +91,26 @@ export interface DarwinPowerShellPoolConfig {
   coldStartFallback?: boolean;
 }
 
+/** Shared options for warm OpenCode server pools */
+export interface OpenCodeServerPoolConfig {
+  /** Number of idle OpenCode server instances to keep pre-warmed */
+  minIdle?: number;
+  /** Maximum number of warm/in-use OpenCode server instances */
+  maxTotal?: number;
+  /** Allow direct CLI startup when no warm server is available */
+  coldStartFallback?: boolean;
+  /** Warm server startup timeout in milliseconds */
+  startupTimeoutMs?: number;
+  /** Enable/disable warm server pooling */
+  enabled?: boolean;
+}
+
+/** Windows OpenCode server warm pool tuning */
+export type WindowsOpenCodeServerPoolConfig = OpenCodeServerPoolConfig;
+
+/** macOS OpenCode server warm pool tuning */
+export type DarwinOpenCodeServerPoolConfig = OpenCodeServerPoolConfig;
+
 /** Adapter options for the underlying CLI adapter */
 export interface TaskAdapterOptions {
   /** The platform (e.g., 'darwin', 'linux', 'win32') */
@@ -113,6 +133,10 @@ export interface TaskAdapterOptions {
   windowsPowerShellPool?: WindowsPowerShellPoolConfig;
   /** macOS PowerShell pool settings (macOS only) */
   darwinPowerShellPool?: DarwinPowerShellPoolConfig;
+  /** Windows OpenCode server pool settings (Windows only) */
+  windowsOpenCodeServerPool?: WindowsOpenCodeServerPoolConfig;
+  /** macOS OpenCode server pool settings (macOS only) */
+  darwinOpenCodeServerPool?: DarwinOpenCodeServerPoolConfig;
 }
 
 /** Options for creating a TaskManager instance */

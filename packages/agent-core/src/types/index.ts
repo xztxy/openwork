@@ -12,6 +12,9 @@ export type {
   TaskAdapterOptions,
   WindowsPowerShellPoolConfig,
   DarwinPowerShellPoolConfig,
+  OpenCodeServerPoolConfig,
+  WindowsOpenCodeServerPoolConfig,
+  DarwinOpenCodeServerPoolConfig,
   TaskCallbacks,
   TaskProgressEvent,
 } from './task-manager.js';

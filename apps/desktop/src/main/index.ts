@@ -316,7 +316,7 @@ if (!gotTheLock) {
       try {
         getTaskManager();
         console.log(
-          `[Main] ${process.platform} task runtime initialized (PowerShell pool prewarming)`,
+          `[Main] ${process.platform} task runtime initialized (PowerShell and OpenCode server pools prewarming)`,
         );
       } catch (err) {
         console.warn(`[Main] Failed to initialize ${process.platform} task runtime prewarm:`, err);
