@@ -123,6 +123,27 @@ describe('CLI Resolver', () => {
 
       expect(result).toBeNull();
     });
+
+    it('uses opencode-ai fallback on Windows when opencode-windows package is missing', () => {
+      if (process.platform !== 'win32') {
+        return;
+      }
+
+      const appRoot = path.join(testDir, 'app');
+      const cliDir = path.join(appRoot, 'node_modules', 'opencode-ai', 'bin');
+      const cliPath = path.join(cliDir, 'opencode.exe');
+      fs.mkdirSync(cliDir, { recursive: true });
+      fs.writeFileSync(cliPath, 'binary');
+
+      const result = resolveCliPath({
+        isPackaged: false,
+        appPath: appRoot,
+      });
+
+      expect(result).not.toBeNull();
+      expect(result?.source).toBe('local');
+      expect(result?.cliPath).toBe(cliPath);
+    });
   });
 
   describe('isCliAvailable', () => {

@@ -6,7 +6,7 @@ import type { CliResolverConfig, ResolvedCliPaths } from '../types.js';
 function getOpenCodePlatformInfo(): { packageNames: string[]; binaryName: string } {
   if (process.platform === 'win32') {
     return {
-      packageNames: ['opencode-windows-x64', 'opencode-windows-x64-baseline'],
+      packageNames: ['opencode-windows-x64', 'opencode-windows-x64-baseline', 'opencode-ai'],
       binaryName: 'opencode.exe',
     };
   }
