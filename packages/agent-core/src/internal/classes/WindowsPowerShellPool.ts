@@ -218,17 +218,13 @@ class PowerShellPool {
       }
     }
 
-    const workerPty = pty.spawn(
-      this.executable,
-      ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '-'],
-      {
-        name: 'xterm-256color',
-        cols: 32000,
-        rows: 30,
-        cwd: this.tempPath,
-        env,
-      },
-    );
+    const workerPty = pty.spawn(this.executable, ['-NoLogo', '-NoProfile', '-NoExit'], {
+      name: 'xterm-256color',
+      cols: 32000,
+      rows: 30,
+      cwd: this.tempPath,
+      env,
+    });
 
     const worker: PoolWorker = {
       id: this.nextWorkerId++,
