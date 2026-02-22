@@ -23,7 +23,7 @@ export interface OpenCodeServerPoolRuntimeOptions {
   getCliCommand: () => { command: string; args: string[] };
   cwd: string;
   buildEnvironment: () => Promise<NodeJS.ProcessEnv>;
-  onBeforeStart?: () => Promise<void>;
+  onBeforeStart?: () => Promise<{ configChanged?: boolean } | void>;
 }
 
 interface ResolvedPoolOptions {

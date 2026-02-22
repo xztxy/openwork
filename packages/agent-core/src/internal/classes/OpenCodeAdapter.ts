@@ -45,7 +45,7 @@ export interface AdapterOptions {
   buildEnvironment: (taskId: string) => Promise<NodeJS.ProcessEnv>;
   buildCliArgs: (config: TaskConfig) => Promise<string[]>;
   acquireOpenCodeServerLease?: () => Promise<OpenCodeServerLease | null>;
-  onBeforeStart?: () => Promise<void>;
+  onBeforeStart?: () => Promise<{ configChanged?: boolean } | void>;
   getModelDisplayName?: (modelId: string) => string;
   windowsPowerShellPool?: WindowsPowerShellPoolOptions;
   darwinPowerShellPool?: DarwinPowerShellPoolOptions;
@@ -210,12 +210,18 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       await this.logWatcher.start();
     }
 
-    if (this.options.onBeforeStart) {
-      await this.options.onBeforeStart();
-    }
+    const runtimePreparation = await this.prepareRuntime();
 
     const cliArgs = await this.options.buildCliArgs(config);
     let openCodeServerLease: OpenCodeServerLease | null = await this.acquireOpenCodeServerLease();
+    if (runtimePreparation.configChanged) {
+      let retireAttempts = 0;
+      while (openCodeServerLease?.source === 'warm' && retireAttempts < 5) {
+        openCodeServerLease.retire();
+        retireAttempts++;
+        openCodeServerLease = await this.acquireOpenCodeServerLease();
+      }
+    }
     const effectiveCliArgs = this.withAttachServer(cliArgs, openCodeServerLease?.attachUrl);
 
     const { command, args: baseArgs } = this.options.getCliCommand();
@@ -343,7 +349,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     if (this.ptyProcess) {
       this.ptyProcess.kill();
       this.ptyProcess = null;
-      this.releaseOpenCodeServerLease(true);
+      this.releaseOpenCodeServerLease();
     }
   }
 
@@ -396,9 +402,9 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
         console.error('[OpenCode Adapter] Error killing PTY process:', error);
       }
       this.ptyProcess = null;
-      this.releaseOpenCodeServerLease(true);
+      this.releaseOpenCodeServerLease();
     }
-    this.releaseOpenCodeServerLease(true);
+    this.releaseOpenCodeServerLease();
 
     this.currentSessionId = null;
     this.currentTaskId = null;
@@ -694,7 +700,8 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
   private handleProcessExit(code: number | null): void {
     this.ptyProcess = null;
-    this.releaseOpenCodeServerLease(true);
+    const retireOpenCodeServer = !this.wasInterrupted && (code === null || code !== 0);
+    this.releaseOpenCodeServerLease(retireOpenCodeServer);
 
     if (this.wasInterrupted && code === 0 && !this.hasCompleted) {
       console.log('[OpenCode CLI] Task was interrupted by user');
@@ -964,6 +971,17 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
   private quotePowerShellLiteral(value: string): string {
     return `'${value.replace(/'/g, "''")}'`;
+  }
+
+  private async prepareRuntime(): Promise<{ configChanged: boolean }> {
+    if (!this.options.onBeforeStart) {
+      return { configChanged: false };
+    }
+
+    const result = await this.options.onBeforeStart();
+    return {
+      configChanged: typeof result === 'object' && result !== null && result.configChanged === true,
+    };
   }
 
   private async acquireOpenCodeServerLease(): Promise<OpenCodeServerLease | null> {
