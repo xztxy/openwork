@@ -77,7 +77,7 @@ export function extractScreenshots(output: string): {
     });
 
   cleanedText = cleanedText
-    .replace(/"[Screenshot captured]"/g, '"[Screenshot]"')
+    .replace(/"\[Screenshot captured\]"/g, '"[Screenshot]"')
     .replace(/\[Screenshot captured\]\[Screenshot captured\]/g, '[Screenshot captured]');
 
   return { cleanedText, attachments };
