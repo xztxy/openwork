@@ -46,7 +46,11 @@ function spawnPnpm(args, options) {
 
 if (!isClean) {
   runStep(process.execPath, [path.join(__dirname, 'patch-electron-name.cjs')]);
-  runPnpmStep(['exec', 'electron-rebuild', '-f']);
+  if (!isWindows) {
+    runPnpmStep(['exec', 'electron-rebuild', '-f']);
+  } else {
+    console.log('[dev] Windows detected: skipping electron-rebuild and using prebuilt modules');
+  }
   fs.rmSync(path.join(desktopRoot, 'dist-electron'), { recursive: true, force: true });
 }
 
