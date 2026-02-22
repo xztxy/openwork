@@ -296,23 +296,37 @@ export async function onBeforeTaskStart(
 
 function parsePositiveEnvInt(name: string, fallback: number): number {
   const value = process.env[name];
-  if (!value) return fallback;
+  if (!value) {
+    return fallback;
+  }
   const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
   return parsed;
 }
 
 function parseBooleanEnv(name: string, fallback: boolean): boolean {
   const value = process.env[name];
-  if (typeof value !== 'string') return fallback;
-  if (value === '1' || value.toLowerCase() === 'true') return true;
-  if (value === '0' || value.toLowerCase() === 'false') return false;
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+  if (value === '1' || value.toLowerCase() === 'true') {
+    return true;
+  }
+  if (value === '0' || value.toLowerCase() === 'false') {
+    return false;
+  }
   return fallback;
 }
 
 function assertPowerShellRuntimeAvailable(): void {
-  if (process.env.NODE_ENV === 'test') return;
-  if (process.platform !== 'win32' && process.platform !== 'darwin') return;
+  if (process.env.NODE_ENV === 'test') {
+    return;
+  }
+  if (process.platform !== 'win32' && process.platform !== 'darwin') {
+    return;
+  }
 
   if (process.platform === 'win32') {
     const searchPath = process.env.PATH ?? process.env.Path ?? '';
@@ -336,7 +350,9 @@ function assertPowerShellRuntimeAvailable(): void {
 }
 
 function getPowerShellPoolOptions() {
-  if (process.platform !== 'win32' && process.platform !== 'darwin') return undefined;
+  if (process.platform !== 'win32' && process.platform !== 'darwin') {
+    return undefined;
+  }
 
   return {
     minIdle: parsePositiveEnvInt('ACCOMPLISH_POWERSHELL_POOL_MIN_IDLE', 1),

@@ -52,13 +52,17 @@ class PoolCapacityError extends Error {
 }
 
 function toPositiveInt(value: unknown, fallback: number): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return fallback;
+  }
   const normalized = Math.floor(value);
   return normalized > 0 ? normalized : fallback;
 }
 
 function toNonNegativeInt(value: unknown, fallback: number): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return fallback;
+  }
   const normalized = Math.floor(value);
   return normalized >= 0 ? normalized : fallback;
 }
@@ -91,6 +95,7 @@ class PowerShellPool {
   private logPrefix: string;
   private warmupFailureStreak = 0;
   private warmupBackoffUntil = 0;
+  private warmupRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     tempPath: string,
@@ -106,7 +111,9 @@ class PowerShellPool {
   }
 
   updateConfig(tempPath: string, options?: PoolOptions): void {
-    if (this.disposed) return;
+    if (this.disposed) {
+      return;
+    }
     this.tempPath = tempPath;
     this.options = resolveOptions(options);
     this.ensureMinIdle();
@@ -145,6 +152,10 @@ class PowerShellPool {
 
   dispose(): void {
     this.disposed = true;
+    if (this.warmupRetryTimer) {
+      clearTimeout(this.warmupRetryTimer);
+      this.warmupRetryTimer = null;
+    }
     for (const worker of this.workers.values()) {
       try {
         worker.pty.kill();
@@ -170,7 +181,9 @@ class PowerShellPool {
   }
 
   private ensureMinIdle(): void {
-    if (this.disposed) return;
+    if (this.disposed) {
+      return;
+    }
 
     while (this.shouldWarmAnotherWorker()) {
       this.warmingCount++;
@@ -189,7 +202,11 @@ class PowerShellPool {
           this.warmingCount = Math.max(0, this.warmingCount - 1);
           if (!this.disposed && this.warmupBackoffUntil > Date.now()) {
             const retryDelay = this.warmupBackoffUntil - Date.now();
-            setTimeout(() => {
+            if (this.warmupRetryTimer) {
+              clearTimeout(this.warmupRetryTimer);
+            }
+            this.warmupRetryTimer = setTimeout(() => {
+              this.warmupRetryTimer = null;
               if (!this.disposed) {
                 this.ensureMinIdle();
               }
@@ -204,10 +221,14 @@ class PowerShellPool {
   }
 
   private shouldWarmAnotherWorker(): boolean {
-    if (this.warmupBackoffUntil > Date.now()) return false;
+    if (this.warmupBackoffUntil > Date.now()) {
+      return false;
+    }
 
     const idleCount = this.idleQueue.length + this.warmingCount;
-    if (idleCount >= this.options.minIdle) return false;
+    if (idleCount >= this.options.minIdle) {
+      return false;
+    }
     const totalCount = this.workers.size + this.warmingCount;
     return totalCount < this.options.maxTotal;
   }
@@ -269,7 +290,9 @@ class PowerShellPool {
       let settled = false;
 
       const exitDisposable = worker.pty.onExit(({ exitCode, signal }) => {
-        if (settled) return;
+        if (settled) {
+          return;
+        }
         settled = true;
         clearTimeout(timer);
         exitDisposable.dispose();
@@ -281,7 +304,9 @@ class PowerShellPool {
       });
 
       const timer = setTimeout(() => {
-        if (settled) return;
+        if (settled) {
+          return;
+        }
         settled = true;
         exitDisposable.dispose();
         resolve();
@@ -291,7 +316,9 @@ class PowerShellPool {
 
   private handleWorkerExit(workerId: number): void {
     const worker = this.workers.get(workerId);
-    if (!worker) return;
+    if (!worker) {
+      return;
+    }
 
     worker.alive = false;
     this.workers.delete(workerId);
@@ -304,7 +331,9 @@ class PowerShellPool {
 
   private retireWorker(workerId: number): void {
     const worker = this.workers.get(workerId);
-    if (!worker || !worker.alive) return;
+    if (!worker || !worker.alive) {
+      return;
+    }
 
     try {
       worker.pty.write('exit\r');
@@ -313,7 +342,9 @@ class PowerShellPool {
     }
 
     setTimeout(() => {
-      if (!worker.alive) return;
+      if (!worker.alive) {
+        return;
+      }
       try {
         worker.pty.kill();
       } catch {
@@ -358,13 +389,17 @@ export function getDarwinPowerShellPool(
 }
 
 export function disposeWindowsPowerShellPool(): void {
-  if (!globalWindowsPool) return;
+  if (!globalWindowsPool) {
+    return;
+  }
   globalWindowsPool.dispose();
   globalWindowsPool = null;
 }
 
 export function disposeDarwinPowerShellPool(): void {
-  if (!globalDarwinPool) return;
+  if (!globalDarwinPool) {
+    return;
+  }
   globalDarwinPool.dispose();
   globalDarwinPool = null;
 }

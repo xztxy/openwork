@@ -37,7 +37,9 @@ function normalizeBaseUrl(url: string): string {
 function resolveProxyPort(overridePort?: number): number {
   if (typeof overridePort === 'number' && Number.isFinite(overridePort)) {
     const normalized = Math.floor(overridePort);
-    if (normalized > 0 && normalized <= 65535) return normalized;
+    if (normalized > 0 && normalized <= 65535) {
+      return normalized;
+    }
   }
   return DEFAULT_AZURE_FOUNDRY_PROXY_PORT;
 }
