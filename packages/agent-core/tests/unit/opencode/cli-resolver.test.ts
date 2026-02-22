@@ -131,7 +131,7 @@ describe('CLI Resolver', () => {
 
       const appRoot = path.join(testDir, 'app');
       const cliDir = path.join(appRoot, 'node_modules', 'opencode-ai', 'bin');
-      const cliPath = path.join(cliDir, 'opencode.exe');
+      const cliPath = path.join(cliDir, 'opencode');
       fs.mkdirSync(cliDir, { recursive: true });
       fs.writeFileSync(cliPath, 'binary');
 

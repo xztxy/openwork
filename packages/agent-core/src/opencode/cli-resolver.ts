@@ -3,16 +3,17 @@ import fs from 'fs';
 import { execSync } from 'child_process';
 import type { CliResolverConfig, ResolvedCliPaths } from '../types.js';
 
-function getOpenCodePlatformInfo(): { packageNames: string[]; binaryName: string } {
+function getOpenCodePlatformInfo(): { packageNames: string[]; binaryNames: string[] } {
   if (process.platform === 'win32') {
     return {
       packageNames: ['opencode-windows-x64', 'opencode-windows-x64-baseline', 'opencode-ai'],
-      binaryName: 'opencode.exe',
+      // opencode-ai publishes a JS launcher at bin/opencode on Windows.
+      binaryNames: ['opencode.exe', 'opencode'],
     };
   }
   return {
     packageNames: ['opencode-ai'],
-    binaryName: 'opencode',
+    binaryNames: ['opencode'],
   };
 }
 
@@ -34,24 +35,26 @@ function getCandidateAppRoots(appPath?: string): string[] {
 }
 
 function resolveBundledCliPath(resourcesPath: string): ResolvedCliPaths | null {
-  const { packageNames, binaryName } = getOpenCodePlatformInfo();
+  const { packageNames, binaryNames } = getOpenCodePlatformInfo();
 
   for (const packageName of packageNames) {
-    const cliPath = path.join(
-      resourcesPath,
-      'app.asar.unpacked',
-      'node_modules',
-      packageName,
-      'bin',
-      binaryName,
-    );
+    for (const binaryName of binaryNames) {
+      const cliPath = path.join(
+        resourcesPath,
+        'app.asar.unpacked',
+        'node_modules',
+        packageName,
+        'bin',
+        binaryName,
+      );
 
-    if (fs.existsSync(cliPath)) {
-      return {
-        cliPath,
-        cliDir: path.dirname(cliPath),
-        source: 'bundled',
-      };
+      if (fs.existsSync(cliPath)) {
+        return {
+          cliPath,
+          cliDir: path.dirname(cliPath),
+          source: 'bundled',
+        };
+      }
     }
   }
 
@@ -60,19 +63,21 @@ function resolveBundledCliPath(resourcesPath: string): ResolvedCliPaths | null {
 
 function resolveLocalCliPath(appPath?: string): ResolvedCliPaths | null {
   const appRoots = getCandidateAppRoots(appPath);
-  const { packageNames, binaryName } = getOpenCodePlatformInfo();
+  const { packageNames, binaryNames } = getOpenCodePlatformInfo();
 
   for (const root of appRoots) {
     if (process.platform === 'win32') {
       for (const packageName of packageNames) {
-        const cliPath = path.join(root, 'node_modules', packageName, 'bin', binaryName);
-        if (fs.existsSync(cliPath)) {
-          console.log('[CLI Resolver] Using local OpenCode CLI executable:', cliPath);
-          return {
-            cliPath,
-            cliDir: path.dirname(cliPath),
-            source: 'local',
-          };
+        for (const binaryName of binaryNames) {
+          const cliPath = path.join(root, 'node_modules', packageName, 'bin', binaryName);
+          if (fs.existsSync(cliPath)) {
+            console.log('[CLI Resolver] Using local OpenCode CLI executable:', cliPath);
+            return {
+              cliPath,
+              cliDir: path.dirname(cliPath),
+              source: 'local',
+            };
+          }
         }
       }
       continue;
