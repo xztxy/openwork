@@ -6,7 +6,9 @@ const rootDir = path.join(__dirname, '..');
 const agentCoreDir = path.join(rootDir, 'packages', 'agent-core');
 const agentCorePackageJsonPath = path.join(agentCoreDir, 'package.json');
 const desktopNodeResourcesDir = path.join(rootDir, 'apps', 'desktop', 'resources', 'nodejs');
-const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+const isWin = process.platform === 'win32';
+const pnpmCommand = 'pnpm';
+const shellOption = isWin ? 'powershell.exe' : undefined;
 const mcpDistOutputs = [
   'mcp-tools/file-permission/dist/index.mjs',
   'mcp-tools/ask-user-question/dist/index.mjs',
@@ -87,6 +89,7 @@ function runPnpm(args, description) {
     cwd: rootDir,
     env: process.env,
     stdio: 'inherit',
+    ...(shellOption ? { shell: shellOption } : {}),
   });
 
   if (result.error) {
