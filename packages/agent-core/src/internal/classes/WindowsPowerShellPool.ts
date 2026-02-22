@@ -1,4 +1,5 @@
 import * as pty from 'node-pty';
+import { getExtendedNodePath } from '../../utils/system-path.js';
 
 export interface WindowsPowerShellPoolOptions {
   minIdle?: number;
@@ -42,6 +43,13 @@ const DEFAULT_POOL_OPTIONS: ResolvedPoolOptions = {
 
 type PoolOptions = WindowsPowerShellPoolOptions | DarwinPowerShellPoolOptions;
 type PowerShellExecutable = 'powershell.exe' | 'pwsh';
+
+class PoolCapacityError extends Error {
+  constructor(maxTotal: number) {
+    super(`PowerShell pool at capacity (${maxTotal}). Cannot spawn additional workers.`);
+    this.name = 'PoolCapacityError';
+  }
+}
 
 function toPositiveInt(value: unknown, fallback: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
@@ -119,14 +127,17 @@ class PowerShellPool {
     }
 
     try {
-      const coldWorker = await this.spawnWorker('in_use', false);
+      const coldWorker = await this.spawnWorker('in_use');
       this.ensureMinIdle();
       return this.createLease(coldWorker, 'cold');
     } catch (error) {
+      if (error instanceof PoolCapacityError) {
+        throw error;
+      }
       if (!this.options.coldStartFallback) {
         throw error;
       }
-      const fallbackWorker = await this.spawnWorker('in_use', true);
+      const fallbackWorker = await this.spawnWorker('in_use');
       this.ensureMinIdle();
       return this.createLease(fallbackWorker, 'cold');
     }
@@ -163,7 +174,7 @@ class PowerShellPool {
 
     while (this.shouldWarmAnotherWorker()) {
       this.warmingCount++;
-      void this.spawnWorker('idle', false)
+      void this.spawnWorker('idle')
         .then(() => {
           this.warmupFailureStreak = 0;
           this.warmupBackoffUntil = 0;
@@ -201,22 +212,12 @@ class PowerShellPool {
     return totalCount < this.options.maxTotal;
   }
 
-  private async spawnWorker(
-    state: 'idle' | 'in_use',
-    allowOverCapacity: boolean,
-  ): Promise<PoolWorker> {
-    if (!allowOverCapacity && this.workers.size >= this.options.maxTotal) {
-      throw new Error(
-        `PowerShell pool at capacity (${this.options.maxTotal}). Cannot spawn additional workers.`,
-      );
+  private async spawnWorker(state: 'idle' | 'in_use'): Promise<PoolWorker> {
+    if (this.workers.size >= this.options.maxTotal) {
+      throw new PoolCapacityError(this.options.maxTotal);
     }
 
-    const env: Record<string, string> = {};
-    for (const [key, value] of Object.entries(process.env)) {
-      if (typeof value === 'string') {
-        env[key] = value;
-      }
-    }
+    const env = this.buildWorkerEnv();
 
     const workerPty = pty.spawn(this.executable, ['-NoLogo', '-NoProfile', '-NoExit'], {
       name: 'xterm-256color',
@@ -244,6 +245,23 @@ class PowerShellPool {
 
     await this.waitForWorkerReady(worker);
     return worker;
+  }
+
+  private buildWorkerEnv(): Record<string, string> {
+    const env: Record<string, string> = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (typeof value === 'string') {
+        env[key] = value;
+      }
+    }
+
+    if (this.executable === 'pwsh' && process.platform === 'darwin') {
+      // GUI-launched Electron apps often have a minimal PATH; mirror desktop preflight lookup.
+      const basePath = env.PATH ?? process.env.PATH ?? '';
+      env.PATH = getExtendedNodePath(basePath);
+    }
+
+    return env;
   }
 
   private waitForWorkerReady(worker: PoolWorker): Promise<void> {
