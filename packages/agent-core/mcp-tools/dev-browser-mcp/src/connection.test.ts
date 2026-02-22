@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import {
   configureFromEnv,
   configure,
   getFullPageName,
   getConnectionMode,
   resetConnection,
+  fetchWithRetry,
 } from './connection.js';
 
 describe('connection', () => {
@@ -96,6 +97,62 @@ describe('connection', () => {
       process.env.ACCOMPLISH_TASK_ID = 'env-task';
       configureFromEnv();
       expect(getFullPageName('page1')).toBe('env-task-page1');
+    });
+  });
+
+  describe('fetchWithRetry', () => {
+    let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      fetchSpy = vi.spyOn(globalThis, 'fetch');
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('returns response on first success', async () => {
+      fetchSpy.mockResolvedValueOnce(new Response('ok', { status: 200 }));
+
+      const res = await fetchWithRetry('http://localhost:9224');
+      expect(res.status).toBe(200);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries on connection error and succeeds on attempt 2', async () => {
+      fetchSpy.mockRejectedValueOnce(new Error('fetch failed'));
+      fetchSpy.mockResolvedValueOnce(new Response('ok', { status: 200 }));
+
+      const res = await fetchWithRetry('http://localhost:9224', undefined, 3, 1);
+      expect(res.status).toBe(200);
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('throws after max retries on persistent connection error', async () => {
+      fetchSpy.mockRejectedValue(new Error('fetch failed'));
+
+      await expect(fetchWithRetry('http://localhost:9224', undefined, 3, 1)).rejects.toThrow(
+        'fetch failed',
+      );
+      expect(fetchSpy).toHaveBeenCalledTimes(3);
+    });
+
+    it('throws immediately for non-connection errors', async () => {
+      fetchSpy.mockRejectedValueOnce(new Error('Invalid URL'));
+
+      await expect(fetchWithRetry('http://localhost:9224', undefined, 3, 1)).rejects.toThrow(
+        'Invalid URL',
+      );
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries on ECONNREFUSED', async () => {
+      fetchSpy.mockRejectedValueOnce(new Error('connect ECONNREFUSED 127.0.0.1:9224'));
+      fetchSpy.mockResolvedValueOnce(new Response('ok', { status: 200 }));
+
+      const res = await fetchWithRetry('http://localhost:9224', undefined, 3, 1);
+      expect(res.status).toBe(200);
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
     });
   });
 });

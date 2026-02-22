@@ -133,7 +133,7 @@ export function resetConnection(): void {
 // Builtin mode (existing behavior -- talks to dev-browser HTTP server)
 // ---------------------------------------------------------------------------
 
-async function fetchWithRetry(
+export async function fetchWithRetry(
   url: string,
   options?: RequestInit,
   maxRetries = 3,
