@@ -1,5 +1,6 @@
 import { app } from 'electron';
 import { execSync } from 'child_process';
+import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import type { TaskManagerOptions, TaskCallbacks } from '@accomplish_ai/agent-core';
@@ -33,6 +34,15 @@ import { getExtendedNodePath } from '../utils/system-path';
 import { getBundledNodePaths, logBundledNodeInfo } from '../utils/bundled-node';
 
 const VERTEX_SA_KEY_FILENAME = 'vertex-sa-key.json';
+const openCodeRuntimeStateCache: {
+  runtimeDigest: string | null;
+  authDigest: string | null;
+  inFlightPreparation: Promise<void> | null;
+} = {
+  runtimeDigest: null,
+  authDigest: null,
+  inFlightPreparation: null,
+};
 
 /**
  * Removes the Vertex AI service account key file from disk if it exists.
@@ -238,33 +248,107 @@ export async function isCliAvailable(): Promise<boolean> {
   return isOpenCodeCliAvailable();
 }
 
-export async function onBeforeStart(): Promise<void> {
-  await syncApiKeysToOpenCodeAuth();
+function toStableValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => toStableValue(item));
+  }
+  if (value && typeof value === 'object') {
+    const sortedEntries = Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, innerValue]) => [key, toStableValue(innerValue)]);
+    return Object.fromEntries(sortedEntries);
+  }
+  return value;
+}
 
-  let azureFoundryToken: string | undefined;
+function computeDigest(value: unknown): string {
+  const stableJson = JSON.stringify(toStableValue(value));
+  return createHash('sha256').update(stableJson).digest('hex');
+}
+
+async function computeRuntimeDigests(
+  azureFoundryToken: string | undefined,
+): Promise<{ runtimeDigest: string; authDigest: string }> {
   const storage = getStorage();
-  const activeModel = storage.getActiveProviderModel();
-  const selectedModel = activeModel || storage.getSelectedModel();
-  const azureFoundryConfig = storage.getAzureFoundryConfig();
-  const azureFoundryProvider = storage.getConnectedProvider('azure-foundry');
-  const azureFoundryCredentials = azureFoundryProvider?.credentials as
-    | AzureFoundryCredentials
-    | undefined;
+  const apiKeys = await getAllApiKeys();
+  const connectors = storage.getAllConnectors();
+  const connectorTokens = connectors.map((connector) => ({
+    id: connector.id,
+    tokens: storage.getConnectorTokens(connector.id),
+  }));
 
-  const isAzureFoundryEntraId =
-    (selectedModel?.provider === 'azure-foundry' &&
-      azureFoundryCredentials?.authMethod === 'entra-id') ||
-    (selectedModel?.provider === 'azure-foundry' && azureFoundryConfig?.authType === 'entra-id');
+  const authDigest = computeDigest(apiKeys);
+  const runtimeDigest = computeDigest({
+    appSettings: storage.getAppSettings(),
+    providerSettings: storage.getProviderSettings(),
+    connectors,
+    connectorTokens,
+    apiKeys,
+    azureFoundryToken: azureFoundryToken || null,
+  });
 
-  if (isAzureFoundryEntraId) {
-    const tokenResult = await getAzureEntraToken();
-    if (!tokenResult.success) {
-      throw new Error(tokenResult.error);
-    }
-    azureFoundryToken = tokenResult.token;
+  return {
+    runtimeDigest,
+    authDigest,
+  };
+}
+
+async function prepareOpenCodeRuntime(): Promise<void> {
+  if (openCodeRuntimeStateCache.inFlightPreparation) {
+    return openCodeRuntimeStateCache.inFlightPreparation;
   }
 
-  await generateOpenCodeConfig(azureFoundryToken);
+  const preparationPromise = (async () => {
+    let azureFoundryToken: string | undefined;
+    const storage = getStorage();
+    const activeModel = storage.getActiveProviderModel();
+    const selectedModel = activeModel || storage.getSelectedModel();
+    const azureFoundryConfig = storage.getAzureFoundryConfig();
+    const azureFoundryProvider = storage.getConnectedProvider('azure-foundry');
+    const azureFoundryCredentials = azureFoundryProvider?.credentials as
+      | AzureFoundryCredentials
+      | undefined;
+
+    const isAzureFoundryEntraId =
+      (selectedModel?.provider === 'azure-foundry' &&
+        azureFoundryCredentials?.authMethod === 'entra-id') ||
+      (selectedModel?.provider === 'azure-foundry' && azureFoundryConfig?.authType === 'entra-id');
+
+    if (isAzureFoundryEntraId) {
+      const tokenResult = await getAzureEntraToken();
+      if (!tokenResult.success) {
+        throw new Error(tokenResult.error);
+      }
+      azureFoundryToken = tokenResult.token;
+    }
+
+    const digests = await computeRuntimeDigests(azureFoundryToken);
+    const authChanged = digests.authDigest !== openCodeRuntimeStateCache.authDigest;
+    const configChanged = digests.runtimeDigest !== openCodeRuntimeStateCache.runtimeDigest;
+
+    if (authChanged) {
+      await syncApiKeysToOpenCodeAuth();
+      openCodeRuntimeStateCache.authDigest = digests.authDigest;
+    }
+
+    if (configChanged) {
+      await generateOpenCodeConfig(azureFoundryToken);
+      openCodeRuntimeStateCache.runtimeDigest = digests.runtimeDigest;
+    }
+  })();
+
+  openCodeRuntimeStateCache.inFlightPreparation = preparationPromise;
+  try {
+    await preparationPromise;
+  } finally {
+    if (openCodeRuntimeStateCache.inFlightPreparation === preparationPromise) {
+      openCodeRuntimeStateCache.inFlightPreparation = null;
+    }
+  }
+}
+
+export async function onBeforeStart(): Promise<void> {
+  await prepareOpenCodeRuntime();
 }
 
 function getBrowserServerConfig(): BrowserServerConfig {
