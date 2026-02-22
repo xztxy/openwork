@@ -24,7 +24,7 @@ import { registerIPCHandlers } from './ipc/handlers';
 import { FutureSchemaError } from '@accomplish_ai/agent-core';
 import { initThoughtStreamApi, startThoughtStreamServer } from './thought-stream-api';
 import type { ProviderId } from '@accomplish_ai/agent-core';
-import { disposeTaskManager, cleanupVertexServiceAccountKey } from './opencode';
+import { disposeTaskManager, cleanupVertexServiceAccountKey, getTaskManager } from './opencode';
 import { oauthBrowserFlow } from './opencode/auth-browser';
 import { migrateLegacyData } from './store/legacyMigration';
 import {
@@ -311,6 +311,17 @@ if (!gotTheLock) {
 
     registerIPCHandlers();
     console.log('[Main] IPC handlers registered');
+
+    if (process.platform === 'win32' || process.platform === 'darwin') {
+      try {
+        getTaskManager();
+        console.log(
+          `[Main] ${process.platform} task runtime initialized (PowerShell pool prewarming)`,
+        );
+      } catch (err) {
+        console.warn(`[Main] Failed to initialize ${process.platform} task runtime prewarm:`, err);
+      }
+    }
 
     createWindow();
 

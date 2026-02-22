@@ -2,16 +2,21 @@ import http from 'http';
 import https from 'https';
 import { URL } from 'url';
 
-const AZURE_FOUNDRY_PROXY_PORT = 9228;
+const DEFAULT_AZURE_FOUNDRY_PROXY_PORT = 9228;
 const MAX_REQUEST_SIZE = 10 * 1024 * 1024;
 
 let server: http.Server | null = null;
 let targetBaseUrl: string | null = null;
+let activeProxyPort = DEFAULT_AZURE_FOUNDRY_PROXY_PORT;
 
 export interface AzureFoundryProxyInfo {
   baseURL: string;
   targetBaseURL: string;
   port: number;
+}
+
+export interface AzureFoundryProxyOptions {
+  port?: number;
 }
 
 function normalizeBaseUrl(url: string): string {
@@ -29,8 +34,16 @@ function normalizeBaseUrl(url: string): string {
   }
 }
 
+function resolveProxyPort(overridePort?: number): number {
+  if (typeof overridePort === 'number' && Number.isFinite(overridePort)) {
+    const normalized = Math.floor(overridePort);
+    if (normalized > 0 && normalized <= 65535) return normalized;
+  }
+  return DEFAULT_AZURE_FOUNDRY_PROXY_PORT;
+}
+
 function getProxyBaseUrl(): string {
-  return `http://127.0.0.1:${AZURE_FOUNDRY_PROXY_PORT}`;
+  return `http://127.0.0.1:${activeProxyPort}`;
 }
 
 function shouldTransformBody(contentType: string | undefined): boolean {
@@ -83,9 +96,7 @@ function isValidRequestPath(path: string): boolean {
 function proxyRequest(req: http.IncomingMessage, res: http.ServerResponse): void {
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(
-      JSON.stringify({ status: 'ok', target: targetBaseUrl, port: AZURE_FOUNDRY_PROXY_PORT }),
-    );
+    res.end(JSON.stringify({ status: 'ok', target: targetBaseUrl, port: activeProxyPort }));
     return;
   }
 
@@ -191,10 +202,14 @@ function proxyRequest(req: http.IncomingMessage, res: http.ServerResponse): void
   });
 }
 
-export async function ensureAzureFoundryProxy(baseURL: string): Promise<AzureFoundryProxyInfo> {
+export async function ensureAzureFoundryProxy(
+  baseURL: string,
+  options?: AzureFoundryProxyOptions,
+): Promise<AzureFoundryProxyInfo> {
   targetBaseUrl = normalizeBaseUrl(baseURL);
 
   if (!server) {
+    activeProxyPort = resolveProxyPort(options?.port);
     server = http.createServer(proxyRequest);
 
     await new Promise<void>((resolve, reject) => {
@@ -208,7 +223,7 @@ export async function ensureAzureFoundryProxy(baseURL: string): Promise<AzureFou
         if (error.code === 'EADDRINUSE') {
           reject(
             new Error(
-              `Port ${AZURE_FOUNDRY_PROXY_PORT} is already in use. ` +
+              `Port ${activeProxyPort} is already in use. ` +
                 'Please close other applications using this port or restart the app.',
             ),
           );
@@ -217,9 +232,9 @@ export async function ensureAzureFoundryProxy(baseURL: string): Promise<AzureFou
         }
       });
 
-      server!.listen(AZURE_FOUNDRY_PROXY_PORT, '127.0.0.1', () => {
+      server!.listen(activeProxyPort, '127.0.0.1', () => {
         clearTimeout(timeout);
-        console.log(`[Azure Foundry Proxy] Listening on port ${AZURE_FOUNDRY_PROXY_PORT}`);
+        console.log(`[Azure Foundry Proxy] Listening on port ${activeProxyPort}`);
         resolve();
       });
     });
@@ -228,7 +243,7 @@ export async function ensureAzureFoundryProxy(baseURL: string): Promise<AzureFou
   return {
     baseURL: getProxyBaseUrl(),
     targetBaseURL: targetBaseUrl,
-    port: AZURE_FOUNDRY_PROXY_PORT,
+    port: activeProxyPort,
   };
 }
 
@@ -242,6 +257,7 @@ export async function stopAzureFoundryProxy(): Promise<void> {
       console.warn('[Azure Foundry Proxy] Shutdown timeout, forcing close');
       server = null;
       targetBaseUrl = null;
+      activeProxyPort = DEFAULT_AZURE_FOUNDRY_PROXY_PORT;
       resolve();
     }, 3000);
 
@@ -252,12 +268,14 @@ export async function stopAzureFoundryProxy(): Promise<void> {
         reject(err);
       } else {
         console.log('[Azure Foundry Proxy] Server stopped');
+        activeProxyPort = DEFAULT_AZURE_FOUNDRY_PROXY_PORT;
         resolve();
       }
     });
 
     server = null;
     targetBaseUrl = null;
+    activeProxyPort = DEFAULT_AZURE_FOUNDRY_PROXY_PORT;
   });
 }
 

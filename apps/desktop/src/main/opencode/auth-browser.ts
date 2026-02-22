@@ -141,11 +141,6 @@ export class OAuthBrowserFlow {
 
     ptyProcess.write('\x03');
 
-    if (process.platform === 'win32') {
-      await this.delay(100);
-      ptyProcess.write('Y\n');
-    }
-
     const gracefulExited = await this.waitForExit(ptyProcess, 1000);
 
     if (!gracefulExited && this.activePty === ptyProcess) {
@@ -196,10 +191,6 @@ export class OAuthBrowserFlow {
         }
       }, timeoutMs);
     });
-  }
-
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
 

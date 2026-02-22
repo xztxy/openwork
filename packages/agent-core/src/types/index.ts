@@ -10,6 +10,8 @@ export type {
   TaskManagerAPI,
   TaskManagerOptions,
   TaskAdapterOptions,
+  WindowsPowerShellPoolConfig,
+  DarwinPowerShellPoolConfig,
   TaskCallbacks,
   TaskProgressEvent,
 } from './task-manager.js';

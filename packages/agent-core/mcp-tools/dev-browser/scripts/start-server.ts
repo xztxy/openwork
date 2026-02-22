@@ -1,5 +1,5 @@
 import { serve } from '@/index.js';
-import { execSync } from 'child_process';
+import { execFileSync, execSync } from 'child_process';
 import { mkdirSync, existsSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -27,6 +27,31 @@ mkdirSync(profileDir, { recursive: true });
 
 const ACCOMPLISH_HTTP_PORT = parseInt(process.env.DEV_BROWSER_PORT || '9224', 10);
 const ACCOMPLISH_CDP_PORT = parseInt(process.env.DEV_BROWSER_CDP_PORT || '9225', 10);
+const DEV_BROWSER_ROOT = join(__dirname, '..');
+
+function runWindowsPowerShell(command: string): string {
+  return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], {
+    encoding: 'utf-8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim();
+}
+
+function findListeningPidOnWindows(port: number): number | null {
+  try {
+    const output = runWindowsPowerShell(
+      `$conn = Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1; if ($null -ne $conn) { $conn.OwningProcess }`,
+    );
+    if (!output) return null;
+    const pid = Number.parseInt(output, 10);
+    return Number.isFinite(pid) && pid > 0 ? pid : null;
+  } catch {
+    return null;
+  }
+}
+
+function stopProcessOnWindows(pid: number): void {
+  runWindowsPowerShell(`Stop-Process -Id ${pid} -Force -ErrorAction SilentlyContinue`);
+}
 
 if (
   !Number.isFinite(ACCOMPLISH_HTTP_PORT) ||
@@ -59,12 +84,9 @@ try {
       console.log('Found relay server running, killing to start launch server...');
       try {
         if (process.platform === 'win32') {
-          const output = execSync(`netstat -ano | findstr :${ACCOMPLISH_HTTP_PORT}`, {
-            encoding: 'utf-8',
-          });
-          const match = output.match(/LISTENING\s+(\d+)/);
-          if (match) {
-            execSync(`taskkill /F /PID ${match[1]}`, { stdio: 'ignore' });
+          const pid = findListeningPidOnWindows(ACCOMPLISH_HTTP_PORT);
+          if (pid) {
+            stopProcessOnWindows(pid);
           }
         } else {
           const pid = execSync(`lsof -ti:${ACCOMPLISH_HTTP_PORT}`, { encoding: 'utf-8' }).trim();
@@ -87,16 +109,12 @@ try {
 
 try {
   if (process.platform === 'win32') {
-    const output = execSync(`netstat -ano | findstr :${ACCOMPLISH_CDP_PORT}`, {
-      encoding: 'utf-8',
-    });
-    const match = output.match(/LISTENING\s+(\d+)/);
-    if (match) {
-      const pid = match[1];
+    const pid = findListeningPidOnWindows(ACCOMPLISH_CDP_PORT);
+    if (pid) {
       console.log(
         `Cleaning up stale Chrome process on CDP port ${ACCOMPLISH_CDP_PORT} (PID: ${pid})`,
       );
-      execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' });
+      stopProcessOnWindows(pid);
     }
   } else {
     const pid = execSync(`lsof -ti:${ACCOMPLISH_CDP_PORT}`, { encoding: 'utf-8' }).trim();
@@ -133,30 +151,18 @@ function installPlaywrightChromium(): void {
   console.log('This may take 1-2 minutes.');
   console.log('========================================\n');
 
-  const managers = [
-    { name: 'bun', command: 'bunx playwright install chromium' },
-    { name: 'pnpm', command: 'pnpm exec playwright install chromium' },
-    { name: 'npm', command: 'npx playwright install chromium' },
-  ];
-
-  let pm: { name: string; command: string } | null = null;
-  for (const manager of managers) {
-    try {
-      const cmd = process.platform === 'win32' ? `where ${manager.name}` : `which ${manager.name}`;
-      execSync(cmd, { stdio: 'ignore' });
-      pm = manager;
-      break;
-    } catch {
-      // intentionally empty
-    }
+  const playwrightCliPath = join(DEV_BROWSER_ROOT, 'node_modules', 'playwright', 'cli.js');
+  if (!existsSync(playwrightCliPath)) {
+    throw new Error(
+      `Playwright CLI not found at ${playwrightCliPath}. Run package install before starting.`,
+    );
   }
 
-  if (!pm) {
-    throw new Error('No package manager found (tried bun, pnpm, npm)');
-  }
-
-  console.log(`Using ${pm.name} to install Playwright Chromium...`);
-  execSync(pm.command, { stdio: 'inherit' });
+  console.log(`Using bundled Playwright CLI: ${playwrightCliPath}`);
+  execFileSync(process.execPath, [playwrightCliPath, 'install', 'chromium'], {
+    cwd: DEV_BROWSER_ROOT,
+    stdio: 'inherit',
+  });
   console.log('\nBrowser installed successfully!\n');
 }
 
@@ -198,7 +204,9 @@ async function startServer(retry = false): Promise<void> {
         return;
       } catch (installError) {
         console.error('Failed to install Playwright browsers:', installError);
-        console.log('You may need to run manually: npx playwright install chromium');
+        console.log(
+          'You may need to run manually: node node_modules/playwright/cli.js install chromium',
+        );
         process.exit(1);
       }
     }

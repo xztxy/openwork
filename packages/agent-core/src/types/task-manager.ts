@@ -71,6 +71,26 @@ export interface TaskCallbacks {
   }) => void;
 }
 
+/** Windows PowerShell warm pool tuning */
+export interface WindowsPowerShellPoolConfig {
+  /** Number of idle PowerShell processes to keep pre-warmed */
+  minIdle?: number;
+  /** Maximum number of pooled and active PowerShell processes */
+  maxTotal?: number;
+  /** Allow on-demand cold spawning when pool cannot serve immediately */
+  coldStartFallback?: boolean;
+}
+
+/** macOS PowerShell warm pool tuning */
+export interface DarwinPowerShellPoolConfig {
+  /** Number of idle PowerShell processes to keep pre-warmed */
+  minIdle?: number;
+  /** Maximum number of pooled and active PowerShell processes */
+  maxTotal?: number;
+  /** Allow on-demand cold spawning when pool cannot serve immediately */
+  coldStartFallback?: boolean;
+}
+
 /** Adapter options for the underlying CLI adapter */
 export interface TaskAdapterOptions {
   /** The platform (e.g., 'darwin', 'linux', 'win32') */
@@ -89,6 +109,10 @@ export interface TaskAdapterOptions {
   onBeforeStart?: () => Promise<void>;
   /** Function to get display name for a model ID */
   getModelDisplayName?: (modelId: string) => string;
+  /** Windows PowerShell pool settings (Windows only) */
+  windowsPowerShellPool?: WindowsPowerShellPoolConfig;
+  /** macOS PowerShell pool settings (macOS only) */
+  darwinPowerShellPool?: DarwinPowerShellPoolConfig;
 }
 
 /** Options for creating a TaskManager instance */

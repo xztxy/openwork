@@ -29,7 +29,7 @@ function runCommand(command, description) {
     execSync(command, {
       stdio: 'inherit',
       cwd: path.join(__dirname, '..'),
-      shell: true,
+      shell: process.platform === 'win32' ? 'powershell.exe' : true,
       env: {
         ...process.env,
         ACCOMPLISH_POSTINSTALL_RUNNING: '1',
@@ -66,7 +66,7 @@ if (isWindows) {
       execSync(`npx prebuild-install --runtime electron --target ${electronVersion}`, {
         stdio: 'inherit',
         cwd: betterSqlite3Path,
-        shell: true,
+        shell: process.platform === 'win32' ? 'powershell.exe' : true,
       });
       console.log('> better-sqlite3 Electron prebuild installed successfully');
     } catch (error) {

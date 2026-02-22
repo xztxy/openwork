@@ -29,7 +29,7 @@ import {
   getMcpToolsPath,
   syncApiKeysToOpenCodeAuth,
 } from './config-generator';
-import { getExtendedNodePath } from '../utils/system-path';
+import { getExtendedNodePath, findCommandInPath } from '../utils/system-path';
 import { getBundledNodePaths, logBundledNodeInfo } from '../utils/bundled-node';
 
 const VERTEX_SA_KEY_FILENAME = 'vertex-sa-key.json';
@@ -294,7 +294,62 @@ export async function onBeforeTaskStart(
   await ensureDevBrowserServer(browserConfig, callbacks.onProgress);
 }
 
+function parsePositiveEnvInt(name: string, fallback: number): number {
+  const value = process.env[name];
+  if (!value) return fallback;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return parsed;
+}
+
+function parseBooleanEnv(name: string, fallback: boolean): boolean {
+  const value = process.env[name];
+  if (typeof value !== 'string') return fallback;
+  if (value === '1' || value.toLowerCase() === 'true') return true;
+  if (value === '0' || value.toLowerCase() === 'false') return false;
+  return fallback;
+}
+
+function assertPowerShellRuntimeAvailable(): void {
+  if (process.env.NODE_ENV === 'test') return;
+  if (process.platform !== 'win32' && process.platform !== 'darwin') return;
+
+  if (process.platform === 'win32') {
+    const searchPath = process.env.PATH ?? process.env.Path ?? '';
+    const resolved = findCommandInPath('powershell.exe', searchPath);
+    if (!resolved) {
+      throw new Error(
+        '[OpenCode CLI] Required PowerShell executable "powershell.exe" was not found in PATH.',
+      );
+    }
+    return;
+  }
+
+  const basePath = process.env.PATH ?? '';
+  const searchPath = getExtendedNodePath(basePath);
+  const resolved = findCommandInPath('pwsh', searchPath);
+  if (!resolved) {
+    throw new Error(
+      '[OpenCode CLI] Required PowerShell executable "pwsh" was not found in PATH. Install PowerShell 7+ and relaunch the app.',
+    );
+  }
+}
+
+function getPowerShellPoolOptions() {
+  if (process.platform !== 'win32' && process.platform !== 'darwin') return undefined;
+
+  return {
+    minIdle: parsePositiveEnvInt('ACCOMPLISH_POWERSHELL_POOL_MIN_IDLE', 1),
+    maxTotal: parsePositiveEnvInt('ACCOMPLISH_POWERSHELL_POOL_MAX_TOTAL', 11),
+    coldStartFallback: parseBooleanEnv('ACCOMPLISH_POWERSHELL_POOL_COLD_START_FALLBACK', true),
+  };
+}
+
 export function createElectronTaskManagerOptions(): TaskManagerOptions {
+  assertPowerShellRuntimeAvailable();
+
+  const powerShellPoolOptions = getPowerShellPoolOptions();
+
   return {
     adapterOptions: {
       platform: process.platform,
@@ -305,6 +360,8 @@ export function createElectronTaskManagerOptions(): TaskManagerOptions {
       onBeforeStart,
       getModelDisplayName,
       buildCliArgs,
+      windowsPowerShellPool: process.platform === 'win32' ? powerShellPoolOptions : undefined,
+      darwinPowerShellPool: process.platform === 'darwin' ? powerShellPoolOptions : undefined,
     },
     defaultWorkingDirectory: app.getPath('temp'),
     maxConcurrentTasks: 10,

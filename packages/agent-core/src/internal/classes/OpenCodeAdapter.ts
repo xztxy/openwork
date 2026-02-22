@@ -11,6 +11,14 @@ import {
   CompletionEnforcerCallbacks,
 } from '../../opencode/completion/index.js';
 import { isNonTaskContinuationToolName } from '../../opencode/tool-classification.js';
+import {
+  getDarwinPowerShellPool,
+  getWindowsPowerShellPool,
+  type DarwinPowerShellLease,
+  type DarwinPowerShellPoolOptions,
+  type WindowsPowerShellLease,
+  type WindowsPowerShellPoolOptions,
+} from './WindowsPowerShellPool.js';
 import type { TaskConfig, Task, TaskMessage, TaskResult } from '../../common/types/task.js';
 import type { OpenCodeMessage } from '../../common/types/opencode.js';
 import type { PermissionRequest } from '../../common/types/permission.js';
@@ -37,6 +45,8 @@ export interface AdapterOptions {
   buildCliArgs: (config: TaskConfig) => Promise<string[]>;
   onBeforeStart?: () => Promise<void>;
   getModelDisplayName?: (modelId: string) => string;
+  windowsPowerShellPool?: WindowsPowerShellPoolOptions;
+  darwinPowerShellPool?: DarwinPowerShellPoolOptions;
 }
 
 export interface OpenCodeAdapterEvents {
@@ -238,19 +248,14 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.emit('debug', { type: 'info', message: cwdMsg });
 
     {
-      const { file: spawnFile, args: spawnArgs } = this.buildPtySpawnArgs(command, allArgs);
+      const { ptyProcess, spawnDescription, deferredCommand, lease } =
+        await this.spawnPtyForCommand(command, allArgs, safeCwd, env);
 
-      const spawnMsg = `PTY spawn: ${spawnFile} ${spawnArgs.join(' ')}`;
+      const spawnMsg = `PTY spawn: ${spawnDescription}`;
       console.log('[OpenCode CLI]', spawnMsg);
       this.emit('debug', { type: 'info', message: spawnMsg });
 
-      this.ptyProcess = pty.spawn(spawnFile, spawnArgs, {
-        name: 'xterm-256color',
-        cols: 32000,
-        rows: 30,
-        cwd: safeCwd,
-        env: env as { [key: string]: string },
-      });
+      this.ptyProcess = ptyProcess;
       const pidMsg = `PTY Process PID: ${this.ptyProcess.pid}`;
       console.log('[OpenCode CLI]', pidMsg);
       this.emit('debug', { type: 'info', message: pidMsg });
@@ -281,6 +286,16 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
         this.emit('debug', { type: 'exit', message: exitMsg, data: { exitCode, signal } });
         this.handleProcessExit(exitCode);
       });
+
+      if (deferredCommand) {
+        try {
+          this.ptyProcess.write(deferredCommand + '\r\n');
+        } catch (error) {
+          lease?.retire();
+          this.ptyProcess = null;
+          throw error;
+        }
+      }
     }
 
     return {
@@ -326,15 +341,6 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
     this.ptyProcess.write('\x03');
     console.log('[OpenCode CLI] Sent Ctrl+C interrupt signal');
-
-    if (this.options.platform === 'win32') {
-      setTimeout(() => {
-        if (this.ptyProcess) {
-          this.ptyProcess.write('Y\n');
-          console.log('[OpenCode CLI] Sent Y to confirm batch termination');
-        }
-      }, 100);
-    }
   }
 
   getSessionId(): string | null {
@@ -734,15 +740,14 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     const allArgs = [...baseArgs, ...cliArgs];
     const safeCwd = config.workingDirectory || this.options.tempPath;
 
-    const { file: spawnFile, args: spawnArgs } = this.buildPtySpawnArgs(command, allArgs);
+    const { ptyProcess, deferredCommand, lease } = await this.spawnPtyForCommand(
+      command,
+      allArgs,
+      safeCwd,
+      env,
+    );
 
-    this.ptyProcess = pty.spawn(spawnFile, spawnArgs, {
-      name: 'xterm-256color',
-      cols: 32000,
-      rows: 30,
-      cwd: safeCwd,
-      env: env as { [key: string]: string },
-    });
+    this.ptyProcess = ptyProcess;
 
     this.ptyProcess.onData((data: string) => {
       /* eslint-disable no-control-regex */
@@ -765,6 +770,16 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.ptyProcess.onExit(({ exitCode }) => {
       this.handleProcessExit(exitCode);
     });
+
+    if (deferredCommand) {
+      try {
+        this.ptyProcess.write(deferredCommand + '\r\n');
+      } catch (error) {
+        lease?.retire();
+        this.ptyProcess = null;
+        throw error;
+      }
+    }
   }
 
   private generateTaskId(): string {
@@ -821,14 +836,108 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     console.log('[OpenCode Adapter] Emitted synthetic plan message');
   }
 
-  private buildPtySpawnArgs(command: string, args: string[]): { file: string; args: string[] } {
+  private async spawnPtyForCommand(
+    command: string,
+    args: string[],
+    cwd: string,
+    env: NodeJS.ProcessEnv,
+  ): Promise<{
+    ptyProcess: pty.IPty;
+    spawnDescription: string;
+    deferredCommand?: string;
+    lease?: WindowsPowerShellLease | DarwinPowerShellLease;
+  }> {
     if (this.options.platform === 'win32') {
-      // Windows policy: always spawn the real .exe, never cmd wrappers.
-      if (command.toLowerCase().endsWith('.exe')) {
-        return { file: command, args };
+      if (!command.toLowerCase().endsWith('.exe')) {
+        throw new Error(`Windows CLI command must resolve to an .exe path. Received: ${command}`);
       }
 
-      throw new Error(`Windows CLI command must resolve to an .exe path. Received: ${command}`);
+      const lease = await getWindowsPowerShellPool(
+        this.options.tempPath,
+        this.options.windowsPowerShellPool,
+      ).acquire();
+
+      const deferredCommand = this.buildPowerShellCommandScript(command, args, cwd, env);
+
+      return {
+        ptyProcess: lease.pty,
+        spawnDescription: `powershell.exe pool (${lease.source})`,
+        deferredCommand,
+        lease,
+      };
+    }
+
+    if (this.options.platform === 'darwin') {
+      const lease = await getDarwinPowerShellPool(
+        this.options.tempPath,
+        this.options.darwinPowerShellPool,
+      ).acquire();
+
+      const deferredCommand = this.buildPowerShellCommandScript(command, args, cwd, env);
+
+      return {
+        ptyProcess: lease.pty,
+        spawnDescription: `pwsh pool (${lease.source})`,
+        deferredCommand,
+        lease,
+      };
+    }
+
+    const { file: spawnFile, args: spawnArgs } = this.buildPtySpawnArgs(command, args);
+    const ptyProcess = pty.spawn(spawnFile, spawnArgs, {
+      name: 'xterm-256color',
+      cols: 32000,
+      rows: 30,
+      cwd,
+      env: env as { [key: string]: string },
+    });
+
+    return {
+      ptyProcess,
+      spawnDescription: `${spawnFile} ${spawnArgs.join(' ')}`,
+    };
+  }
+
+  private buildPowerShellCommandScript(
+    command: string,
+    args: string[],
+    cwd: string,
+    env: NodeJS.ProcessEnv,
+  ): string {
+    const lines: string[] = [];
+    lines.push("$ErrorActionPreference = 'Stop'");
+    lines.push(`Set-Location -LiteralPath ${this.quotePowerShellLiteral(cwd)}`);
+
+    for (const [key, value] of Object.entries(env)) {
+      if (typeof value !== 'string') continue;
+      if (process.env[key] === value) continue;
+      lines.push(
+        `[System.Environment]::SetEnvironmentVariable(${this.quotePowerShellLiteral(key)}, ${this.quotePowerShellLiteral(value)}, 'Process')`,
+      );
+    }
+
+    lines.push(`$accomplishCommand = ${this.quotePowerShellLiteral(command)}`);
+    lines.push('$accomplishArgs = @(');
+    for (const arg of args) {
+      lines.push(`  ${this.quotePowerShellLiteral(arg)}`);
+    }
+    lines.push(')');
+    lines.push('& $accomplishCommand @accomplishArgs');
+    lines.push(
+      '$accomplishExitCode = if ($null -ne $LASTEXITCODE) { [int]$LASTEXITCODE } elseif ($?) { 0 } else { 1 }',
+    );
+    lines.push('exit $accomplishExitCode');
+
+    return lines.join('\r\n');
+  }
+
+  private quotePowerShellLiteral(value: string): string {
+    return `'${value.replace(/'/g, "''")}'`;
+  }
+
+  private buildPtySpawnArgs(command: string, args: string[]): { file: string; args: string[] } {
+    if (this.options.platform === 'win32') {
+      throw new Error('Windows execution must be handled by the PowerShell pool.');
     }
 
     const shell =

@@ -1,4 +1,10 @@
 import { OpenCodeAdapter, AdapterOptions, OpenCodeCliNotFoundError } from './OpenCodeAdapter.js';
+import {
+  disposeDarwinPowerShellPool,
+  getDarwinPowerShellPool,
+  disposeWindowsPowerShellPool,
+  getWindowsPowerShellPool,
+} from './WindowsPowerShellPool.js';
 import type {
   TaskConfig,
   Task,
@@ -92,6 +98,18 @@ export class TaskManager {
   constructor(options: TaskManagerOptions) {
     this.options = options;
     this.maxConcurrentTasks = options.maxConcurrentTasks ?? DEFAULT_MAX_CONCURRENT_TASKS;
+
+    if (this.options.adapterOptions.platform === 'win32') {
+      getWindowsPowerShellPool(
+        this.options.adapterOptions.tempPath,
+        this.options.adapterOptions.windowsPowerShellPool,
+      );
+    } else if (this.options.adapterOptions.platform === 'darwin') {
+      getDarwinPowerShellPool(
+        this.options.adapterOptions.tempPath,
+        this.options.adapterOptions.darwinPowerShellPool,
+      );
+    }
   }
 
   getIsFirstTask(): boolean {
@@ -496,6 +514,12 @@ export class TaskManager {
     stopMoonshotProxy().catch((err) => {
       console.error('[TaskManager] Failed to stop Moonshot proxy:', err);
     });
+
+    if (this.options.adapterOptions.platform === 'win32') {
+      disposeWindowsPowerShellPool();
+    } else if (this.options.adapterOptions.platform === 'darwin') {
+      disposeDarwinPowerShellPool();
+    }
 
     console.log('[TaskManager] All tasks disposed');
   }

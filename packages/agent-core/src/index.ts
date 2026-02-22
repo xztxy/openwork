@@ -1,5 +1,4 @@
 // =============================================================================
-console.log('[agent-core] u2d sync test');
 // @accomplish/core - Public API (v0.4.0)
 // =============================================================================
 // This file explicitly exports the public API for the @accomplish/core package.
@@ -34,6 +33,8 @@ export type {
   TaskManagerAPI,
   TaskManagerOptions as TaskManagerFactoryOptions,
   TaskAdapterOptions,
+  WindowsPowerShellPoolConfig,
+  DarwinPowerShellPoolConfig,
   TaskCallbacks as TaskManagerCallbacks,
   TaskProgressEvent as TaskManagerProgressEvent,
   // Storage API

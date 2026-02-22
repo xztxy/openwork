@@ -336,7 +336,7 @@ describe('OAuthBrowserFlow', () => {
       expect(mockPtyInstance.write).toHaveBeenCalledWith('\x03');
     });
 
-    it('should send Y confirmation on Windows', async () => {
+    it('should not send batch confirmation on Windows', async () => {
       const originalPlatform = process.platform;
       Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
 
@@ -348,7 +348,7 @@ describe('OAuthBrowserFlow', () => {
 
       await oauthBrowserFlow.cancel();
 
-      expect(mockPtyInstance.write).toHaveBeenCalledWith('Y\n');
+      expect(mockPtyInstance.write).not.toHaveBeenCalledWith('Y\n');
 
       Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
     });

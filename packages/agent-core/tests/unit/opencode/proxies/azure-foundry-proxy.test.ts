@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import net from 'net';
 import {
   transformRequestBody,
   ensureAzureFoundryProxy,
@@ -6,11 +7,36 @@ import {
   isAzureFoundryProxyRunning,
 } from '../../../../src/opencode/proxies/azure-foundry-proxy.js';
 
+async function getFreePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.on('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        server.close(() => reject(new Error('Could not determine free port')));
+        return;
+      }
+      const { port } = address;
+      server.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(port);
+      });
+    });
+  });
+}
+
 describe('Azure Foundry Proxy', () => {
-  beforeEach(() => {
+  let proxyPort = 0;
+
+  beforeEach(async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    proxyPort = await getFreePort();
   });
 
   afterEach(async () => {
@@ -120,16 +146,22 @@ describe('Azure Foundry Proxy', () => {
 
   describe('ensureAzureFoundryProxy', () => {
     it('should start proxy server and return proxy info', async () => {
-      const result = await ensureAzureFoundryProxy('https://api.azure.com/openai');
+      const result = await ensureAzureFoundryProxy('https://api.azure.com/openai', {
+        port: proxyPort,
+      });
 
-      expect(result.baseURL).toBe('http://127.0.0.1:9228');
+      expect(result.baseURL).toBe(`http://127.0.0.1:${proxyPort}`);
       expect(result.targetBaseURL).toBe('https://api.azure.com/openai');
-      expect(result.port).toBe(9228);
+      expect(result.port).toBe(proxyPort);
     });
 
     it('should reuse existing proxy server', async () => {
-      const result1 = await ensureAzureFoundryProxy('https://api.azure.com/openai');
-      const result2 = await ensureAzureFoundryProxy('https://api.azure.com/openai2');
+      const result1 = await ensureAzureFoundryProxy('https://api.azure.com/openai', {
+        port: proxyPort,
+      });
+      const result2 = await ensureAzureFoundryProxy('https://api.azure.com/openai2', {
+        port: proxyPort,
+      });
 
       // Both should return same proxy URL
       expect(result1.baseURL).toBe(result2.baseURL);
@@ -138,7 +170,9 @@ describe('Azure Foundry Proxy', () => {
     });
 
     it('should normalize URL by removing trailing slash', async () => {
-      const result = await ensureAzureFoundryProxy('https://api.azure.com/openai/');
+      const result = await ensureAzureFoundryProxy('https://api.azure.com/openai/', {
+        port: proxyPort,
+      });
 
       expect(result.targetBaseURL).toBe('https://api.azure.com/openai');
     });
@@ -156,7 +190,7 @@ describe('Azure Foundry Proxy', () => {
 
   describe('stopAzureFoundryProxy', () => {
     it('should stop running proxy', async () => {
-      await ensureAzureFoundryProxy('https://api.azure.com/openai');
+      await ensureAzureFoundryProxy('https://api.azure.com/openai', { port: proxyPort });
       expect(isAzureFoundryProxyRunning()).toBe(true);
 
       await stopAzureFoundryProxy();
@@ -177,7 +211,7 @@ describe('Azure Foundry Proxy', () => {
     });
 
     it('should return true after starting proxy', async () => {
-      await ensureAzureFoundryProxy('https://api.azure.com/openai');
+      await ensureAzureFoundryProxy('https://api.azure.com/openai', { port: proxyPort });
 
       expect(isAzureFoundryProxyRunning()).toBe(true);
     });
