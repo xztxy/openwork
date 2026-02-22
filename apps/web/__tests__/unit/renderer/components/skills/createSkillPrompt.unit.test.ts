@@ -25,33 +25,39 @@ describe('createSkillPrompt', () => {
         name: 'My Skill',
         description: 'Does useful work',
         skillsBasePath: '/Users/test/Library/Application Support/Accomplish/skills/',
+        platform: 'darwin',
       });
 
       expect(prompt).toContain('/skill-creator');
       expect(prompt).toContain(
-        'Use this exact base directory: "/Users/test/Library/Application Support/Accomplish/skills"',
+        'Use this exact base directory: `/Users/test/Library/Application Support/Accomplish/skills`',
       );
       expect(prompt).toContain(
-        'Write exactly one skill file at: "/Users/test/Library/Application Support/Accomplish/skills/my-skill/SKILL.md"',
+        'Write exactly one skill file at: `/Users/test/Library/Application Support/Accomplish/skills/my-skill/SKILL.md`',
       );
       expect(prompt).toContain(
         'End your final message with exactly: Created skill at: /Users/test/Library/Application Support/Accomplish/skills/my-skill/SKILL.md',
       );
     });
 
-    it('uses windows separators when base path is windows style', () => {
+    it('uses windows separators when platform is win32', () => {
       const prompt = buildCreateSkillPrompt({
         name: 'Windows Skill',
         description: 'Works on Windows',
-        skillsBasePath: 'C:\\Users\\Test\\AppData\\Roaming\\Accomplish\\skills\\',
+        skillsBasePath: 'C:/Users/Test/AppData/Roaming/Accomplish/skills/',
+        platform: 'win32',
       });
 
       expect(prompt).toContain(
-        'Write exactly one skill file at: "C:\\\\Users\\\\Test\\\\AppData\\\\Roaming\\\\Accomplish\\\\skills\\\\windows-skill\\\\SKILL.md"',
+        'Use this exact base directory: `C:\\Users\\Test\\AppData\\Roaming\\Accomplish\\skills`',
+      );
+      expect(prompt).toContain(
+        'Write exactly one skill file at: `C:\\Users\\Test\\AppData\\Roaming\\Accomplish\\skills\\windows-skill\\SKILL.md`',
       );
       expect(prompt).toContain(
         'End your final message with exactly: Created skill at: C:\\Users\\Test\\AppData\\Roaming\\Accomplish\\skills\\windows-skill\\SKILL.md',
       );
+      expect(prompt).not.toContain('C:\\\\Users');
     });
   });
 });

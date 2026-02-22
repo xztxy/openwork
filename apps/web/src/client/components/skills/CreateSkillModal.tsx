@@ -55,11 +55,17 @@ export function CreateSkillModal({ open, onOpenChange, onSettingsClose }: Create
     setIsSubmitting(true);
 
     try {
-      const skillsBasePath = await getAccomplish().getUserSkillsPath();
+      const accomplish = getAccomplish();
+      const [skillsBasePath, platform] = await Promise.all([
+        accomplish.getUserSkillsPath(),
+        accomplish.getPlatform(),
+      ]);
+
       const prompt = buildCreateSkillPrompt({
         name: name.trim(),
         description: description.trim(),
         skillsBasePath,
+        platform,
       });
 
       const task = await startTask({ prompt });
