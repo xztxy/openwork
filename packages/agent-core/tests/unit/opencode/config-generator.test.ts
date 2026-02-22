@@ -52,6 +52,11 @@ describe('ConfigGenerator', () => {
   afterEach(() => {
     vi.restoreAllMocks();
 
+    const sharedBundledNodeRoot = path.dirname(sharedBundledNodeBinPath);
+    if (fs.existsSync(sharedBundledNodeRoot)) {
+      fs.rmSync(sharedBundledNodeRoot, { recursive: true, force: true });
+    }
+
     if (fs.existsSync(testDir)) {
       fs.rmSync(testDir, { recursive: true, force: true });
     }

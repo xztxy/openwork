@@ -121,6 +121,22 @@ export async function buildEnvironment(taskId: string): Promise<NodeJS.ProcessEn
     );
   }
 
+  if (!fs.existsSync(bundledNode.nodePath)) {
+    throw new Error(
+      `[OpenCode CLI] Bundled Node.js executable not found at ${bundledNode.nodePath}. ` +
+        'Run "pnpm -F @accomplish/desktop download:nodejs" and rebuild before launching.',
+    );
+  }
+
+  try {
+    fs.accessSync(bundledNode.nodePath, fs.constants.X_OK);
+  } catch {
+    throw new Error(
+      `[OpenCode CLI] Bundled Node.js executable is not executable at ${bundledNode.nodePath}. ` +
+        'Run "pnpm -F @accomplish/desktop download:nodejs" and rebuild before launching.',
+    );
+  }
+
   env.ELECTRON_RUN_AS_NODE = '1';
   logBundledNodeInfo();
 

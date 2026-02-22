@@ -4,6 +4,8 @@ import path from 'path';
 const originalPlatform = process.platform;
 const originalArch = process.arch;
 const originalAppRoot = process.env.APP_ROOT;
+const processWithResources = process as NodeJS.Process & { resourcesPath?: string };
+const originalResourcesPath = processWithResources.resourcesPath;
 
 const { mockApp, mockFs } = vi.hoisted(() => ({
   mockApp: {
@@ -43,6 +45,11 @@ describe('Bundled Node.js Utilities', () => {
     vi.restoreAllMocks();
     Object.defineProperty(process, 'platform', { value: originalPlatform });
     Object.defineProperty(process, 'arch', { value: originalArch });
+    if (originalResourcesPath === undefined) {
+      delete processWithResources.resourcesPath;
+    } else {
+      processWithResources.resourcesPath = originalResourcesPath;
+    }
     if (originalAppRoot === undefined) {
       delete process.env.APP_ROOT;
     } else {
@@ -84,7 +91,7 @@ describe('Bundled Node.js Utilities', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' });
     Object.defineProperty(process, 'arch', { value: 'x64' });
     const resourcesPath = 'C:\\Program Files\\Accomplish\\resources';
-    (process as NodeJS.Process & { resourcesPath: string }).resourcesPath = resourcesPath;
+    processWithResources.resourcesPath = resourcesPath;
     const nodePath = path.join(resourcesPath, 'nodejs', 'x64', 'node.exe');
 
     mockFs.existsSync.mockImplementation((input: string) => input === nodePath);

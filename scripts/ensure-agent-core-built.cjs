@@ -96,6 +96,10 @@ function runPnpm(args, description) {
   if (typeof result.status === 'number' && result.status !== 0) {
     process.exit(result.status);
   }
+  if (result.status === null && result.signal) {
+    console.error(`pnpm command "${description}" terminated by signal: ${result.signal}`);
+    process.exit(1);
+  }
 }
 
 const hostNodeTarget = resolveHostNodeRuntimeTarget();
@@ -118,7 +122,14 @@ if (hostNodeTarget) {
   );
 }
 
-const pkg = JSON.parse(fs.readFileSync(agentCorePackageJsonPath, 'utf8'));
+let pkg;
+try {
+  pkg = JSON.parse(fs.readFileSync(agentCorePackageJsonPath, 'utf8'));
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`Failed to read or parse ${agentCorePackageJsonPath}: ${message}`);
+  process.exit(1);
+}
 const outputPaths = new Set();
 
 addOutputPath(outputPaths, pkg.main);

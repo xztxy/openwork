@@ -105,6 +105,10 @@ vi.mock('@accomplish_ai/agent-core', async () => {
       }) => {
         const configDir = actualPath.join(options.userDataPath, 'opencode');
         const configPath = actualPath.join(configDir, 'opencode.json');
+        const nodeExecutableName = process.platform === 'win32' ? 'node.exe' : 'node';
+        const nodeCommand = options.bundledNodeBinPath
+          ? actualPath.join(options.bundledNodeBinPath, nodeExecutableName)
+          : nodeExecutableName;
 
         // Create config directory
         if (!actualFs.existsSync(configDir)) {
@@ -139,10 +143,7 @@ Use AskUserQuestion tool for user interaction.`,
             'file-permission': {
               type: 'local',
               enabled: true,
-              command: [
-                'node',
-                actualPath.join(options.mcpToolsPath, 'file-permission', 'dist', 'index.mjs'),
-              ],
+              command: [nodeCommand, actualPath.join(options.mcpToolsPath, 'file-permission', 'dist', 'index.mjs')],
               environment: {
                 PERMISSION_API_PORT: String(options.permissionApiPort),
               },
@@ -446,11 +447,15 @@ describe('OpenCode Config Generator Integration', () => {
       // Assert
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
       const filePermission = config.mcp['file-permission'];
+      const expectedNode = path.join(
+        tempBundledNodeBinDir,
+        process.platform === 'win32' ? 'node.exe' : 'node',
+      );
 
       expect(filePermission).toBeDefined();
       expect(filePermission.type).toBe('local');
       expect(filePermission.enabled).toBe(true);
-      expect(filePermission.command[0]).toBe('node');
+      expect(filePermission.command[0]).toBe(expectedNode);
       expect(filePermission.command[1]).toContain('dist/index.mjs');
       expect(filePermission.environment.PERMISSION_API_PORT).toBe('9226');
     });

@@ -73,6 +73,15 @@ export async function installPlaywrightChromium(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const devBrowserDir = path.join(config.mcpToolsPath, 'dev-browser');
+    if (!fs.existsSync(devBrowserDir)) {
+      const message =
+        `[Browser] Missing dev-browser directory: ${devBrowserDir}. ` +
+        'Run "pnpm -F @accomplish/desktop build:mcp-tools:dev" and rebuild artifacts.';
+      onProgress?.(message);
+      reject(new Error(message));
+      return;
+    }
+
     const nodeExe = getNodeExecutable(config.bundledNodeBinPath);
     const playwrightCliPath = resolvePlaywrightCliPath(config.mcpToolsPath);
     const spawnEnv = buildNodeEnvironment(config.bundledNodeBinPath);

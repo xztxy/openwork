@@ -84,6 +84,20 @@ const bundles = [
   },
 ];
 
+function validateSkillDependencyCategories() {
+  const bundledSkillNames = new Set(bundles.map((bundle) => bundle.name));
+  const categorizedSkillNames = new Set([...SKILLS_WITH_RUNTIME_DEPS, ...SKILLS_FULLY_BUNDLED]);
+  const uncategorizedSkills = [...bundledSkillNames].filter(
+    (skillName) => !categorizedSkillNames.has(skillName),
+  );
+
+  if (uncategorizedSkills.length > 0) {
+    throw new Error(
+      `[bundle-skills] Skills missing dependency categorization: ${uncategorizedSkills.join(', ')}`,
+    );
+  }
+}
+
 function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
@@ -203,14 +217,20 @@ async function main() {
     throw new Error(`[bundle-skills] MCP tools directory not found: ${skillsDir}`);
   }
 
+  validateSkillDependencyCategories();
+
   console.log(`[bundle-skills] Starting skill bundling (mode=${buildMode})...`);
   for (const bundle of bundles) {
     await bundleSkill(bundle);
   }
   verifyBundleOutputs();
 
-  console.log('[bundle-skills] Optimizing skill dependencies for deterministic runtime parity...');
-  reinstallProductionDepsForBundledBuild();
+  if (buildMode === 'package') {
+    console.log('[bundle-skills] Optimizing skill dependencies for package runtime...');
+    reinstallProductionDepsForBundledBuild();
+  } else {
+    console.log('[bundle-skills] Skipping dependency optimization in dev mode.');
+  }
 
   console.log('[bundle-skills] Done');
 }
