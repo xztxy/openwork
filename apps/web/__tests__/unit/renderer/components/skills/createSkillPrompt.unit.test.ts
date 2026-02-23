@@ -15,7 +15,24 @@ describe('createSkillPrompt', () => {
     });
 
     it('falls back when name is fully sanitized away', () => {
-      expect(sanitizeSkillDirectoryName('🔥🔥🔥')).toBe('new-skill');
+      expect(sanitizeSkillDirectoryName('🔥🔥🔥')).toMatch(/^new-skill-[a-z0-9]{10}$/);
+    });
+
+    it('uses deterministic fallback for identical non-ascii names', () => {
+      const first = sanitizeSkillDirectoryName('こんにちは');
+      const second = sanitizeSkillDirectoryName('こんにちは');
+
+      expect(first).toBe(second);
+      expect(first).toMatch(/^new-skill-[a-z0-9]{10}$/);
+    });
+
+    it('avoids collisions for different non-ascii names', () => {
+      const japanese = sanitizeSkillDirectoryName('こんにちは');
+      const hebrew = sanitizeSkillDirectoryName('שלום');
+
+      expect(japanese).not.toBe(hebrew);
+      expect(japanese).toMatch(/^new-skill-[a-z0-9]{10}$/);
+      expect(hebrew).toMatch(/^new-skill-[a-z0-9]{10}$/);
     });
   });
 
@@ -58,6 +75,20 @@ describe('createSkillPrompt', () => {
         'End your final message with exactly: Created skill at: C:\\Users\\Test\\AppData\\Roaming\\Accomplish\\skills\\windows-skill\\SKILL.md',
       );
       expect(prompt).not.toContain('C:\\\\Users');
+    });
+
+    it('uses hashed fallback directory in prompt for non-ascii names', () => {
+      const slug = sanitizeSkillDirectoryName('שלום');
+      const prompt = buildCreateSkillPrompt({
+        name: 'שלום',
+        description: 'Does useful work',
+        skillsBasePath: '/Users/test/Library/Application Support/Accomplish/skills/',
+        platform: 'darwin',
+      });
+
+      expect(prompt).toContain(
+        `Write exactly one skill file at: \`/Users/test/Library/Application Support/Accomplish/skills/${slug}/SKILL.md\``,
+      );
     });
   });
 });
