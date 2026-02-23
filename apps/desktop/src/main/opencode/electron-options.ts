@@ -341,6 +341,8 @@ export async function onBeforeTaskStart(
 }
 
 export function createElectronTaskManagerOptions(): TaskManagerOptions {
+  const maxConcurrentTasks = process.platform === 'win32' ? 1 : 10;
+
   return {
     adapterOptions: {
       platform: process.platform,
@@ -353,7 +355,7 @@ export function createElectronTaskManagerOptions(): TaskManagerOptions {
       buildCliArgs,
     },
     defaultWorkingDirectory: app.getPath('temp'),
-    maxConcurrentTasks: 10,
+    maxConcurrentTasks,
     isCliAvailable,
     onBeforeTaskStart,
   };
