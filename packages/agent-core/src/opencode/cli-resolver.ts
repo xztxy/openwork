@@ -18,6 +18,70 @@ function getOpenCodePlatformInfo(): { packageNames: string[]; binaryNames: strin
   };
 }
 
+const WINDOWS_NATIVE_PACKAGE_NAMES = ['opencode-windows-x64-baseline', 'opencode-windows-x64'];
+const WINDOWS_NATIVE_BINARY_NAME = 'opencode.exe';
+
+function findWindowsNativeCliInNodeModules(nodeModulesDir: string): string | null {
+  for (const packageName of WINDOWS_NATIVE_PACKAGE_NAMES) {
+    const cliPath = path.join(nodeModulesDir, packageName, 'bin', WINDOWS_NATIVE_BINARY_NAME);
+    if (fs.existsSync(cliPath)) {
+      return cliPath;
+    }
+  }
+  return null;
+}
+
+function findWindowsNativeCliFromPnpmStore(root: string): string | null {
+  const pnpmDir = path.join(root, 'node_modules', '.pnpm');
+  if (!fs.existsSync(pnpmDir)) {
+    return null;
+  }
+
+  try {
+    const entries = fs.readdirSync(pnpmDir, { withFileTypes: true });
+    for (const packageName of WINDOWS_NATIVE_PACKAGE_NAMES) {
+      const packageEntries = entries.filter(
+        (entry) => entry.isDirectory() && entry.name.startsWith(`${packageName}@`),
+      );
+      for (const packageEntry of packageEntries) {
+        const cliPath = path.join(
+          pnpmDir,
+          packageEntry.name,
+          'node_modules',
+          packageName,
+          'bin',
+          WINDOWS_NATIVE_BINARY_NAME,
+        );
+        if (fs.existsSync(cliPath)) {
+          return cliPath;
+        }
+      }
+    }
+  } catch {
+    // ignore pnpm store scanning failures and continue fallback resolution
+  }
+
+  return null;
+}
+
+function findWindowsNativeCliFromWrapper(wrapperPath: string): string | null {
+  let current = path.dirname(wrapperPath);
+
+  for (;;) {
+    const nodeModulesDir = path.join(current, 'node_modules');
+    const nativeCli = findWindowsNativeCliInNodeModules(nodeModulesDir);
+    if (nativeCli) {
+      return nativeCli;
+    }
+
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return null;
+    }
+    current = parent;
+  }
+}
+
 function getCandidateAppRoots(appPath?: string): string[] {
   const roots: string[] = [];
 
@@ -68,58 +132,56 @@ function resolveLocalCliPath(appPath?: string): ResolvedCliPaths | null {
 
   for (const root of appRoots) {
     if (process.platform === 'win32') {
-      for (const packageName of packageNames) {
-        for (const binaryName of binaryNames) {
-          const cliPath = path.join(root, 'node_modules', packageName, 'bin', binaryName);
-          if (fs.existsSync(cliPath)) {
-            console.log('[CLI Resolver] Using local OpenCode CLI executable:', cliPath);
-            return {
-              cliPath,
-              cliDir: path.dirname(cliPath),
-              source: 'local',
-            };
-          }
-        }
+      // 1) Prefer direct native Windows binaries.
+      const nativeFromNodeModules = findWindowsNativeCliInNodeModules(path.join(root, 'node_modules'));
+      if (nativeFromNodeModules) {
+        console.log('[CLI Resolver] Using local OpenCode CLI executable:', nativeFromNodeModules);
+        return {
+          cliPath: nativeFromNodeModules,
+          cliDir: path.dirname(nativeFromNodeModules),
+          source: 'local',
+        };
       }
 
-      // pnpm often keeps optional platform binaries only in node_modules/.pnpm.
-      const pnpmDir = path.join(root, 'node_modules', '.pnpm');
-      if (fs.existsSync(pnpmDir)) {
-        try {
-          const entries = fs.readdirSync(pnpmDir, { withFileTypes: true });
-          for (const packageName of packageNames) {
-            const packageEntries = entries.filter(
-              (entry) => entry.isDirectory() && entry.name.startsWith(`${packageName}@`),
-            );
-            for (const packageEntry of packageEntries) {
-              for (const binaryName of binaryNames) {
-                const cliPath = path.join(
-                  pnpmDir,
-                  packageEntry.name,
-                  'node_modules',
-                  packageName,
-                  'bin',
-                  binaryName,
-                );
-                if (fs.existsSync(cliPath)) {
-                  console.log('[CLI Resolver] Using local OpenCode CLI executable:', cliPath);
-                  return {
-                    cliPath,
-                    cliDir: path.dirname(cliPath),
-                    source: 'local',
-                  };
-                }
-              }
-            }
-          }
-        } catch {
-          // ignore pnpm store scanning failures and continue fallback resolution
+      // 2) Try pnpm store layout.
+      const nativeFromPnpmStore = findWindowsNativeCliFromPnpmStore(root);
+      if (nativeFromPnpmStore) {
+        console.log('[CLI Resolver] Using local OpenCode CLI executable:', nativeFromPnpmStore);
+        return {
+          cliPath: nativeFromPnpmStore,
+          cliDir: path.dirname(nativeFromPnpmStore),
+          source: 'local',
+        };
+      }
+
+      // 3) Wrapper fallback: resolve native binary from wrapper location if possible.
+      for (const binaryName of binaryNames) {
+        const wrapperPath = path.join(root, 'node_modules', 'opencode-ai', 'bin', binaryName);
+        if (!fs.existsSync(wrapperPath)) {
+          continue;
         }
+
+        const nativeFromWrapper = findWindowsNativeCliFromWrapper(wrapperPath);
+        if (nativeFromWrapper) {
+          console.log('[CLI Resolver] Using local OpenCode CLI executable:', nativeFromWrapper);
+          return {
+            cliPath: nativeFromWrapper,
+            cliDir: path.dirname(nativeFromWrapper),
+            source: 'local',
+          };
+        }
+
+        console.log('[CLI Resolver] Using local OpenCode CLI executable:', wrapperPath);
+        return {
+          cliPath: wrapperPath,
+          cliDir: path.dirname(wrapperPath),
+          source: 'local',
+        };
       }
       continue;
     }
 
-    const cliPath = path.join(root, 'node_modules', '.bin', binaryName);
+    const cliPath = path.join(root, 'node_modules', '.bin', binaryNames[0]);
     if (fs.existsSync(cliPath)) {
       console.log('[CLI Resolver] Using local OpenCode CLI executable:', cliPath);
       return {

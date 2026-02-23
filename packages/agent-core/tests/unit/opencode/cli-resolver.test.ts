@@ -173,6 +173,38 @@ describe('CLI Resolver', () => {
       expect(result?.source).toBe('local');
       expect(result?.cliPath).toBe(cliPath);
     });
+
+    it('prefers native Windows binary discovered from opencode-ai wrapper path', () => {
+      if (process.platform !== 'win32') {
+        return;
+      }
+
+      const appRoot = path.join(testDir, 'app');
+      const wrapperPath = path.join(appRoot, 'node_modules', 'opencode-ai', 'bin', 'opencode');
+      fs.mkdirSync(path.dirname(wrapperPath), { recursive: true });
+      fs.writeFileSync(wrapperPath, 'wrapper');
+
+      const nativeCliPath = path.join(
+        appRoot,
+        'node_modules',
+        'opencode-ai',
+        'node_modules',
+        'opencode-windows-x64-baseline',
+        'bin',
+        'opencode.exe',
+      );
+      fs.mkdirSync(path.dirname(nativeCliPath), { recursive: true });
+      fs.writeFileSync(nativeCliPath, 'binary');
+
+      const result = resolveCliPath({
+        isPackaged: false,
+        appPath: appRoot,
+      });
+
+      expect(result).not.toBeNull();
+      expect(result?.source).toBe('local');
+      expect(result?.cliPath).toBe(nativeCliPath);
+    });
   });
 
   describe('isCliAvailable', () => {
