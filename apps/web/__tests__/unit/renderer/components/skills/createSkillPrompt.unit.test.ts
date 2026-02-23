@@ -1,43 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildCreateSkillPrompt,
-  sanitizeSkillDirectoryName,
-} from '@/components/skills/createSkillPrompt';
+import { buildCreateSkillPrompt } from '@/components/skills/createSkillPrompt';
 
 describe('createSkillPrompt', () => {
-  describe('sanitizeSkillDirectoryName', () => {
-    it('creates lowercase hyphenated directory names', () => {
-      expect(sanitizeSkillDirectoryName('My Awesome Skill')).toBe('my-awesome-skill');
-    });
-
-    it('removes traversal and unsafe characters', () => {
-      expect(sanitizeSkillDirectoryName('../../../etc/passwd')).toBe('etc-passwd');
-    });
-
-    it('falls back when name is fully sanitized away', () => {
-      expect(sanitizeSkillDirectoryName('🔥🔥🔥')).toMatch(/^new-skill-[a-z0-9]{10}$/);
-    });
-
-    it('uses deterministic fallback for identical non-ascii names', () => {
-      const first = sanitizeSkillDirectoryName('こんにちは');
-      const second = sanitizeSkillDirectoryName('こんにちは');
-
-      expect(first).toBe(second);
-      expect(first).toMatch(/^new-skill-[a-z0-9]{10}$/);
-    });
-
-    it('avoids collisions for different non-ascii names', () => {
-      const japanese = sanitizeSkillDirectoryName('こんにちは');
-      const hebrew = sanitizeSkillDirectoryName('שלום');
-
-      expect(japanese).not.toBe(hebrew);
-      expect(japanese).toMatch(/^new-skill-[a-z0-9]{10}$/);
-      expect(hebrew).toMatch(/^new-skill-[a-z0-9]{10}$/);
-    });
-  });
-
   describe('buildCreateSkillPrompt', () => {
-    it('injects exact base and target paths for unix paths', () => {
+    it('pins only the deterministic base path for unix paths', () => {
       const prompt = buildCreateSkillPrompt({
         name: 'My Skill',
         description: 'Does useful work',
@@ -50,14 +16,16 @@ describe('createSkillPrompt', () => {
         'Use this exact base directory: `/Users/test/Library/Application Support/Accomplish/skills`',
       );
       expect(prompt).toContain(
-        'Write exactly one skill file at: `/Users/test/Library/Application Support/Accomplish/skills/my-skill/SKILL.md`',
+        'Create exactly one new subdirectory under that base directory for this skill.',
       );
       expect(prompt).toContain(
-        'End your final message with exactly: Created skill at: /Users/test/Library/Application Support/Accomplish/skills/my-skill/SKILL.md',
+        'End your final message with exactly: Created skill at: <absolute path to SKILL.md>',
       );
+      expect(prompt).not.toContain('Use this exact skill directory name');
+      expect(prompt).not.toContain('/my-skill/SKILL.md');
     });
 
-    it('uses windows separators when platform is win32', () => {
+    it('normalizes windows base path when platform is win32', () => {
       const prompt = buildCreateSkillPrompt({
         name: 'Windows Skill',
         description: 'Works on Windows',
@@ -68,17 +36,10 @@ describe('createSkillPrompt', () => {
       expect(prompt).toContain(
         'Use this exact base directory: `C:\\Users\\Test\\AppData\\Roaming\\Accomplish\\skills`',
       );
-      expect(prompt).toContain(
-        'Write exactly one skill file at: `C:\\Users\\Test\\AppData\\Roaming\\Accomplish\\skills\\windows-skill\\SKILL.md`',
-      );
-      expect(prompt).toContain(
-        'End your final message with exactly: Created skill at: C:\\Users\\Test\\AppData\\Roaming\\Accomplish\\skills\\windows-skill\\SKILL.md',
-      );
       expect(prompt).not.toContain('C:\\\\Users');
     });
 
-    it('uses hashed fallback directory in prompt for non-ascii names', () => {
-      const slug = sanitizeSkillDirectoryName('שלום');
+    it('accepts non-ascii skill names without enforcing a fixed slug', () => {
       const prompt = buildCreateSkillPrompt({
         name: 'שלום',
         description: 'Does useful work',
@@ -86,9 +47,8 @@ describe('createSkillPrompt', () => {
         platform: 'darwin',
       });
 
-      expect(prompt).toContain(
-        `Write exactly one skill file at: \`/Users/test/Library/Application Support/Accomplish/skills/${slug}/SKILL.md\``,
-      );
+      expect(prompt).toContain('- Name: "שלום"');
+      expect(prompt).not.toContain('Use this exact skill directory name');
     });
   });
 });
