@@ -39,6 +39,54 @@ describe('createSkillPrompt', () => {
       expect(prompt).not.toContain('C:\\\\Users');
     });
 
+    it('keeps unix paths with spaces in user home segments', () => {
+      const prompt = buildCreateSkillPrompt({
+        name: 'Linux Skill',
+        description: 'Works on Linux',
+        skillsBasePath: '/home/Jane Doe/.local/share/Accomplish/skills/',
+        platform: 'linux',
+      });
+
+      expect(prompt).toContain(
+        'Use this exact base directory: `/home/Jane Doe/.local/share/Accomplish/skills`',
+      );
+    });
+
+    it('keeps windows paths with spaces in user names', () => {
+      const prompt = buildCreateSkillPrompt({
+        name: 'Windows Skill',
+        description: 'Works on Windows',
+        skillsBasePath: 'C:/Users/Jane Doe/AppData/Roaming/Accomplish/skills/',
+        platform: 'win32',
+      });
+
+      expect(prompt).toContain(
+        'Use this exact base directory: `C:\\Users\\Jane Doe\\AppData\\Roaming\\Accomplish\\skills`',
+      );
+    });
+
+    it('preserves tilde-prefixed paths without expansion', () => {
+      const prompt = buildCreateSkillPrompt({
+        name: 'Home Skill',
+        description: 'Works with home shorthand',
+        skillsBasePath: '~/.config/Accomplish/skills/',
+        platform: 'linux',
+      });
+
+      expect(prompt).toContain('Use this exact base directory: `~/.config/Accomplish/skills`');
+    });
+
+    it('normalizes windows UNC network paths', () => {
+      const prompt = buildCreateSkillPrompt({
+        name: 'Network Skill',
+        description: 'Works on network share',
+        skillsBasePath: '//Server01/Accomplish/skills/',
+        platform: 'win32',
+      });
+
+      expect(prompt).toContain('Use this exact base directory: `\\\\Server01\\Accomplish\\skills`');
+    });
+
     it('preserves unix root base path', () => {
       const prompt = buildCreateSkillPrompt({
         name: 'Root Skill',

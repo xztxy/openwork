@@ -298,6 +298,7 @@
     "descriptionPlaceholder": "描述此技能的功能...",
     "creating": "创建中...",
     "createButton": "创建技能",
+    "createFailed": "无法启动技能创建，请重试。",
     "filterAll": "全部",
     "filterActive": "已启用",
     "filterInactive": "已停用",
