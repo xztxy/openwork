@@ -27,7 +27,6 @@ export function CreateSkillModal({ open, onOpenChange, onSettingsClose }: Create
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasProvider, setHasProvider] = useState<boolean | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const { startTask } = useTaskStore();
   const navigate = useNavigate();
@@ -36,7 +35,6 @@ export function CreateSkillModal({ open, onOpenChange, onSettingsClose }: Create
   // Check if there's an active provider when modal opens
   useEffect(() => {
     if (open) {
-      setSubmitError(null);
       const accomplish = getAccomplish();
       accomplish
         .getProviderSettings()
@@ -55,7 +53,6 @@ export function CreateSkillModal({ open, onOpenChange, onSettingsClose }: Create
     if (!name.trim() || !description.trim() || !hasProvider) return;
 
     setIsSubmitting(true);
-    setSubmitError(null);
 
     try {
       const accomplish = getAccomplish();
@@ -73,16 +70,12 @@ export function CreateSkillModal({ open, onOpenChange, onSettingsClose }: Create
 
       const task = await startTask({ prompt });
       if (task) {
-        setSubmitError(null);
         onOpenChange(false);
         onSettingsClose?.();
         setName('');
         setDescription('');
         navigate(`/execution/${task.id}`);
       }
-    } catch (error) {
-      console.error('Failed to bootstrap create-skill flow:', error);
-      setSubmitError(t('skills.createFailed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -93,7 +86,6 @@ export function CreateSkillModal({ open, onOpenChange, onSettingsClose }: Create
       onOpenChange(false);
       setName('');
       setDescription('');
-      setSubmitError(null);
     }
   };
 
@@ -120,8 +112,6 @@ export function CreateSkillModal({ open, onOpenChange, onSettingsClose }: Create
             </div>
           </div>
         )}
-
-        {submitError && <p className="text-sm text-destructive">{submitError}</p>}
 
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">

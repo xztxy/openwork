@@ -298,7 +298,6 @@
     "descriptionPlaceholder": "Describe what this skill should do...",
     "creating": "Creating...",
     "createButton": "Create Skill",
-    "createFailed": "Failed to start skill creation. Please try again.",
     "filterAll": "All",
     "filterActive": "Active",
     "filterInactive": "Inactive",
