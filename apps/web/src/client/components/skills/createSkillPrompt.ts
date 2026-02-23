@@ -6,6 +6,15 @@ interface BuildCreateSkillPromptParams {
 }
 
 function trimTrailingSeparator(value: string): string {
+  // Preserve filesystem roots.
+  if (/^[A-Za-z]:[\\/]$/.test(value)) {
+    return value;
+  }
+
+  if (/^[\\/]+$/.test(value)) {
+    return value[0];
+  }
+
   return value.replace(/[\\/]+$/, '');
 }
 

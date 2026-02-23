@@ -39,6 +39,39 @@ describe('createSkillPrompt', () => {
       expect(prompt).not.toContain('C:\\\\Users');
     });
 
+    it('preserves unix root base path', () => {
+      const prompt = buildCreateSkillPrompt({
+        name: 'Root Skill',
+        description: 'Works at root',
+        skillsBasePath: '/',
+        platform: 'darwin',
+      });
+
+      expect(prompt).toContain('Use this exact base directory: `/`');
+    });
+
+    it('preserves windows root base path', () => {
+      const prompt = buildCreateSkillPrompt({
+        name: 'Root Skill',
+        description: 'Works at root',
+        skillsBasePath: '\\',
+        platform: 'win32',
+      });
+
+      expect(prompt).toContain('Use this exact base directory: `\\`');
+    });
+
+    it('preserves windows drive root base path', () => {
+      const prompt = buildCreateSkillPrompt({
+        name: 'Drive Root Skill',
+        description: 'Works at drive root',
+        skillsBasePath: 'C:/',
+        platform: 'win32',
+      });
+
+      expect(prompt).toContain('Use this exact base directory: `C:\\`');
+    });
+
     it('accepts non-ascii skill names without enforcing a fixed slug', () => {
       const prompt = buildCreateSkillPrompt({
         name: 'שלום',
