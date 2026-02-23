@@ -145,7 +145,13 @@ export async function buildEnvironment(taskId: string): Promise<NodeJS.ProcessEn
     );
   }
 
-  env.ELECTRON_RUN_AS_NODE = '1';
+  // In packaged builds we rely on Electron's Node mode for runtime consistency.
+  // In development on Windows this can interfere with native CLI execution.
+  if (app.isPackaged) {
+    env.ELECTRON_RUN_AS_NODE = '1';
+  } else if (env.ELECTRON_RUN_AS_NODE) {
+    delete env.ELECTRON_RUN_AS_NODE;
+  }
   logBundledNodeInfo();
 
   const delimiter = process.platform === 'win32' ? ';' : ':';
