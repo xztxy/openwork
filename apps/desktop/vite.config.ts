@@ -26,6 +26,24 @@ export default defineConfig(() => ({
         },
       },
       {
+        entry: 'src/mcp/trace-capture.ts',
+        vite: {
+          build: {
+            outDir: 'dist-electron/main/mcp',
+            lib: {
+              formats: ['es'],
+              fileName: () => 'trace-capture.mjs',
+            },
+            rollupOptions: {
+              external: ['playwright-core'],
+              output: {
+                inlineDynamicImports: true,
+              },
+            },
+          },
+        },
+      },
+      {
         entry: 'src/preload/index.ts',
         onstart({ reload }) {
           reload();

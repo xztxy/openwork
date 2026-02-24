@@ -680,6 +680,37 @@ describe('ConfigGenerator', () => {
 
       expect(result.systemPrompt).toContain('browser automation assistant');
     });
+
+    it('should set ACCOMPLISH_TOOL_DEBUG_PATH env when toolDebugPath is provided', () => {
+      const result = generateConfig(makeOptions({ toolDebugPath: '/path/to/trace-capture.mjs' }));
+
+      const mcpConfig = result.mcpServers['dev-browser-mcp'];
+      expect(mcpConfig).toBeDefined();
+      expect(mcpConfig.environment?.ACCOMPLISH_TOOL_DEBUG_PATH).toBe('/path/to/trace-capture.mjs');
+    });
+
+    it('should not set ACCOMPLISH_TOOL_DEBUG_PATH when toolDebugPath is undefined', () => {
+      const result = generateConfig(makeOptions({ browser: { mode: 'builtin' } }));
+
+      const mcpConfig = result.mcpServers['dev-browser-mcp'];
+      expect(mcpConfig).toBeDefined();
+      expect(mcpConfig.environment).toBeUndefined();
+    });
+
+    it('should combine toolDebugPath with CDP env vars in remote mode', () => {
+      const browser: BrowserConfig = {
+        mode: 'remote',
+        cdpEndpoint: 'http://remote:9222',
+      };
+      const result = generateConfig(
+        makeOptions({ browser, toolDebugPath: '/path/to/trace-capture.mjs' }),
+      );
+
+      const mcpConfig = result.mcpServers['dev-browser-mcp'];
+      expect(mcpConfig).toBeDefined();
+      expect(mcpConfig.environment?.CDP_ENDPOINT).toBe('http://remote:9222');
+      expect(mcpConfig.environment?.ACCOMPLISH_TOOL_DEBUG_PATH).toBe('/path/to/trace-capture.mjs');
+    });
   });
 
   describe('needs_planning decision framework', () => {

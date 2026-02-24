@@ -1,5 +1,6 @@
 import { app } from 'electron';
 import path from 'path';
+import fs from 'fs';
 import {
   generateConfig,
   ACCOMPLISH_AGENT_NAME,
@@ -39,6 +40,31 @@ export function getOpenCodeConfigDir(): string {
   } else {
     return path.join(app.getAppPath(), '..', '..', 'packages', 'agent-core');
   }
+}
+
+/**
+ * Returns the path to trace-capture.mjs for dev-browser-mcp tool debug hooks.
+ * Returns undefined if the file is not found (e.g. not yet built).
+ */
+function getToolDebugPath(): string | undefined {
+  let tracePath: string;
+  if (app.isPackaged) {
+    tracePath = path.join(
+      process.resourcesPath,
+      'app.asar.unpacked',
+      'dist-electron',
+      'main',
+      'mcp',
+      'trace-capture.mjs',
+    );
+  } else {
+    tracePath = path.join(app.getAppPath(), 'dist-electron', 'main', 'mcp', 'trace-capture.mjs');
+  }
+  if (fs.existsSync(tracePath)) {
+    return tracePath;
+  }
+  console.warn('[OpenCode Config] trace-capture.mjs not found at:', tracePath);
+  return undefined;
 }
 
 /**
@@ -146,6 +172,7 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
     model: modelOverride?.model,
     smallModel: modelOverride?.smallModel,
     connectors: connectors.length > 0 ? connectors : undefined,
+    toolDebugPath: getToolDebugPath(),
   });
 
   process.env.OPENCODE_CONFIG = result.configPath;

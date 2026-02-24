@@ -158,7 +158,7 @@
       "node_modules/node-pty/package.json",
       "node_modules/better-sqlite3/build/**/*.node",
       "node_modules/better-sqlite3/package.json",
-      "dist-electron/main/mcp/*.js"
+      "dist-electron/main/mcp/*.{js,mjs}"
     ],
     "afterPack": "./scripts/after-pack.cjs",
     "publish": {

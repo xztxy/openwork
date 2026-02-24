@@ -45,6 +45,8 @@ export interface ConfigGeneratorOptions {
     url: string;
     accessToken: string;
   }>;
+  /** Path to the tool-debug module loaded by dev-browser-mcp for trace capture */
+  toolDebugPath?: string;
 }
 
 export interface ProviderConfig {
@@ -411,6 +413,10 @@ Use empty array [] if no skills apply to your task.
           }
         }
       }
+    }
+
+    if (options.toolDebugPath) {
+      browserEnv.ACCOMPLISH_TOOL_DEBUG_PATH = options.toolDebugPath;
     }
 
     mcpServers['dev-browser-mcp'] = {
