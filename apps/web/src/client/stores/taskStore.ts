@@ -71,7 +71,7 @@ interface TaskState {
   sendFollowUp: (
     message: string,
     attachments?: import('@accomplish_ai/agent-core/common').FileAttachmentInfo[],
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   cancelTask: () => Promise<void>;
   interruptTask: () => Promise<void>;
   setPermissionRequest: (request: PermissionRequest | null) => void;
@@ -225,7 +225,6 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       });
       await startTask({ prompt: message, files: attachments });
       return true;
-      return;
     }
 
     if (!sessionId) {

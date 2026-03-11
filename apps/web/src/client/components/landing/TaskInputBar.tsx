@@ -105,7 +105,10 @@ export function TaskInputBar({
         return;
       }
 
-      const accepted = processFileAttachments(fileList, attachments.length);
+      const accepted = processFileAttachments(fileList, attachments.length, {
+        onOversize: (name, limit) => console.warn(`${name} exceeds ${limit} limit`),
+        onOverLimit: (_count, max) => console.warn(`Maximum ${max} files allowed`),
+      });
       if (accepted.length > 0) {
         onAttachmentsChange([...attachments, ...accepted]);
       }

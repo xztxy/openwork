@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTaskStore } from '../stores/taskStore';
 import { getAccomplish } from '../lib/accomplish';
-import { processFileAttachments, MAX_FILES } from '../lib/fileUtils';
+import { MAX_FILES } from '../lib/fileUtils';
 import { springs } from '../lib/animations';
 import { hasAnyReadyProvider } from '@accomplish_ai/agent-core/common';
 import { Button } from '@/components/ui/button';
@@ -344,8 +344,9 @@ export function ExecutionPage() {
       const newFiles = await accomplish.pickFiles();
       if (newFiles.length > 0) {
         setAttachments((prev) => {
-          const accepted = processFileAttachments(newFiles, prev.length);
-          return accepted.length > 0 ? [...prev, ...accepted] : prev;
+          const remaining = MAX_FILES - prev.length;
+          if (remaining <= 0) return prev;
+          return [...prev, ...newFiles.slice(0, remaining)];
         });
       }
     } catch (error) {
@@ -907,7 +908,7 @@ export function ExecutionPage() {
                       setFollowUp(newValue);
                       setTimeout(() => followUpInputRef.current?.focus(), 0);
                     }}
-                    onPickFiles={handlePickFiles}
+                    onAttachFiles={handlePickFiles}
                     onOpenSettings={(tab) => {
                       setSettingsInitialTab(tab);
                       setShowSettingsDialog(true);
