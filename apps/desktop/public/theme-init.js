@@ -1,3 +1,4 @@
+/* eslint-env browser */
 // Early-boot theme initialization — runs before React/Electron APIs are available.
 // Cannot reuse apps/web/src/client/lib/theme.ts here because that module depends
 // on the Electron `accomplish` bridge (getAccomplish / onThemeChange) which is not
