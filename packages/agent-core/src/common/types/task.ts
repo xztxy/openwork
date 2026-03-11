@@ -37,6 +37,8 @@ export interface FileAttachmentInfo {
   type: 'image' | 'text' | 'code' | 'pdf' | 'other';
   /** File size in bytes */
   size: number;
+  /** Pre-read file content for text/code files (populated by IPC handler in Electron) */
+  content?: string;
 }
 
 export interface Task {
