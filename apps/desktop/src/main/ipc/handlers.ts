@@ -709,20 +709,35 @@ export function registerIPCHandlers(): void {
       throw new Error('You can only drop a maximum of 5 files.');
     }
 
+    // Security: reject non-absolute paths and paths in sensitive system directories
+    // to prevent a compromised renderer from using this channel as a file-read primitive.
+    const BLOCKED_PREFIXES = ['/etc/', '/sys/', '/proc/', '/dev/', '/boot/', '/root/'];
+    for (const p of paths) {
+      const normalised = path.resolve(p);
+      if (!path.isAbsolute(normalised)) {
+        throw new Error('Only absolute file paths are accepted.');
+      }
+      const lower = normalised.toLowerCase();
+      if (BLOCKED_PREFIXES.some((prefix) => lower.startsWith(prefix))) {
+        throw new Error(`Access to ${path.basename(p)} is not permitted.`);
+      }
+    }
+
     const attachments: import('@accomplish_ai/agent-core').FileAttachmentInfo[] = [];
 
     for (const filePath of paths) {
-      if (!fs.existsSync(filePath)) {
-        throw new Error(`File ${path.basename(filePath)} does not exist.`);
+      const resolvedPath = path.resolve(filePath);
+      if (!fs.existsSync(resolvedPath)) {
+        throw new Error(`File ${path.basename(resolvedPath)} does not exist.`);
       }
 
-      const stats = await fs.promises.stat(filePath);
+      const stats = await fs.promises.stat(resolvedPath);
 
       if (stats.size > MAX_ATTACHMENT_FILE_SIZE) {
-        throw new Error(`File ${path.basename(filePath)} exceeds the 10MB size limit.`);
+        throw new Error(`File ${path.basename(resolvedPath)} exceeds the 10MB size limit.`);
       }
 
-      const ext = path.extname(filePath).toLowerCase().substring(1);
+      const ext = path.extname(resolvedPath).toLowerCase().substring(1);
       let type: 'image' | 'text' | 'code' | 'pdf' | 'other' = 'other';
       let content: string | undefined = undefined;
 
@@ -758,20 +773,20 @@ export function registerIPCHandlers(): void {
         case 'md':
         case 'json':
           type = 'text';
-          content = await fs.promises.readFile(filePath, 'utf-8');
+          content = await fs.promises.readFile(resolvedPath, 'utf-8');
           break;
         case 'js':
         case 'ts':
         case 'py':
           type = 'code';
-          content = await fs.promises.readFile(filePath, 'utf-8');
+          content = await fs.promises.readFile(resolvedPath, 'utf-8');
           break;
       }
 
       attachments.push({
         id: crypto.randomUUID(),
-        name: path.basename(filePath),
-        path: filePath,
+        name: path.basename(resolvedPath),
+        path: resolvedPath,
         size: stats.size,
         type,
         content,

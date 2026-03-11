@@ -170,7 +170,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         context: {
           prompt: config.prompt,
           taskId: config.taskId,
-          attachments: config.attachments?.length,
+          files: config.files?.length,
         },
       });
       const task = await accomplish.startTask(config);
@@ -203,7 +203,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   sendFollowUp: async (
     message: string,
     attachments?: import('@accomplish_ai/agent-core/common').FileAttachmentInfo[],
-  ) => {
+  ): Promise<boolean> => {
     const accomplish = getAccomplish();
     const { currentTask, startTask } = get();
     if (!currentTask) {
@@ -212,7 +212,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         level: 'warn',
         message: 'UI follow-up failed: no active task',
       });
-      return;
+      return false;
     }
 
     const sessionId = currentTask.result?.sessionId || currentTask.sessionId;
@@ -223,7 +223,8 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         message: 'UI follow-up: starting fresh task (no session from interrupted task)',
         context: { taskId: currentTask.id },
       });
-      await startTask({ prompt: message, attachments });
+      await startTask({ prompt: message, files: attachments });
+      return true;
       return;
     }
 
@@ -234,7 +235,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         message: 'UI follow-up failed: missing session',
         context: { taskId: currentTask.id },
       });
-      return;
+      return false;
     }
 
     const userMessage: TaskMessage = {
@@ -279,6 +280,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         isLoading: task.status === 'queued',
         tasks: state.tasks.map((t) => (t.id === taskId ? { ...t, status: task.status } : t)),
       }));
+      return true;
     } catch (err) {
       set((state) => ({
         error: err instanceof Error ? err.message : 'Failed to send message',
@@ -296,6 +298,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
           error: err instanceof Error ? err.message : String(err),
         },
       });
+      return false;
     }
   },
 

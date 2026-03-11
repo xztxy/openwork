@@ -3,7 +3,16 @@
 import { useRef, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getAccomplish } from '@/lib/accomplish';
-import { ArrowUp, WarningCircle, X, FileText, Image, Code, File } from '@phosphor-icons/react';
+import {
+  ArrowUp,
+  WarningCircle,
+  X,
+  FileText,
+  Image,
+  Code,
+  File,
+  FilePdf,
+} from '@phosphor-icons/react';
 import { PROMPT_DEFAULT_MAX_LENGTH } from '@accomplish_ai/agent-core/common';
 import type { FileAttachmentInfo } from '@accomplish_ai/agent-core/common';
 import { useSpeechInput } from '@/hooks/useSpeechInput';
@@ -29,6 +38,8 @@ function FileTypeIcon({
       return <FileText className={className} />;
     case 'code':
       return <Code className={className} />;
+    case 'pdf':
+      return <FilePdf className={className} />;
     default:
       return <File className={className} />;
   }
@@ -126,7 +137,7 @@ export function TaskInputBar({
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    dragCounterRef.current--;
+    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
     if (dragCounterRef.current === 0) {
       setIsDragOver(false);
     }

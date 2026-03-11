@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTaskStore } from '../stores/taskStore';
 import { getAccomplish } from '../lib/accomplish';
+import { processFileAttachments, MAX_FILES } from '../lib/fileUtils';
 import { springs } from '../lib/animations';
 import { hasAnyReadyProvider } from '@accomplish_ai/agent-core/common';
 import { Button } from '@/components/ui/button';
@@ -258,9 +259,11 @@ export function ExecutionPage() {
         return;
       }
     }
-    await sendFollowUp(followUp, attachments);
-    setFollowUp('');
-    setAttachments([]);
+    const ok = await sendFollowUp(followUp, attachments);
+    if (ok) {
+      setFollowUp('');
+      setAttachments([]);
+    }
   }, [followUp, attachments, accomplish, sendFollowUp]);
 
   const handleSettingsDialogClose = (open: boolean) => {
@@ -274,10 +277,12 @@ export function ExecutionPage() {
   const handleApiKeySaved = async () => {
     setShowSettingsDialog(false);
     if (pendingFollowUp) {
-      await sendFollowUp(pendingFollowUp, attachments);
-      setFollowUp('');
-      setPendingFollowUp(null);
-      setAttachments([]);
+      const ok = await sendFollowUp(pendingFollowUp, attachments);
+      if (ok) {
+        setFollowUp('');
+        setPendingFollowUp(null);
+        setAttachments([]);
+      }
     }
   };
 
@@ -338,7 +343,10 @@ export function ExecutionPage() {
     try {
       const newFiles = await accomplish.pickFiles();
       if (newFiles.length > 0) {
-        setAttachments((prev) => [...prev, ...newFiles].slice(0, 5));
+        setAttachments((prev) => {
+          const accepted = processFileAttachments(newFiles, prev.length);
+          return accepted.length > 0 ? [...prev, ...accepted] : prev;
+        });
       }
     } catch (error) {
       console.error('Failed to pick files:', error);
@@ -398,7 +406,11 @@ export function ExecutionPage() {
     try {
       const newAttachments = await accomplish.processDroppedFiles(filePaths);
       if (newAttachments.length > 0) {
-        setAttachments((prev) => [...prev, ...newAttachments].slice(0, 5));
+        setAttachments((prev) => {
+          const remaining = MAX_FILES - prev.length;
+          if (remaining <= 0) return prev;
+          return [...prev, ...newAttachments.slice(0, remaining)];
+        });
       }
     } catch (err) {
       console.error('Failed to process dropped files:', err);
