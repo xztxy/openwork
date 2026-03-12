@@ -24,7 +24,9 @@ describe('Favorites repository', () => {
   });
 
   beforeEach(() => {
-    if (!databaseModule || !favoritesModule) return;
+    if (!databaseModule || !favoritesModule) {
+      return;
+    }
     testDir = path.join(
       os.tmpdir(),
       `fav-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -44,10 +46,17 @@ describe('Favorites repository', () => {
   });
 
   it('should add and get favorites', () => {
-    if (!favoritesModule) return;
+    if (!favoritesModule) {
+      return;
+    }
 
+    const base = new Date('2025-01-01T00:00:00.000Z').getTime();
+    vi.useFakeTimers();
+    vi.setSystemTime(base);
     favoritesModule.addFavorite('task_1', 'Prompt one', 'Summary one');
+    vi.setSystemTime(base + 1000);
     favoritesModule.addFavorite('task_2', 'Prompt two');
+    vi.useRealTimers();
 
     const list = favoritesModule.getFavorites();
     expect(list).toHaveLength(2);
@@ -61,18 +70,29 @@ describe('Favorites repository', () => {
   });
 
   it('should return favorites ordered by favoritedAt descending', () => {
-    if (!favoritesModule) return;
+    if (!favoritesModule) {
+      return;
+    }
 
+    // Control the clock so each insert gets a distinct timestamp
+    const base = new Date('2025-01-01T00:00:00.000Z').getTime();
+    vi.useFakeTimers();
+    vi.setSystemTime(base);
     favoritesModule.addFavorite('task_a', 'A');
+    vi.setSystemTime(base + 1000);
     favoritesModule.addFavorite('task_b', 'B');
+    vi.setSystemTime(base + 2000);
     favoritesModule.addFavorite('task_c', 'C');
+    vi.useRealTimers();
 
     const list = favoritesModule.getFavorites();
     expect(list.map((f) => f.taskId)).toEqual(['task_c', 'task_b', 'task_a']);
   });
 
   it('should replace existing favorite when adding same taskId', () => {
-    if (!favoritesModule) return;
+    if (!favoritesModule) {
+      return;
+    }
 
     favoritesModule.addFavorite('task_1', 'Old prompt', 'Old summary');
     favoritesModule.addFavorite('task_1', 'New prompt', 'New summary');
@@ -84,7 +104,9 @@ describe('Favorites repository', () => {
   });
 
   it('should remove favorite', () => {
-    if (!favoritesModule) return;
+    if (!favoritesModule) {
+      return;
+    }
 
     favoritesModule.addFavorite('task_1', 'P1');
     favoritesModule.addFavorite('task_2', 'P2');
@@ -96,7 +118,9 @@ describe('Favorites repository', () => {
   });
 
   it('should return isFavorite true when task is favorited', () => {
-    if (!favoritesModule) return;
+    if (!favoritesModule) {
+      return;
+    }
 
     favoritesModule.addFavorite('task_1', 'P1');
     expect(favoritesModule.isFavorite('task_1')).toBe(true);
@@ -104,7 +128,9 @@ describe('Favorites repository', () => {
   });
 
   it('should return isFavorite false after remove', () => {
-    if (!favoritesModule) return;
+    if (!favoritesModule) {
+      return;
+    }
 
     favoritesModule.addFavorite('task_1', 'P1');
     favoritesModule.removeFavorite('task_1');

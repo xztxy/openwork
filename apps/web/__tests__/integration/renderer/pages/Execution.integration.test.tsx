@@ -1017,8 +1017,8 @@ describe('Execution Page Integration', () => {
 
       renderWithRouter('task-123');
 
-      // Assert
-      expect(screen.getByRole('heading', { name: /cancelled/i })).toBeInTheDocument();
+      // Assert - cancelled tasks render a badge span, not a heading
+      expect(screen.getByText(/cancelled/i)).toBeInTheDocument();
     });
 
     it('should show Continue button for interrupted task with session and messages', () => {

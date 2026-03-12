@@ -14,6 +14,9 @@ import {
 import type { StoredFavorite } from '@accomplish_ai/agent-core';
 import { getAccomplish } from '../lib/accomplish';
 
+// Request-token counter to guard against stale loadFavorites responses
+let _loadFavoritesToken = 0;
+
 interface TaskUpdateBatchEvent {
   taskId: string;
   messages: TaskMessage[];
@@ -507,9 +510,13 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   loadFavorites: async () => {
     const accomplish = getAccomplish();
+    // Increment token; stale responses from earlier calls will be ignored
+    const token = ++_loadFavoritesToken;
     try {
       const favorites = await accomplish.listFavorites();
-      set({ favorites });
+      if (token === _loadFavoritesToken) {
+        set({ favorites });
+      }
     } catch (err) {
       console.error('[taskStore] Failed to load favorites:', err);
     }
@@ -532,7 +539,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
           }
         : { taskId, prompt: '', favoritedAt: new Date().toISOString() };
 
-    set({ favorites: [...favorites, entry] });
+    set({ favorites: [entry, ...favorites] }); // prepend to match newest-first order from storage
 
     try {
       await accomplish.addFavorite(taskId);
