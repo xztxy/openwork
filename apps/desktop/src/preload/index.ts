@@ -487,6 +487,8 @@ const accomplishAPI = {
     };
   },
 
+  getUserSkillsPath: (): Promise<string> => ipcRenderer.invoke('get-user-skills-path'),
+
   // HuggingFace Local configuration
   startHuggingFaceServer: (
     modelId: string,

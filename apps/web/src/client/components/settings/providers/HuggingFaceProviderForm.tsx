@@ -11,8 +11,7 @@ import {
   FormError,
   ModelSelector,
 } from '../shared';
-
-const huggingfaceLogo = '/assets/ai-logos/huggingface.svg';
+import huggingfaceLogo from '/assets/ai-logos/huggingface.svg';
 
 interface SuggestedModel {
   id: string;

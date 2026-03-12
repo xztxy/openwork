@@ -9,6 +9,7 @@
 import http from 'http';
 import { app } from 'electron';
 import path from 'path';
+import { getStorage } from '../../store/storage';
 
 /**
  * Structure of a chat message in the conversation.
@@ -555,6 +556,16 @@ export async function startServer(
         state.server = server;
         state.port = address.port;
         console.log(`[HF Server] Listening on http://127.0.0.1:${address.port}`);
+        // Persist the chosen port so clients can reconnect after restart
+        try {
+          const storage = getStorage();
+          const existingConfig = storage.getHuggingFaceLocalConfig();
+          if (existingConfig) {
+            storage.setHuggingFaceLocalConfig({ ...existingConfig, serverPort: address.port });
+          }
+        } catch (err) {
+          console.warn('[HF Server] Failed to persist port to config:', err);
+        }
         resolve({ success: true, port: address.port });
       } else {
         resolve({ success: false, error: 'Failed to get server address' });

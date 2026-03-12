@@ -1444,6 +1444,10 @@ export function registerIPCHandlers(): void {
     shell.showItemInFolder(filePath);
   });
 
+  handle('get-user-skills-path', async () => {
+    return skillsManager.getUserSkillsPath();
+  });
+
   // ── MCP Connectors ──────────────────────────────────────────────────
 
   handle('connectors:list', async () => {
@@ -1642,6 +1646,8 @@ export function registerIPCHandlers(): void {
     'huggingface-local:set-config',
     async (_event: IpcMainInvokeEvent, config: HuggingFaceLocalConfig | null) => {
       if (config !== null) {
+        const validQuantizations = ['q4', 'fp32'];
+        const validDevicePreferences = ['auto', 'cpu', 'cuda', 'webgpu'];
         if (
           typeof config !== 'object' ||
           (config.selectedModelId !== null && typeof config.selectedModelId !== 'string') ||
@@ -1652,7 +1658,10 @@ export function registerIPCHandlers(): void {
               config.serverPort >= 1 &&
               config.serverPort <= 65535
             )) ||
-          typeof config.enabled !== 'boolean'
+          typeof config.enabled !== 'boolean' ||
+          (config.quantization !== null && !validQuantizations.includes(config.quantization)) ||
+          (config.devicePreference !== null &&
+            !validDevicePreferences.includes(config.devicePreference))
         ) {
           throw new Error('Invalid HuggingFace config: unexpected field types');
         }

@@ -299,7 +299,12 @@ interface AccomplishAPI {
     modelId: string,
   ): Promise<{ success: boolean; port?: number; error?: string }>;
   stopHuggingFaceServer(): Promise<{ success: boolean; error?: string }>;
-  getHuggingFaceServerStatus(): Promise<{ running: boolean; port?: number }>;
+  getHuggingFaceServerStatus(): Promise<{
+    running: boolean;
+    port: number | null;
+    loadedModel: string | null;
+    isLoading: boolean;
+  }>;
   testHuggingFaceConnection(): Promise<{ success: boolean; error?: string }>;
   deleteHuggingFaceModel(modelId: string): Promise<{ success: boolean; error?: string }>;
   onHuggingFaceDownloadProgress(
