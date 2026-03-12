@@ -920,6 +920,23 @@ describe('IPC Handlers Integration', () => {
       expect(addFavorite).toHaveBeenCalledWith(taskId, 'Complete me', 'Done');
     });
 
+    it('task:favorite:add should add interrupted task to favorites', async () => {
+      const taskId = 'task_fav_interrupted';
+      mockTasks.push({
+        id: taskId,
+        prompt: 'Resume later',
+        summary: 'Work in progress',
+        status: 'interrupted',
+        messages: [],
+        createdAt: new Date().toISOString(),
+      });
+
+      await invokeHandler('task:favorite:add', taskId);
+
+      const { addFavorite } = await import('@accomplish_ai/agent-core');
+      expect(addFavorite).toHaveBeenCalledWith(taskId, 'Resume later', 'Work in progress');
+    });
+
     it('task:favorite:add should reject when task not found', async () => {
       await expect(invokeHandler('task:favorite:add', 'task_nonexistent')).rejects.toThrow(
         'Favorite failed: task not found (taskId: task_nonexistent)',

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { StarButton } from '../ui/StarButton';
+import { FAVORITABLE_STATUSES } from '../../lib/task-utils';
 import { useTaskStore } from '../../stores/taskStore';
 import type { Task } from '@accomplish_ai/agent-core/common';
 
@@ -98,8 +99,6 @@ export default function TaskHistory({ limit, showTitle = true }: TaskHistoryProp
   );
 }
 
-const COMPLETED_OR_INTERRUPTED: Array<string> = ['completed', 'interrupted'];
-
 function TaskHistoryItem({
   task,
   isFavorited,
@@ -126,7 +125,7 @@ function TaskHistoryItem({
 
   const config = statusConfig[task.status] || statusConfig.pending;
   const timeAgo = getTimeAgo(task.createdAt, tCommon);
-  const canFavorite = COMPLETED_OR_INTERRUPTED.includes(task.status);
+  const canFavorite = FAVORITABLE_STATUSES.includes(task.status);
 
   return (
     <Link

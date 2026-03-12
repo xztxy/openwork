@@ -96,10 +96,9 @@ test.describe('Favorites', () => {
     const ariaPressed = await executionPage.favoriteToggle.first().getAttribute('aria-pressed');
     expect(ariaPressed).toBe('false');
 
-    // Verify button text changed back
+    // Verify button text changed back to unfavorited label
     const buttonText = await executionPage.favoriteToggle.first().textContent();
-    expect(buttonText).toContain('Favorite');
-    expect(buttonText).not.toContain('Favorited');
+    expect(buttonText).toContain('Add to favorites');
   });
 
   test('should display favorites section on Home after favoriting', async ({ window }) => {
@@ -186,5 +185,43 @@ test.describe('Favorites', () => {
     const inputValue = await homePage.taskInput.inputValue();
     expect(inputValue.length).toBeGreaterThan(0);
     await expect(homePage.submitButton).toBeEnabled();
+  });
+
+  test('should favorite an interrupted task', async ({ window }) => {
+    const homePage = new HomePage(window);
+    const executionPage = new ExecutionPage(window);
+
+    await window.waitForLoadState('domcontentloaded');
+
+    // Submit a task that will be interrupted
+    await homePage.enterTask(TEST_SCENARIOS.SUCCESS.keyword);
+    await homePage.submitTask();
+    await window.waitForURL(/.*#\/execution.*/, { timeout: TEST_TIMEOUTS.NAVIGATION });
+
+    // Interrupt the task mid-run
+    await executionPage.stopButton.click();
+    await executionPage.waitForComplete();
+
+    // Favorite toggle should be visible for interrupted tasks too
+    await expect(executionPage.favoriteToggle.first()).toBeVisible();
+
+    const ariaPressed = await executionPage.favoriteToggle.first().getAttribute('aria-pressed');
+    expect(ariaPressed).toBe('false');
+
+    // Toggle favorite
+    await executionPage.favoriteToggle.first().click();
+    await window.waitForTimeout(TEST_TIMEOUTS.STATE_UPDATE);
+
+    const ariaPressedAfter = await executionPage.favoriteToggle
+      .first()
+      .getAttribute('aria-pressed');
+    expect(ariaPressedAfter).toBe('true');
+
+    // Verify it appears on the Home page favorites section
+    await executionPage.startNewTaskButton.click();
+    await window.waitForURL(/.*#\/$/, { timeout: TEST_TIMEOUTS.NAVIGATION });
+
+    await expect(homePage.favoritesSection).toBeVisible();
+    await expect(homePage.favoriteItems.first()).toBeVisible();
   });
 });

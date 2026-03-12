@@ -54,14 +54,9 @@ export function HomePage() {
   }, [t]);
 
   useEffect(() => {
-    if (typeof loadFavorites === 'function') {
-      loadFavorites();
-    }
-  }, [loadFavorites]);
-
-  useEffect(() => {
+    // Single effect — Home only renders at '/', so the pathname guard also covers initial mount
     if (location.pathname === '/' && typeof loadFavorites === 'function') {
-      loadFavorites();
+      void loadFavorites();
     }
   }, [location.pathname, loadFavorites]);
 
@@ -276,7 +271,7 @@ export function HomePage() {
                       onClick={() => setShowAllFavorites(true)}
                       className="text-center text-[13px] leading-[15px] tracking-[-0.13px] text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      Show all {favoritesList.length} favorites
+                      {t('favorites.showAll', { count: favoritesList.length })}
                     </button>
                   )}
                 </>

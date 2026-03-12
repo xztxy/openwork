@@ -47,6 +47,7 @@ interface TaskState {
   // Task history
   tasks: Task[];
   favorites: StoredFavorite[];
+  favoritesLoaded: boolean;
   loadFavorites: () => Promise<void>;
   addFavorite: (taskId: string) => Promise<void>;
   removeFavorite: (taskId: string) => Promise<void>;
@@ -102,6 +103,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   error: null,
   tasks: [],
   favorites: [],
+  favoritesLoaded: false,
   permissionRequest: null,
   setupProgress: null,
   setupProgressTaskId: null,
@@ -509,13 +511,17 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   },
 
   loadFavorites: async () => {
+    // Skip if already loaded — prevents redundant IPC calls from multiple components
+    if (get().favoritesLoaded) {
+      return;
+    }
     const accomplish = getAccomplish();
     // Increment token; stale responses from earlier calls will be ignored
     const token = ++_loadFavoritesToken;
     try {
       const favorites = await accomplish.listFavorites();
       if (token === _loadFavoritesToken) {
-        set({ favorites });
+        set({ favorites, favoritesLoaded: true });
       }
     } catch (err) {
       console.error('[taskStore] Failed to load favorites:', err);

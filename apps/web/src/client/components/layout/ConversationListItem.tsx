@@ -1,13 +1,11 @@
-import { useMemo, useEffect } from 'react';
+import { useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import type { Task } from '@accomplish_ai/agent-core/common';
 import { cn } from '@/lib/utils';
 import { X, Star, SpinnerGap } from '@phosphor-icons/react';
 import { useTaskStore } from '@/stores/taskStore';
-import { STATUS_COLORS, extractDomains } from '@/lib/task-utils';
-
-const COMPLETED_OR_INTERRUPTED: Array<string> = ['completed', 'interrupted'];
+import { STATUS_COLORS, FAVORITABLE_STATUSES, extractDomains } from '@/lib/task-utils';
 
 interface ConversationListItemProps {
   task: Task;
@@ -20,16 +18,12 @@ export function ConversationListItem({ task }: ConversationListItemProps) {
   const isActive = location.pathname === `/execution/${task.id}`;
   const deleteTask = useTaskStore((state) => state.deleteTask);
   const domains = useMemo(() => extractDomains(task), [task]);
-  const { favorites, loadFavorites, addFavorite, removeFavorite } = useTaskStore();
+  const { favorites, addFavorite, removeFavorite } = useTaskStore();
   const favoritesList = Array.isArray(favorites) ? favorites : [];
   const isFavorited = favoritesList.some((f) => f.taskId === task.id);
-  const canFavorite = COMPLETED_OR_INTERRUPTED.includes(task.status);
-
-  useEffect(() => {
-    if (typeof loadFavorites === 'function') {
-      loadFavorites();
-    }
-  }, [loadFavorites]);
+  const canFavorite = FAVORITABLE_STATUSES.includes(task.status);
+  // Note: loadFavorites is intentionally not called here — the parent page
+  // (Home/Execution) is responsible for loading favorites once on mount.
 
   const handleClick = () => {
     navigate(`/execution/${task.id}`);
@@ -112,8 +106,8 @@ export function ConversationListItem({ task }: ConversationListItemProps) {
                 await addFavorite(task.id);
               }
             }}
-            title={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
-            aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+            title={isFavorited ? t('favorite.remove') : t('favorite.add')}
+            aria-label={isFavorited ? t('favorite.remove') : t('favorite.add')}
             className={cn(
               'absolute right-6 top-1/2 -translate-y-1/2',
               'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto',

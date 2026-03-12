@@ -1473,9 +1473,10 @@ async function getAISnapshot(page: Page, options: SnapshotOptions = {}): Promise
     preserveSubtrees: options.preserveSubtrees || false,
   };
 
-  const result = await page.evaluate((opts) => {
-    return (globalThis as any).__devBrowser_getAISnapshot(opts);
-  }, optsToSend);
+  const result = await page.evaluate(
+    (opts) => (globalThis as any).__devBrowser_getAISnapshot(opts),
+    optsToSend,
+  );
   return result as string;
 }
 

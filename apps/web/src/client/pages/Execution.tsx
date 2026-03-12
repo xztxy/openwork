@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useTaskStore } from '../stores/taskStore';
 import { getAccomplish } from '../lib/accomplish';
 import { springs } from '../lib/animations';
+import { FAVORITABLE_STATUSES } from '../lib/task-utils';
 import { hasAnyReadyProvider } from '@accomplish_ai/agent-core/common';
 import { Button } from '@/components/ui/button';
 import { StarButton } from '@/components/ui/StarButton';
@@ -49,6 +50,7 @@ function ExecutionCompleteFooter({
   taskId: string;
   onStartNewTask: () => void;
 }) {
+  const { t: tExecution } = useTranslation('execution');
   const { currentTask, favorites, loadFavorites, addFavorite, removeFavorite } = useTaskStore();
   const favoritesList = Array.isArray(favorites) ? favorites : [];
   const isFavorited = favoritesList.some((f) => f.taskId === taskId);
@@ -67,9 +69,10 @@ function ExecutionCompleteFooter({
     }
   }, [taskId, isFavorited, addFavorite, removeFavorite]);
 
-  const statusLabel =
-    currentTask?.status === 'interrupted' ? 'stopped' : (currentTask?.status ?? '');
-  const canFavorite = currentTask?.status === 'completed' || currentTask?.status === 'interrupted';
+  const rawStatus = currentTask?.status ?? '';
+  const statusLabelKey = rawStatus === 'interrupted' ? 'status.stopped' : `status.${rawStatus}`;
+  const statusLabel = rawStatus ? tExecution(statusLabelKey) : '';
+  const canFavorite = FAVORITABLE_STATUSES.includes(rawStatus);
 
   return (
     <div className="flex-shrink-0 border-t border-border bg-card/50 px-6 py-4 flex flex-col items-center gap-3">
