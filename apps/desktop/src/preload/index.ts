@@ -5,11 +5,13 @@
  * for communicating with the Electron main process via IPC.
  */
 
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { ProviderType, Skill, TodoItem, McpConnector } from '@accomplish_ai/agent-core';
 
 // Expose the accomplish API to the renderer
 const accomplishAPI = {
+  // Utility for safely extracting native paths from DOM File objects in drop events
+  getFilePath: (file: File): string => webUtils.getPathForFile(file),
   // App info
   getVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
   getPlatform: (): Promise<string> => ipcRenderer.invoke('app:platform'),
@@ -33,14 +35,25 @@ const accomplishAPI = {
     ipcRenderer.invoke('task:favorite:remove', taskId),
   listFavorites: (): Promise<unknown[]> => ipcRenderer.invoke('task:favorite:list'),
   isFavorite: (taskId: string): Promise<boolean> => ipcRenderer.invoke('task:favorite:has', taskId),
+  pickFiles: (): Promise<import('@accomplish_ai/agent-core/common').FileAttachmentInfo[]> =>
+    ipcRenderer.invoke('task:pick-files'),
+  processDroppedFiles: (
+    paths: string[],
+  ): Promise<import('@accomplish_ai/agent-core/common').FileAttachmentInfo[]> =>
+    ipcRenderer.invoke('task:process-dropped-files', paths),
 
   // Permission responses
   respondToPermission: (response: { taskId: string; allowed: boolean }): Promise<void> =>
     ipcRenderer.invoke('permission:respond', response),
 
   // Session management
-  resumeSession: (sessionId: string, prompt: string, taskId?: string): Promise<unknown> =>
-    ipcRenderer.invoke('session:resume', sessionId, prompt, taskId),
+  resumeSession: (
+    sessionId: string,
+    prompt: string,
+    taskId?: string,
+    attachments?: import('@accomplish_ai/agent-core/common').FileAttachmentInfo[],
+  ): Promise<unknown> =>
+    ipcRenderer.invoke('session:resume', sessionId, prompt, taskId, attachments),
 
   // Settings
   getApiKeys: (): Promise<unknown[]> => ipcRenderer.invoke('settings:api-keys'),
