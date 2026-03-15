@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getAccomplish } from '@/lib/accomplish';
 import { applyTheme as applyLibTheme } from '@/lib/theme';
 
@@ -37,6 +37,8 @@ function resolveIsDark(preference: ThemePreference): boolean {
 export function useTheme() {
   const [preference, setPreference] = useState<ThemePreference>(getStoredPreference);
   const [isDark, setIsDark] = useState(() => resolveIsDark(getStoredPreference()));
+  // Guard: prevents async bootstrap from overwriting a user toggle that happened before it resolves
+  const hasLocalOverrideRef = useRef(false);
 
   // Sync from Electron backend on mount and subscribe to host-driven changes
   useEffect(() => {
@@ -44,6 +46,8 @@ export function useTheme() {
     accomplish
       .getTheme()
       .then((theme) => {
+        // Skip if the user already made a choice before this async call resolved
+        if (hasLocalOverrideRef.current) return;
         if (theme === 'light' || theme === 'dark' || theme === 'system') {
           setPreference(theme);
           setIsDark(resolveIsDark(theme));
@@ -85,6 +89,7 @@ export function useTheme() {
   }, [preference]);
 
   const setTheme = (newPreference: ThemePreference) => {
+    hasLocalOverrideRef.current = true;
     setPreference(newPreference);
     setIsDark(resolveIsDark(newPreference));
     applyLibTheme(newPreference);
