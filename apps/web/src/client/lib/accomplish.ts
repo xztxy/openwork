@@ -45,13 +45,6 @@ interface AccomplishAPI {
   listTasks(): Promise<Task[]>;
   deleteTask(taskId: string): Promise<void>;
   clearTaskHistory(): Promise<void>;
-  addFavorite(taskId: string): Promise<void>;
-  removeFavorite(taskId: string): Promise<void>;
-  listFavorites(): Promise<StoredFavorite[]>;
-  isFavorite(taskId: string): Promise<boolean>;
-  pickFiles(): Promise<FileAttachmentInfo[]>;
-  getFilePath(file: File): string;
-  processDroppedFiles(paths: string[]): Promise<FileAttachmentInfo[]>;
 
   // Permission responses
   respondToPermission(response: PermissionResponse): Promise<void>;
@@ -319,6 +312,16 @@ interface AccomplishAPI {
   // Todo operations
   getTodosForTask(taskId: string): Promise<TodoItem[]>;
 
+  // Favorites
+  addFavorite(taskId: string): Promise<void>;
+  removeFavorite(taskId: string): Promise<void>;
+  listFavorites(): Promise<StoredFavorite[]>;
+
+  // File attachments
+  pickFiles(): Promise<FileAttachmentInfo[]>;
+  getFilePath(file: File): string;
+  processDroppedFiles(paths: string[]): Promise<FileAttachmentInfo[]>;
+
   // Event subscriptions
   onTaskUpdate(callback: (event: TaskUpdateEvent) => void): () => void;
   onTaskUpdateBatch?(
@@ -359,6 +362,29 @@ interface AccomplishAPI {
   }): Promise<unknown>;
   exportLogs(): Promise<{ success: boolean; path?: string; error?: string; reason?: string }>;
 
+  // Debug bug reporting
+  captureScreenshot(): Promise<{
+    success: boolean;
+    data?: string;
+    width?: number;
+    height?: number;
+    error?: string;
+  }>;
+  captureAxtree(): Promise<{ success: boolean; data?: string; error?: string }>;
+  generateBugReport(data: {
+    taskId?: string;
+    taskPrompt?: string;
+    taskStatus?: string;
+    taskCreatedAt?: string;
+    taskCompletedAt?: string;
+    messages?: unknown[];
+    debugLogs?: unknown[];
+    screenshot?: string;
+    axtree?: string;
+    appVersion?: string;
+    platform?: string;
+  }): Promise<{ success: boolean; path?: string; error?: string; reason?: string }>;
+
   // Skills management
   getSkills(): Promise<Skill[]>;
   getEnabledSkills(): Promise<Skill[]>;
@@ -372,6 +398,24 @@ interface AccomplishAPI {
   resyncSkills(): Promise<Skill[]>;
   openSkillInEditor(filePath: string): Promise<void>;
   showSkillInFolder(filePath: string): Promise<void>;
+
+  // Sandbox configuration
+  getSandboxConfig(): Promise<{
+    mode: 'disabled' | 'native' | 'docker';
+    allowedPaths: string[];
+    networkRestricted: boolean;
+    allowedHosts: string[];
+    dockerImage?: string;
+    networkPolicy?: { allowOutbound: boolean; allowedHosts?: string[] };
+  }>;
+  setSandboxConfig(config: {
+    mode: 'disabled' | 'native' | 'docker';
+    allowedPaths: string[];
+    networkRestricted: boolean;
+    allowedHosts: string[];
+    dockerImage?: string;
+    networkPolicy?: { allowOutbound: boolean; allowedHosts?: string[] };
+  }): Promise<void>;
 
   // MCP Connectors
   getConnectors(): Promise<McpConnector[]>;

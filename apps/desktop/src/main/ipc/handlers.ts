@@ -1,9 +1,9 @@
 import crypto from 'crypto';
-import { ipcMain, BrowserWindow, shell, dialog, nativeTheme } from 'electron';
+import path from 'path';
+import { ipcMain, BrowserWindow, shell, app, dialog, nativeTheme } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import { URL } from 'url';
 import fs from 'fs';
-import path from 'path';
 import {
   isOpenCodeCliInstalled,
   getOpenCodeCliVersion,
@@ -82,6 +82,7 @@ import type {
   AzureFoundryConfig,
   LiteLLMConfig,
   LMStudioConfig,
+  FileAttachmentInfo,
 } from '@accomplish_ai/agent-core';
 import {
   DEFAULT_PROVIDERS,
@@ -261,32 +262,6 @@ export function registerIPCHandlers(): void {
     return storage.getTodosForTask(taskId);
   });
 
-  const allowedFavoriteStatuses: Array<'completed' | 'interrupted'> = ['completed', 'interrupted'];
-  handle('task:favorite:add', async (_event: IpcMainInvokeEvent, taskId: string) => {
-    const task = storage.getTask(taskId);
-    if (!task) {
-      throw new Error(`Favorite failed: task not found (taskId: ${taskId})`);
-    }
-    if (!allowedFavoriteStatuses.includes(task.status as 'completed' | 'interrupted')) {
-      throw new Error(
-        `Favorite failed: invalid status (taskId: ${taskId}, status: ${task.status})`,
-      );
-    }
-    storage.addFavorite(taskId, task.prompt, task.summary);
-  });
-
-  handle('task:favorite:remove', async (_event: IpcMainInvokeEvent, taskId: string) => {
-    storage.removeFavorite(taskId);
-  });
-
-  handle('task:favorite:list', async () => {
-    return storage.getFavorites();
-  });
-
-  handle('task:favorite:has', async (_event: IpcMainInvokeEvent, taskId: string) => {
-    return storage.isFavorite(taskId);
-  });
-
   handle('permission:respond', async (_event: IpcMainInvokeEvent, response: PermissionResponse) => {
     const parsedResponse = validate(permissionResponseSchema, response);
     const { taskId, decision, requestId } = parsedResponse;
@@ -334,7 +309,7 @@ export function registerIPCHandlers(): void {
       sessionId: string,
       prompt: string,
       existingTaskId?: string,
-      attachments?: import('@accomplish_ai/agent-core/common').FileAttachmentInfo[],
+      attachments?: FileAttachmentInfo[],
     ) => {
       const window = assertTrustedWindow(BrowserWindow.fromWebContents(event.sender));
       const sender = event.sender;
@@ -649,197 +624,6 @@ export function registerIPCHandlers(): void {
       isActive: true,
       createdAt: new Date().toISOString(),
     };
-  });
-
-  handle('task:pick-files', async (event: IpcMainInvokeEvent) => {
-    const window = assertTrustedWindow(BrowserWindow.fromWebContents(event.sender));
-
-    const result = await dialog.showOpenDialog(window, {
-      properties: ['openFile', 'multiSelections'],
-      filters: [
-        {
-          name: 'Supported Files',
-          extensions: ['png', 'jpg', 'jpeg', 'gif', 'txt', 'md', 'json', 'js', 'ts', 'py', 'pdf'],
-        },
-      ],
-    });
-
-    if (result.canceled || result.filePaths.length === 0) {
-      return [];
-    }
-
-    if (result.filePaths.length > 5) {
-      throw new Error('You can only select a maximum of 5 files.');
-    }
-
-    const attachments: import('@accomplish_ai/agent-core/common').FileAttachmentInfo[] = [];
-
-    for (const filePath of result.filePaths) {
-      const stats = await fs.promises.stat(filePath);
-
-      if (stats.size > MAX_ATTACHMENT_FILE_SIZE) {
-        throw new Error(`File ${path.basename(filePath)} exceeds the 10MB size limit.`);
-      }
-
-      const ext = path.extname(filePath).toLowerCase().substring(1);
-      let type: 'image' | 'text' | 'code' | 'pdf' | 'other' = 'other';
-      let content: string | undefined = undefined;
-
-      switch (ext) {
-        case 'png':
-        case 'jpg':
-        case 'jpeg':
-        case 'gif':
-          type = 'image';
-          break;
-        case 'pdf':
-          type = 'pdf';
-          break;
-        case 'txt':
-        case 'md':
-        case 'json':
-          type = 'text';
-          content = await fs.promises.readFile(filePath, 'utf-8');
-          break;
-        case 'js':
-        case 'ts':
-        case 'py':
-          type = 'code';
-          content = await fs.promises.readFile(filePath, 'utf-8');
-          break;
-      }
-
-      attachments.push({
-        id: crypto.randomUUID(),
-        name: path.basename(filePath),
-        path: filePath,
-        size: stats.size,
-        type,
-        content,
-      });
-    }
-
-    return attachments;
-  });
-
-  handle('task:process-dropped-files', async (event: IpcMainInvokeEvent, paths: string[]) => {
-    assertTrustedWindow(BrowserWindow.fromWebContents(event.sender));
-
-    if (!paths || paths.length === 0) {
-      return [];
-    }
-
-    if (paths.length > 5) {
-      throw new Error('You can only drop a maximum of 5 files.');
-    }
-
-    // Security: reject non-absolute paths and paths in sensitive system directories
-    // to prevent a compromised renderer from using this channel as a file-read primitive.
-    const BLOCKED_PREFIXES = [
-      // Unix/macOS system dirs
-      '/etc/',
-      '/sys/',
-      '/proc/',
-      '/dev/',
-      '/boot/',
-      '/root/',
-      // Windows system dirs (normalised to forward-slash lower-case for comparison)
-      'c:/windows/',
-      'c:/system32/',
-      'c:/program files/',
-      'c:/programdata/',
-    ];
-
-    for (const p of paths) {
-      // Resolve symlinks to get the real path, preventing traversal via symlinks
-      let resolvedReal: string;
-      try {
-        resolvedReal = await fs.promises.realpath(p);
-      } catch {
-        throw new Error(`Cannot resolve path for ${path.basename(p)}.`);
-      }
-
-      if (!path.isAbsolute(resolvedReal)) {
-        throw new Error('Only absolute file paths are accepted.');
-      }
-      const lower = resolvedReal.replace(/\\/g, '/').toLowerCase();
-      if (BLOCKED_PREFIXES.some((prefix) => lower.startsWith(prefix))) {
-        throw new Error(`Access to ${path.basename(p)} is not permitted.`);
-      }
-    }
-
-    const attachments: import('@accomplish_ai/agent-core/common').FileAttachmentInfo[] = [];
-
-    for (const filePath of paths) {
-      // Re-use the real path already resolved in the security check above
-      const resolvedPath = await fs.promises.realpath(filePath).catch(() => path.resolve(filePath));
-      if (!fs.existsSync(resolvedPath)) {
-        throw new Error(`File ${path.basename(resolvedPath)} does not exist.`);
-      }
-
-      const stats = await fs.promises.stat(resolvedPath);
-
-      if (stats.size > MAX_ATTACHMENT_FILE_SIZE) {
-        throw new Error(`File ${path.basename(resolvedPath)} exceeds the 10MB size limit.`);
-      }
-
-      const ext = path.extname(resolvedPath).toLowerCase().substring(1);
-      let type: 'image' | 'text' | 'code' | 'pdf' | 'other' = 'other';
-      let content: string | undefined = undefined;
-
-      // Note: We only allow certain safe drag-n-drop file extensions
-      const allowedExts = [
-        'png',
-        'jpg',
-        'jpeg',
-        'gif',
-        'txt',
-        'md',
-        'json',
-        'js',
-        'ts',
-        'py',
-        'pdf',
-      ];
-      if (!allowedExts.includes(ext)) {
-        throw new Error(`File type .${ext} is not supported for attachments.`);
-      }
-
-      switch (ext) {
-        case 'png':
-        case 'jpg':
-        case 'jpeg':
-        case 'gif':
-          type = 'image';
-          break;
-        case 'pdf':
-          type = 'pdf';
-          break;
-        case 'txt':
-        case 'md':
-        case 'json':
-          type = 'text';
-          content = await fs.promises.readFile(resolvedPath, 'utf-8');
-          break;
-        case 'js':
-        case 'ts':
-        case 'py':
-          type = 'code';
-          content = await fs.promises.readFile(resolvedPath, 'utf-8');
-          break;
-      }
-
-      attachments.push({
-        id: crypto.randomUUID(),
-        name: path.basename(resolvedPath),
-        path: resolvedPath,
-        size: stats.size,
-        type,
-        content,
-      });
-    }
-
-    return attachments;
   });
 
   handle('bedrock:get-credentials', async (_event: IpcMainInvokeEvent) => {
@@ -1184,6 +968,61 @@ export function registerIPCHandlers(): void {
     return storage.getAppSettings();
   });
 
+  handle('sandbox:get-config', async (_event: IpcMainInvokeEvent) => {
+    return storage.getSandboxConfig();
+  });
+
+  handle(
+    'sandbox:set-config',
+    async (
+      _event: IpcMainInvokeEvent,
+      config: {
+        mode: string;
+        allowedPaths: string[];
+        networkRestricted: boolean;
+        allowedHosts: string[];
+        dockerImage?: string;
+        networkPolicy?: { allowOutbound: boolean; allowedHosts?: string[] };
+      },
+    ) => {
+      if (!config || typeof config !== 'object') {
+        throw new Error('Invalid sandbox configuration');
+      }
+      if (!['disabled', 'native', 'docker'].includes(config.mode)) {
+        throw new Error('Invalid sandbox mode. Must be "disabled", "native", or "docker".');
+      }
+      if (!Array.isArray(config.allowedPaths)) {
+        throw new Error('allowedPaths must be an array');
+      }
+      if (typeof config.networkRestricted !== 'boolean') {
+        throw new Error('networkRestricted must be a boolean');
+      }
+      if (!Array.isArray(config.allowedHosts)) {
+        throw new Error('allowedHosts must be an array');
+      }
+
+      storage.setSandboxConfig({
+        mode: config.mode as 'disabled' | 'native' | 'docker',
+        allowedPaths: config.allowedPaths.map((p) => sanitizeString(p, 'allowedPath', 512)),
+        networkRestricted: config.networkRestricted,
+        allowedHosts: config.allowedHosts.map((h) => sanitizeString(h, 'allowedHost', 256)),
+        ...(config.dockerImage !== undefined && {
+          dockerImage: sanitizeString(config.dockerImage, 'dockerImage', 256),
+        }),
+        ...(config.networkPolicy !== undefined && {
+          networkPolicy: {
+            allowOutbound: Boolean(config.networkPolicy.allowOutbound),
+            ...(Array.isArray(config.networkPolicy.allowedHosts) && {
+              allowedHosts: config.networkPolicy.allowedHosts.map((h) =>
+                sanitizeString(h, 'networkPolicy.allowedHost', 256),
+              ),
+            }),
+          },
+        }),
+      });
+    },
+  );
+
   handle('settings:openai-base-url:get', async (_event: IpcMainInvokeEvent) => {
     return storage.getOpenAiBaseUrl();
   });
@@ -1374,6 +1213,342 @@ export function registerIPCHandlers(): void {
       const message = error instanceof Error ? error.message : 'Unknown error';
       return { success: false, error: message };
     }
+  });
+
+  const assertDebugModeEnabled = () => {
+    if (!storage.getDebugMode()) {
+      throw new Error('Debug mode is disabled');
+    }
+  };
+
+  // Debug Bug Report Handlers
+
+  handle('debug:capture-screenshot', async (event: IpcMainInvokeEvent) => {
+    try {
+      assertDebugModeEnabled();
+    } catch (e) {
+      return { success: false, error: (e as Error).message };
+    }
+    let window: BrowserWindow;
+    try {
+      window = assertTrustedWindow(BrowserWindow.fromWebContents(event.sender));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Untrusted window';
+      return { success: false, error: message };
+    }
+    try {
+      const image = await window.webContents.capturePage();
+      const pngBuffer = image.toPNG();
+      const base64 = pngBuffer.toString('base64');
+      const size = image.getSize();
+      return { success: true, data: base64, width: size.width, height: size.height };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return { success: false, error: message };
+    }
+  });
+
+  handle('debug:capture-axtree', async (event: IpcMainInvokeEvent) => {
+    try {
+      assertDebugModeEnabled();
+    } catch (e) {
+      return { success: false, error: (e as Error).message };
+    }
+    let window: BrowserWindow;
+    try {
+      window = assertTrustedWindow(BrowserWindow.fromWebContents(event.sender));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Untrusted window';
+      return { success: false, error: message };
+    }
+    try {
+      const axtree = await window.webContents.executeJavaScript(`
+        (function() {
+          var MAX_DEPTH = 15;
+          var MAX_TEXT = 200;
+          var MAX_NODES = 5000;
+          var nodeCount = 0;
+          function walk(el, depth) {
+            if (depth > MAX_DEPTH || nodeCount >= MAX_NODES) return null;
+            nodeCount++;
+            var tag = el.tagName ? el.tagName.toLowerCase() : '#text';
+            var node = { tag: tag };
+            var role = el.getAttribute ? el.getAttribute('role') : null;
+            if (role) node.role = role;
+            var ariaLabel = el.getAttribute ? el.getAttribute('aria-label') : null;
+            if (ariaLabel) node.ariaLabel = ariaLabel.substring(0, MAX_TEXT);
+            if (el.id) node.id = el.id;
+            var text = '';
+            for (var i = 0; i < el.childNodes.length; i++) {
+              if (el.childNodes[i].nodeType === 3) {
+                text += el.childNodes[i].textContent;
+              }
+            }
+            text = text.trim();
+            if (text) node.text = text.substring(0, MAX_TEXT);
+            var children = [];
+            for (var j = 0; j < el.children.length; j++) {
+              var child = walk(el.children[j], depth + 1);
+              if (child) children.push(child);
+            }
+            if (children.length > 0) node.children = children;
+            return node;
+          }
+          if (!document.body) return '{}';
+          return JSON.stringify(walk(document.body, 0));
+        })()
+      `);
+      return { success: true, data: axtree };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return { success: false, error: message };
+    }
+  });
+
+  handle(
+    'debug:generate-bug-report',
+    async (
+      event: IpcMainInvokeEvent,
+      reportData: {
+        taskId?: string;
+        taskPrompt?: string;
+        taskStatus?: string;
+        taskCreatedAt?: string;
+        taskCompletedAt?: string;
+        messages?: unknown[];
+        debugLogs?: unknown[];
+        screenshot?: string;
+        axtree?: string;
+        appVersion?: string;
+        platform?: string;
+      },
+    ) => {
+      try {
+        assertDebugModeEnabled();
+      } catch (e) {
+        return { success: false, error: (e as Error).message };
+      }
+      let window: BrowserWindow;
+      try {
+        window = assertTrustedWindow(BrowserWindow.fromWebContents(event.sender));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Untrusted window';
+        return { success: false, error: message };
+      }
+      try {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const defaultFilename = `bug-report-${timestamp}.json`;
+
+        const result = await dialog.showSaveDialog(window, {
+          title: 'Save Bug Report',
+          defaultPath: defaultFilename,
+          filters: [
+            { name: 'JSON Files', extensions: ['json'] },
+            { name: 'All Files', extensions: ['*'] },
+          ],
+        });
+
+        if (result.canceled || !result.filePath) {
+          return { success: false, reason: 'cancelled' };
+        }
+
+        // Write PNG sidecar first (collision-safe) so hasScreenshot in the
+        // JSON is only true when the file was actually written.
+        let screenshotPath: string | undefined;
+        if (reportData.screenshot) {
+          const parsed = path.parse(result.filePath);
+          const candidate = path.join(parsed.dir, `${parsed.name}.png`);
+          try {
+            await fs.promises.access(candidate);
+            // File exists — use a timestamped name to avoid silent overwrite.
+            screenshotPath = path.join(parsed.dir, `${parsed.name}-${Date.now()}.png`);
+          } catch {
+            screenshotPath = candidate;
+          }
+          await fs.promises.writeFile(screenshotPath, Buffer.from(reportData.screenshot, 'base64'));
+        }
+
+        const report = {
+          version: 1,
+          generatedAt: new Date().toISOString(),
+          app: {
+            version: reportData.appVersion ?? app.getVersion(),
+            platform: reportData.platform ?? process.platform,
+          },
+          task: {
+            id: reportData.taskId,
+            prompt: reportData.taskPrompt,
+            status: reportData.taskStatus,
+            createdAt: reportData.taskCreatedAt,
+            completedAt: reportData.taskCompletedAt,
+            messageCount: Array.isArray(reportData.messages) ? reportData.messages.length : 0,
+          },
+          messages: reportData.messages,
+          debugLogs: reportData.debugLogs,
+          axtree: reportData.axtree,
+          screenshotFile: screenshotPath ? path.basename(screenshotPath) : null,
+          hasScreenshot: Boolean(screenshotPath),
+        };
+
+        await fs.promises.writeFile(result.filePath, JSON.stringify(report, null, 2), 'utf-8');
+
+        return { success: true, path: result.filePath };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return { success: false, error: message };
+      }
+    },
+  );
+
+  // Favorites handlers
+  handle('favorites:list', async () => {
+    return storage.getFavorites();
+  });
+
+  handle('favorites:add', async (_event: IpcMainInvokeEvent, taskId: string) => {
+    const task = storage.getTask(taskId);
+    if (!task) {
+      throw new Error(`Favorite failed: task not found (taskId: ${taskId})`);
+    }
+    const allowedFavoriteStatuses: Array<'completed' | 'interrupted'> = [
+      'completed',
+      'interrupted',
+    ];
+    if (!allowedFavoriteStatuses.includes(task.status as 'completed' | 'interrupted')) {
+      throw new Error(
+        `Favorite failed: invalid status (taskId: ${taskId}, status: ${task.status})`,
+      );
+    }
+    storage.addFavorite(taskId, task.prompt, task.summary);
+  });
+
+  handle('favorites:remove', async (_event: IpcMainInvokeEvent, taskId: string) => {
+    storage.removeFavorite(taskId);
+  });
+
+  handle('favorites:has', async (_event: IpcMainInvokeEvent, taskId: string) => {
+    return storage.isFavorite(taskId);
+  });
+
+  // File attachment handlers
+  handle('files:pick', async (event: IpcMainInvokeEvent) => {
+    const window = assertTrustedWindow(BrowserWindow.fromWebContents(event.sender));
+    const result = await dialog.showOpenDialog(window, {
+      properties: ['openFile', 'multiSelections'],
+    });
+    if (result.canceled) return [];
+    if (result.filePaths.length > 5) {
+      throw new Error('You can only select a maximum of 5 files.');
+    }
+    for (const filePath of result.filePaths) {
+      const stat = fs.statSync(filePath);
+      if (stat.size > MAX_ATTACHMENT_FILE_SIZE) {
+        throw new Error(`File ${path.basename(filePath)} exceeds the 10 MB size limit.`);
+      }
+    }
+    return result.filePaths.map((filePath) => {
+      const stat = fs.statSync(filePath);
+      const ext = path.extname(filePath).toLowerCase().slice(1);
+      const textExts = ['txt', 'md', 'json', 'yaml', 'yml', 'toml', 'csv', 'xml', 'html', 'css'];
+      const codeExts = [
+        'ts',
+        'tsx',
+        'js',
+        'jsx',
+        'py',
+        'rb',
+        'go',
+        'rs',
+        'java',
+        'c',
+        'cpp',
+        'h',
+        'cs',
+        'swift',
+        'kt',
+        'sh',
+        'bash',
+        'zsh',
+        'fish',
+      ];
+      const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico'];
+      const pdfExts = ['pdf'];
+      type FileType = 'image' | 'text' | 'code' | 'pdf' | 'other';
+      let type: FileType = 'other';
+      if (imageExts.includes(ext)) type = 'image';
+      else if (pdfExts.includes(ext)) type = 'pdf';
+      else if (codeExts.includes(ext)) type = 'code';
+      else if (textExts.includes(ext)) type = 'text';
+
+      const info: FileAttachmentInfo = {
+        id: crypto.randomUUID(),
+        name: path.basename(filePath),
+        path: filePath,
+        type,
+        size: stat.size,
+      };
+      if (type === 'text' || type === 'code') {
+        try {
+          info.content = fs.readFileSync(filePath, 'utf-8');
+        } catch {
+          // Non-fatal: content stays undefined
+        }
+      }
+      return info;
+    });
+  });
+
+  handle('files:process-dropped', async (_event: IpcMainInvokeEvent, filePaths: string[]) => {
+    return filePaths.map((filePath) => {
+      const stat = fs.statSync(filePath);
+      const ext = path.extname(filePath).toLowerCase().slice(1);
+      const textExts = ['txt', 'md', 'json', 'yaml', 'yml', 'toml', 'csv', 'xml', 'html', 'css'];
+      const codeExts = [
+        'ts',
+        'tsx',
+        'js',
+        'jsx',
+        'py',
+        'rb',
+        'go',
+        'rs',
+        'java',
+        'c',
+        'cpp',
+        'h',
+        'cs',
+        'swift',
+        'kt',
+        'sh',
+        'bash',
+        'zsh',
+        'fish',
+      ];
+      const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico'];
+      const pdfExts = ['pdf'];
+      type FileType = 'image' | 'text' | 'code' | 'pdf' | 'other';
+      let type: FileType = 'other';
+      if (imageExts.includes(ext)) type = 'image';
+      else if (pdfExts.includes(ext)) type = 'pdf';
+      else if (codeExts.includes(ext)) type = 'code';
+      else if (textExts.includes(ext)) type = 'text';
+
+      const info: FileAttachmentInfo = {
+        id: crypto.randomUUID(),
+        name: path.basename(filePath),
+        path: filePath,
+        type,
+        size: stat.size,
+      };
+      if (type === 'text' || type === 'code') {
+        try {
+          info.content = fs.readFileSync(filePath, 'utf-8');
+        } catch {
+          // Non-fatal: content stays undefined
+        }
+      }
+      return info;
+    });
   });
 
   handle('skills:list', async () => {
