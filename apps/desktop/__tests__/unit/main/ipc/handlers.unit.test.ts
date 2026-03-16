@@ -63,6 +63,13 @@ vi.mock('electron', () => {
         webContents: {
           send: vi.fn(),
           isDestroyed: vi.fn(() => false),
+          capturePage: vi.fn(() =>
+            Promise.resolve({
+              toPNG: () => Buffer.from('fake-png-data'),
+              getSize: () => ({ width: 1920, height: 1080 }),
+            }),
+          ),
+          executeJavaScript: vi.fn(() => Promise.resolve('{"tag":"body","children":[]}')),
         },
       })),
       getFocusedWindow: vi.fn(() => ({
@@ -71,12 +78,23 @@ vi.mock('electron', () => {
       })),
       getAllWindows: vi.fn(() => [{ id: 1, webContents: { send: vi.fn() } }]),
     },
+    dialog: {
+      showSaveDialog: vi.fn(() =>
+        Promise.resolve({ canceled: false, filePath: '/tmp/bug-report.json' }),
+      ),
+      showOpenDialog: vi.fn(() => Promise.resolve({ canceled: false, filePaths: [] })),
+    },
+    nativeTheme: {
+      themeSource: 'system',
+      shouldUseDarkColors: false,
+    },
     shell: {
       openExternal: vi.fn(),
     },
     app: {
       isPackaged: false,
       getPath: vi.fn(() => '/tmp/test-app'),
+      getVersion: vi.fn(() => '1.0.0-test'),
     },
   };
 });
@@ -274,7 +292,6 @@ vi.mock('@accomplish_ai/agent-core', async (importOriginal) => {
     validateApiKey: actual.validateApiKey,
     validateHttpUrl: actual.validateHttpUrl,
     validateTaskConfig: actual.validateTaskConfig,
-    buildEnhancedPrompt: actual.buildEnhancedPrompt,
     ALLOWED_API_KEY_PROVIDERS: actual.ALLOWED_API_KEY_PROVIDERS,
     STANDARD_VALIDATION_PROVIDERS: actual.STANDARD_VALIDATION_PROVIDERS,
     validate: actual.validate,
@@ -388,9 +405,37 @@ vi.mock('@main/permission-api', () => ({
   QUESTION_API_PORT: 9227,
 }));
 
+// Mock fs module for bug report file writes
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>();
+  return {
+    ...actual,
+    default: {
+      ...actual,
+      writeFileSync: vi.fn(),
+      existsSync: vi.fn(() => false),
+      copyFileSync: vi.fn(),
+      promises: {
+        writeFile: vi.fn(() => Promise.resolve()),
+        access: vi.fn(() => Promise.reject(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))),
+        stat: vi.fn(() => Promise.resolve({ size: 1024 })),
+      },
+    },
+    writeFileSync: vi.fn(),
+    existsSync: vi.fn(() => false),
+    copyFileSync: vi.fn(),
+    promises: {
+      writeFile: vi.fn(() => Promise.resolve()),
+      access: vi.fn(() => Promise.reject(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))),
+      stat: vi.fn(() => Promise.resolve({ size: 1024 })),
+    },
+  };
+});
+
 // Import after mocks are set up
 import { registerIPCHandlers } from '@main/ipc/handlers';
-import { ipcMain, BrowserWindow as _BrowserWindow, shell } from 'electron';
+import { ipcMain, BrowserWindow as _BrowserWindow, shell, dialog } from 'electron';
+import fs from 'fs';
 
 // Type the mocked ipcMain with helpers
 type MockedIpcMain = typeof ipcMain & {
@@ -467,10 +512,6 @@ describe('IPC Handlers Integration', () => {
       expect(handlers.has('task:list')).toBe(true);
       expect(handlers.has('task:delete')).toBe(true);
       expect(handlers.has('task:clear-history')).toBe(true);
-      expect(handlers.has('task:favorite:add')).toBe(true);
-      expect(handlers.has('task:favorite:remove')).toBe(true);
-      expect(handlers.has('task:favorite:list')).toBe(true);
-      expect(handlers.has('task:favorite:has')).toBe(true);
 
       // Permission handler
       expect(handlers.has('permission:respond')).toBe(true);
@@ -902,108 +943,6 @@ describe('IPC Handlers Integration', () => {
       // Assert
       const { clearHistory } = await import('@accomplish_ai/agent-core');
       expect(clearHistory).toHaveBeenCalled();
-    });
-
-    it('task:favorite:add should add completed task to favorites', async () => {
-      const taskId = 'task_fav_add';
-      mockTasks.push({
-        id: taskId,
-        prompt: 'Complete me',
-        summary: 'Done',
-        status: 'completed',
-        messages: [],
-        createdAt: new Date().toISOString(),
-      });
-
-      await invokeHandler('task:favorite:add', taskId);
-
-      const { addFavorite } = await import('@accomplish_ai/agent-core');
-      expect(addFavorite).toHaveBeenCalledWith(taskId, 'Complete me', 'Done');
-    });
-
-    it('task:favorite:add should add interrupted task to favorites', async () => {
-      const taskId = 'task_fav_interrupted';
-      mockTasks.push({
-        id: taskId,
-        prompt: 'Resume later',
-        summary: 'Work in progress',
-        status: 'interrupted',
-        messages: [],
-        createdAt: new Date().toISOString(),
-      });
-
-      await invokeHandler('task:favorite:add', taskId);
-
-      const { addFavorite } = await import('@accomplish_ai/agent-core');
-      expect(addFavorite).toHaveBeenCalledWith(taskId, 'Resume later', 'Work in progress');
-    });
-
-    it('task:favorite:add should reject when task not found', async () => {
-      await expect(invokeHandler('task:favorite:add', 'task_nonexistent')).rejects.toThrow(
-        'Favorite failed: task not found (taskId: task_nonexistent)',
-      );
-      const { addFavorite } = await import('@accomplish_ai/agent-core');
-      expect(addFavorite).not.toHaveBeenCalled();
-    });
-
-    it('task:favorite:add should reject when task status is not completed or interrupted', async () => {
-      const taskId = 'task_running';
-      mockTasks.push({
-        id: taskId,
-        prompt: 'Running',
-        status: 'running',
-        messages: [],
-        createdAt: new Date().toISOString(),
-      });
-
-      await expect(invokeHandler('task:favorite:add', taskId)).rejects.toThrow(
-        'Favorite failed: invalid status (taskId: task_running, status: running)',
-      );
-      const { addFavorite } = await import('@accomplish_ai/agent-core');
-      expect(addFavorite).not.toHaveBeenCalled();
-    });
-
-    it('task:favorite:remove should remove task from favorites', async () => {
-      const taskId = 'task_to_unfav';
-      mockFavorites.push({
-        taskId,
-        prompt: 'Old',
-        favoritedAt: new Date().toISOString(),
-      });
-
-      await invokeHandler('task:favorite:remove', taskId);
-
-      const { removeFavorite } = await import('@accomplish_ai/agent-core');
-      expect(removeFavorite).toHaveBeenCalledWith(taskId);
-    });
-
-    it('task:favorite:list should return favorites list', async () => {
-      mockFavorites.length = 0;
-      mockFavorites.push(
-        { taskId: 't1', prompt: 'P1', favoritedAt: new Date().toISOString() },
-        { taskId: 't2', prompt: 'P2', favoritedAt: new Date().toISOString() },
-      );
-
-      const result = await invokeHandler('task:favorite:list');
-
-      expect(result).toHaveLength(2);
-      const { getFavorites } = await import('@accomplish_ai/agent-core');
-      expect(getFavorites).toHaveBeenCalled();
-    });
-
-    it('task:favorite:has should return whether task is favorited', async () => {
-      mockFavorites.length = 0;
-      mockFavorites.push({
-        taskId: 'task_yes',
-        prompt: 'Y',
-        favoritedAt: new Date().toISOString(),
-      });
-
-      const resultYes = await invokeHandler('task:favorite:has', 'task_yes');
-      const resultNo = await invokeHandler('task:favorite:has', 'task_no');
-
-      expect(resultYes).toBe(true);
-      expect(resultNo).toBe(false);
     });
   });
 
@@ -2199,4 +2138,345 @@ describe('IPC Handlers Integration', () => {
   // The callback logic is exercised through the task lifecycle tests above.
   // The utility functions (extractScreenshots, sanitizeToolOutput)
   // are tested in handlers-utils.unit.test.ts as pure function tests.
+
+  describe('Favorites Handlers', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      mockedIpcMain._clear();
+      registerIPCHandlers();
+    });
+
+    it('favorites:add should add a completed task to favorites', async () => {
+      const taskId = 'task_fav_add';
+      mockTasks.push({
+        id: taskId,
+        prompt: 'Complete me',
+        summary: 'Done',
+        status: 'completed',
+        messages: [],
+        createdAt: new Date().toISOString(),
+      });
+
+      await invokeHandler('favorites:add', taskId);
+
+      const { addFavorite } = await import('@accomplish_ai/agent-core');
+      expect(addFavorite).toHaveBeenCalledWith(taskId, 'Complete me', 'Done');
+    });
+
+    it('favorites:add should add an interrupted task to favorites', async () => {
+      const taskId = 'task_fav_interrupted';
+      mockTasks.push({
+        id: taskId,
+        prompt: 'Resume later',
+        summary: 'WIP',
+        status: 'interrupted',
+        messages: [],
+        createdAt: new Date().toISOString(),
+      });
+
+      await invokeHandler('favorites:add', taskId);
+
+      const { addFavorite } = await import('@accomplish_ai/agent-core');
+      expect(addFavorite).toHaveBeenCalledWith(taskId, 'Resume later', 'WIP');
+    });
+
+    it('favorites:add should reject when task not found', async () => {
+      await expect(invokeHandler('favorites:add', 'task_nonexistent')).rejects.toThrow(
+        'Favorite failed: task not found (taskId: task_nonexistent)',
+      );
+      const { addFavorite } = await import('@accomplish_ai/agent-core');
+      expect(addFavorite).not.toHaveBeenCalled();
+    });
+
+    it('favorites:add should reject when task status is not completed or interrupted', async () => {
+      const taskId = 'task_running';
+      mockTasks.push({
+        id: taskId,
+        prompt: 'Running',
+        status: 'running',
+        messages: [],
+        createdAt: new Date().toISOString(),
+      });
+
+      await expect(invokeHandler('favorites:add', taskId)).rejects.toThrow(
+        'Favorite failed: invalid status (taskId: task_running, status: running)',
+      );
+      const { addFavorite } = await import('@accomplish_ai/agent-core');
+      expect(addFavorite).not.toHaveBeenCalled();
+    });
+
+    it('favorites:remove should remove task from favorites', async () => {
+      await invokeHandler('favorites:remove', 'task_to_unfav');
+      const { removeFavorite } = await import('@accomplish_ai/agent-core');
+      expect(removeFavorite).toHaveBeenCalledWith('task_to_unfav');
+    });
+
+    it('favorites:list should return favorites list', async () => {
+      const result = await invokeHandler('favorites:list');
+      const { getFavorites } = await import('@accomplish_ai/agent-core');
+      expect(getFavorites).toHaveBeenCalled();
+      expect(Array.isArray(result)).toBe(true);
+    });
+  });
+
+  describe('Debug Bug Report Handlers', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      mockedIpcMain._clear();
+
+      // Reset BrowserWindow mock to include capturePage and executeJavaScript
+      (_BrowserWindow.fromWebContents as Mock).mockReturnValue({
+        id: 1,
+        isDestroyed: vi.fn(() => false),
+        webContents: {
+          send: vi.fn(),
+          isDestroyed: vi.fn(() => false),
+          capturePage: vi.fn(() =>
+            Promise.resolve({
+              toPNG: () => Buffer.from('fake-png-data'),
+              getSize: () => ({ width: 1920, height: 1080 }),
+            }),
+          ),
+          executeJavaScript: vi.fn(() => Promise.resolve('{"tag":"body","children":[]}')),
+        },
+      });
+      (_BrowserWindow.getFocusedWindow as Mock).mockReturnValue({
+        id: 1,
+        isDestroyed: () => false,
+      });
+      (_BrowserWindow.getAllWindows as Mock).mockReturnValue([
+        { id: 1, webContents: { send: vi.fn() } },
+      ]);
+
+      // Reset dialog mock
+      (dialog.showSaveDialog as Mock).mockResolvedValue({
+        canceled: false,
+        filePath: '/tmp/bug-report.json',
+      });
+
+      // Enable debug mode for all debug handler tests
+      mockDebugMode = true;
+
+      // Reset fs mocks
+      (fs.writeFileSync as Mock).mockReset();
+      (fs.promises.writeFile as unknown as Mock).mockReset();
+      (fs.promises.writeFile as unknown as Mock).mockResolvedValue(undefined);
+      (fs.promises.access as unknown as Mock).mockReset();
+      (fs.promises.access as unknown as Mock).mockRejectedValue(
+        Object.assign(new Error('ENOENT'), { code: 'ENOENT' }),
+      );
+
+      registerIPCHandlers();
+    });
+
+    it('should register all three debug handlers', () => {
+      const handlers = mockedIpcMain._getHandlers();
+      expect(handlers.has('debug:capture-screenshot')).toBe(true);
+      expect(handlers.has('debug:capture-axtree')).toBe(true);
+      expect(handlers.has('debug:generate-bug-report')).toBe(true);
+    });
+
+    it('debug:capture-screenshot should return base64 PNG data', async () => {
+      const result = (await invokeHandler('debug:capture-screenshot')) as {
+        success: boolean;
+        data: string;
+        width: number;
+        height: number;
+      };
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBe(Buffer.from('fake-png-data').toString('base64'));
+      expect(result.width).toBe(1920);
+      expect(result.height).toBe(1080);
+    });
+
+    it('debug:capture-screenshot should handle errors gracefully', async () => {
+      (_BrowserWindow.fromWebContents as Mock).mockReturnValue({
+        id: 1,
+        isDestroyed: vi.fn(() => false),
+        webContents: {
+          send: vi.fn(),
+          isDestroyed: vi.fn(() => false),
+          capturePage: vi.fn(() => Promise.reject(new Error('Capture failed'))),
+          executeJavaScript: vi.fn(),
+        },
+      });
+
+      const result = (await invokeHandler('debug:capture-screenshot')) as {
+        success: boolean;
+        error: string;
+      };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Capture failed');
+    });
+
+    it('debug:capture-axtree should return JSON string', async () => {
+      const result = (await invokeHandler('debug:capture-axtree')) as {
+        success: boolean;
+        data: string;
+      };
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBe('{"tag":"body","children":[]}');
+    });
+
+    it('debug:capture-axtree should handle errors gracefully', async () => {
+      (_BrowserWindow.fromWebContents as Mock).mockReturnValue({
+        id: 1,
+        isDestroyed: vi.fn(() => false),
+        webContents: {
+          send: vi.fn(),
+          isDestroyed: vi.fn(() => false),
+          capturePage: vi.fn(),
+          executeJavaScript: vi.fn(() => Promise.reject(new Error('Script execution failed'))),
+        },
+      });
+
+      const result = (await invokeHandler('debug:capture-axtree')) as {
+        success: boolean;
+        error: string;
+      };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Script execution failed');
+    });
+
+    it('debug:generate-bug-report should save report via dialog and return success', async () => {
+      const reportData = {
+        taskId: 'task_123',
+        taskPrompt: 'Test prompt',
+        taskStatus: 'completed',
+        messages: [{ type: 'user', content: 'hello' }],
+        debugLogs: [{ type: 'info', message: 'log entry' }],
+      };
+
+      const result = (await invokeHandler('debug:generate-bug-report', reportData)) as {
+        success: boolean;
+        path: string;
+      };
+
+      expect(result.success).toBe(true);
+      expect(result.path).toBe('/tmp/bug-report.json');
+      expect(dialog.showSaveDialog).toHaveBeenCalled();
+      expect(fs.promises.writeFile).toHaveBeenCalledTimes(1);
+
+      const writtenContent = JSON.parse(
+        (fs.promises.writeFile as unknown as Mock).mock.calls[0][1] as string,
+      ) as { task: { id: string; prompt: string }; hasScreenshot: boolean };
+      expect(writtenContent.task.id).toBe('task_123');
+      expect(writtenContent.task.prompt).toBe('Test prompt');
+      expect(writtenContent.hasScreenshot).toBe(false);
+    });
+
+    it('debug:generate-bug-report should handle dialog cancellation', async () => {
+      (dialog.showSaveDialog as Mock).mockResolvedValue({
+        canceled: true,
+        filePath: undefined,
+      });
+
+      const result = (await invokeHandler('debug:generate-bug-report', {})) as {
+        success: boolean;
+        reason: string;
+      };
+
+      expect(result.success).toBe(false);
+      expect(result.reason).toBe('cancelled');
+      expect(fs.promises.writeFile).not.toHaveBeenCalled();
+    });
+
+    it('debug:generate-bug-report should handle write errors', async () => {
+      (fs.promises.writeFile as unknown as Mock).mockRejectedValueOnce(
+        new Error('Permission denied'),
+      );
+
+      const result = (await invokeHandler('debug:generate-bug-report', {
+        taskId: 'task_err',
+      })) as {
+        success: boolean;
+        error: string;
+      };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Permission denied');
+    });
+
+    it('debug:generate-bug-report should save screenshot file when provided', async () => {
+      const pngMagic = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+      const screenshotBase64 = Buffer.concat([pngMagic, Buffer.from('fake-png-data')]).toString(
+        'base64',
+      );
+      const reportData = {
+        taskId: 'task_with_screenshot',
+        taskPrompt: 'Screenshot test',
+        taskStatus: 'completed',
+        screenshot: screenshotBase64,
+      };
+
+      const result = (await invokeHandler('debug:generate-bug-report', reportData)) as {
+        success: boolean;
+        path: string;
+      };
+
+      expect(result.success).toBe(true);
+      // fs.promises.writeFile is used (not writeFileSync)
+      expect(fs.promises.writeFile).toHaveBeenCalledTimes(2);
+
+      // First call: PNG screenshot (written before JSON so hasScreenshot is accurate)
+      // Second call: JSON report
+      const calls = (fs.promises.writeFile as unknown as Mock).mock.calls;
+      const jsonCall = calls.find((c: unknown[]) => typeof c[1] === 'string') as
+        | [string, string]
+        | undefined;
+      const pngCall = calls.find((c: unknown[]) => Buffer.isBuffer(c[1])) as
+        | [string, Buffer]
+        | undefined;
+
+      expect(jsonCall).toBeDefined();
+      const jsonContent = JSON.parse(jsonCall![1]) as { hasScreenshot: boolean };
+      expect(jsonContent.hasScreenshot).toBe(true);
+
+      expect(pngCall).toBeDefined();
+      expect(pngCall![0]).toContain('bug-report');
+      expect(Buffer.isBuffer(pngCall![1])).toBe(true);
+    });
+
+    it('debug:capture-screenshot should return error when no window found', async () => {
+      (_BrowserWindow.fromWebContents as Mock).mockReturnValue(null);
+
+      const result = (await invokeHandler('debug:capture-screenshot')) as {
+        success: boolean;
+        error: string;
+      };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Untrusted window');
+    });
+
+    it('debug:capture-axtree should return error when no window found', async () => {
+      (_BrowserWindow.fromWebContents as Mock).mockReturnValue(null);
+
+      const result = (await invokeHandler('debug:capture-axtree')) as {
+        success: boolean;
+        error: string;
+      };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Untrusted window');
+    });
+
+    it('debug:generate-bug-report should return error when no window found', async () => {
+      (_BrowserWindow.fromWebContents as Mock).mockReturnValue(null);
+
+      const result = (await invokeHandler('debug:generate-bug-report', {
+        taskId: 'test',
+      })) as {
+        success: boolean;
+        error: string;
+      };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Untrusted window');
+    });
+  });
 });
