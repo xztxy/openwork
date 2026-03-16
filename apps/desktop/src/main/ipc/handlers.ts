@@ -521,7 +521,9 @@ export function registerIPCHandlers(): void {
           {
             timeout: API_KEY_VALIDATION_TIMEOUT_MS,
             baseUrl:
-              provider === 'openai' ? storage.getOpenAiBaseUrl().trim() || undefined : undefined,
+              provider === 'openai'
+                ? storage.getOpenAiBaseUrl().trim() || undefined
+                : (options?.baseUrl as string | undefined),
             zaiRegion:
               provider === 'zai'
                 ? (options?.region as import('@accomplish_ai/agent-core').ZaiRegion) ||

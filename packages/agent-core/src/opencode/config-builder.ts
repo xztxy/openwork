@@ -498,6 +498,28 @@ export async function buildProviderConfigs(
     }
   }
 
+  // MiniMax provider
+  const minimaxProvider = providerSettings.connectedProviders.minimax;
+  if (minimaxProvider?.connectionStatus === 'connected' && minimaxProvider.selectedModelId) {
+    const modelId = minimaxProvider.selectedModelId.replace(/^minimax\//, '');
+    const minimaxApiKey = getApiKey('minimax');
+    const defaultBaseUrl = 'https://api.minimax.io/v1';
+    const baseUrl = (minimaxProvider.customBaseUrl || defaultBaseUrl).replace(/\/$/, '');
+    providerConfigs.push({
+      id: 'minimax',
+      npm: '@ai-sdk/openai-compatible',
+      name: 'MiniMax',
+      options: {
+        baseURL: baseUrl,
+        ...(minimaxApiKey ? { apiKey: minimaxApiKey } : {}),
+      },
+      models: {
+        [modelId]: { name: modelId, tools: true },
+      },
+    });
+    console.log('[OpenCode Config Builder] MiniMax configured:', modelId, 'baseURL:', baseUrl);
+  }
+
   // Z.AI provider
   const zaiKey = getApiKey('zai');
   if (zaiKey) {
@@ -538,20 +560,11 @@ export async function buildProviderConfigs(
 }
 
 /**
- * API key mapping from internal provider IDs to OpenCode auth.json format.
- * Only providers that need special key mapping in auth.json are included here.
- */
-const _AUTH_KEY_MAPPING: Record<string, string> = {
-  deepseek: 'deepseek',
-  zai: 'zai-coding-plan',
-  minimax: 'minimax',
-};
-
-/**
  * Syncs API keys to OpenCode auth.json file.
  *
  * This function writes API keys to the OpenCode auth.json file so that the CLI
- * can access them. Only specific providers (deepseek, zai, minimax) are synced.
+ * can access them. Only specific providers (deepseek, zai) are synced this way;
+ * MiniMax keys are passed directly via providerConfigs options.apiKey.
  *
  * @param authPath - Path to the auth.json file
  * @param apiKeys - Record of provider IDs to API keys (null values are ignored)
@@ -591,14 +604,6 @@ export async function syncApiKeysToOpenCodeAuth(
       auth['zai-coding-plan'] = { type: 'api', key: apiKeys.zai };
       updated = true;
       console.log('[OpenCode Auth] Synced Z.AI Coding Plan API key');
-    }
-  }
-
-  if (apiKeys.minimax) {
-    if (!auth.minimax || auth.minimax.key !== apiKeys.minimax) {
-      auth.minimax = { type: 'api', key: apiKeys.minimax };
-      updated = true;
-      console.log('[OpenCode Auth] Synced MiniMax API key');
     }
   }
 

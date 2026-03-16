@@ -108,6 +108,8 @@ export interface ProviderConfig {
   defaultModelId?: string;
   /** Config for dynamically fetching models from the provider API */
   modelsEndpoint?: ModelsEndpointConfig;
+  /** Whether the user can customize the base URL for this provider */
+  editableBaseUrl?: boolean;
 }
 
 export interface ModelConfig {
@@ -299,7 +301,8 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     name: 'MiniMax',
     requiresApiKey: true,
     apiKeyEnvVar: 'MINIMAX_API_KEY',
-    baseUrl: 'https://api.minimax.io',
+    baseUrl: 'https://api.minimax.io/v1',
+    editableBaseUrl: true,
     defaultModelId: 'minimax/MiniMax-M2.5',
     models: [
       {

@@ -147,15 +147,15 @@ export async function validateApiKey(
         break;
       }
 
-      case 'minimax':
+      case 'minimax': {
+        const minimaxBase = (options?.baseUrl || 'https://api.minimax.io/v1').replace(/\/+$/, '');
         response = await fetchWithTimeout(
-          'https://api.minimax.io/anthropic/v1/messages',
+          `${minimaxBase}/chat/completions`,
           {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${apiKey}`,
-              'anthropic-version': '2023-06-01',
             },
             body: JSON.stringify({
               model: 'MiniMax-M2.5',
@@ -166,6 +166,7 @@ export async function validateApiKey(
           timeout,
         );
         break;
+      }
 
       case 'ollama':
       case 'bedrock':
