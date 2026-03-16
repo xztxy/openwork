@@ -66,15 +66,15 @@
     "@types/node": "catalog:",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
-    "@vitest/coverage-v8": "^4.0.17",
+    "@vitest/coverage-v8": "^4.1.0",
     "concurrently": "^9.1.2",
-    "electron": "^35.2.1",
+    "electron": "^41.0.2",
     "electron-builder": "^25.1.8",
     "esbuild": "^0.27.3",
     "typescript": "^5.7.2",
-    "vite": "^6.0.6",
-    "vite-plugin-electron": "^0.29.0",
-    "vitest": "^4.0.17"
+    "vite": "^8.0.0",
+    "vite-plugin-electron": "^0.29.1",
+    "vitest": "^4.1.0"
   },
   "optionalDependencies": {
     "opencode-darwin-arm64": "1.2.26",
