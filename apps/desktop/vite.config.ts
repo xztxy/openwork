@@ -16,7 +16,9 @@ const nodeExternals = [...builtinModules, ...builtinModules.map((m) => `node:${m
 // Node built-ins will fail at runtime in an ESM context.
 // Workspace packages (@accomplish_ai/*) are aliased to local source and must be bundled.
 const externalizeNodeModules = (id: string) => {
-  if (id.startsWith('@accomplish_ai/')) return false;
+  if (id.startsWith('@accomplish_ai/')) {
+    return false;
+  }
   return !id.startsWith('.') && !id.startsWith('/') && !id.includes('\0') && !path.isAbsolute(id);
 };
 
