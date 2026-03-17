@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence, motion } from 'framer-motion';
 import { getAccomplish } from '@/lib/accomplish';
@@ -185,6 +185,12 @@ export function OllamaProviderForm({
   const [error, setError] = useState<string | null>(null);
   const [availableModels, setAvailableModels] = useState<OllamaModel[]>([]);
 
+  const latestProviderRef = useRef(connectedProvider);
+  const refreshRequestIdRef = useRef(0);
+  useEffect(() => {
+    latestProviderRef.current = connectedProvider;
+  }, [connectedProvider]);
+
   const isConnected = connectedProvider?.connectionStatus === 'connected';
 
   const handleConnect = async () => {
@@ -233,20 +239,30 @@ export function OllamaProviderForm({
   };
 
   const handleRefresh = async () => {
-    if (!connectedProvider) {
+    const baseProvider = latestProviderRef.current;
+    if (!baseProvider) {
       return;
     }
+    const requestId = ++refreshRequestIdRef.current;
     setRefreshing(true);
     setError(null);
 
     try {
       const accomplish = getAccomplish();
       const currentUrl =
-        (connectedProvider.credentials as OllamaCredentials)?.serverUrl || 'http://localhost:11434';
+        (baseProvider.credentials as OllamaCredentials)?.serverUrl || 'http://localhost:11434';
       const result = await accomplish.testOllamaConnection(currentUrl);
 
       if (!result.success) {
         setError(result.error || t('status.connectionFailed'));
+        return;
+      }
+
+      if (requestId !== refreshRequestIdRef.current) {
+        return;
+      }
+      const latestProvider = latestProviderRef.current;
+      if (!latestProvider || latestProvider.connectionStatus !== 'connected') {
         return;
       }
 
@@ -259,12 +275,12 @@ export function OllamaProviderForm({
 
       const freshModelIds = new Set(freshModels.map((m) => m.id));
       const keepSelectedModel =
-        connectedProvider.selectedModelId && freshModelIds.has(connectedProvider.selectedModelId)
-          ? connectedProvider.selectedModelId
+        latestProvider.selectedModelId && freshModelIds.has(latestProvider.selectedModelId)
+          ? latestProvider.selectedModelId
           : null;
 
       const updatedProvider: ConnectedProvider = {
-        ...connectedProvider,
+        ...latestProvider,
         selectedModelId: keepSelectedModel,
         availableModels: freshModels.map((m) => ({
           id: m.id,
