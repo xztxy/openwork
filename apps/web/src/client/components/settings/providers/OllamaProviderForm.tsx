@@ -179,6 +179,7 @@ export function OllamaProviderForm({
   const { t } = useTranslation('settings');
   const [serverUrl, setServerUrl] = useState('http://localhost:11434');
   const [connecting, setConnecting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [availableModels, setAvailableModels] = useState<OllamaModel[]>([]);
 
@@ -226,6 +227,55 @@ export function OllamaProviderForm({
       setError(err instanceof Error ? err.message : t('status.connectionFailed'));
     } finally {
       setConnecting(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    if (!connectedProvider) {
+      return;
+    }
+    setRefreshing(true);
+    setError(null);
+
+    try {
+      const accomplish = getAccomplish();
+      const currentUrl =
+        (connectedProvider.credentials as OllamaCredentials)?.serverUrl || 'http://localhost:11434';
+      const result = await accomplish.testOllamaConnection(currentUrl);
+
+      if (!result.success) {
+        setError(result.error || t('status.connectionFailed'));
+        return;
+      }
+
+      const freshModels: OllamaModel[] = (result.models || []).map((m) => ({
+        id: `ollama/${m.id}`,
+        name: m.displayName,
+        toolSupport: m.toolSupport || 'unknown',
+      }));
+      setAvailableModels(freshModels);
+
+      const freshModelIds = new Set(freshModels.map((m) => m.id));
+      const keepSelectedModel =
+        connectedProvider.selectedModelId && freshModelIds.has(connectedProvider.selectedModelId)
+          ? connectedProvider.selectedModelId
+          : null;
+
+      const updatedProvider: ConnectedProvider = {
+        ...connectedProvider,
+        selectedModelId: keepSelectedModel,
+        availableModels: freshModels.map((m) => ({
+          id: m.id,
+          name: m.name,
+          toolSupport: m.toolSupport,
+        })),
+      };
+
+      onConnect(updatedProvider);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('status.connectionFailed'));
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -300,12 +350,40 @@ export function OllamaProviderForm({
 
               <ConnectedControls onDisconnect={onDisconnect} />
 
-              <OllamaModelSelector
-                models={models}
-                value={connectedProvider?.selectedModelId || null}
-                onChange={onModelChange}
-                error={showModelError && !connectedProvider?.selectedModelId}
-              />
+              <div className="flex items-start gap-2">
+                <div className="flex-1 min-w-0">
+                  <OllamaModelSelector
+                    models={models}
+                    value={connectedProvider?.selectedModelId || null}
+                    onChange={onModelChange}
+                    error={showModelError && !connectedProvider?.selectedModelId}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  data-testid="ollama-refresh-models"
+                  className="mt-6 flex-shrink-0 rounded-md border border-input bg-background px-2.5 py-2.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+                  title={t('ollama.refreshModels')}
+                >
+                  <svg
+                    className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <FormError error={error} />
 
               <div className="flex items-center gap-3 pt-2 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1">

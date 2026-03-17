@@ -122,7 +122,8 @@
   },
   "lmstudio": {
     "serverUrl": "LM Studio Server URL",
-    "serverHint": "Start LM Studio and enable the local server in Developer settings"
+    "serverHint": "Start LM Studio and enable the local server in Developer settings",
+    "refreshModels": "Refresh model list"
   },
   "vertex": {
     "serviceAccountTab": "Service Account",
@@ -175,7 +176,8 @@
     "selectModel": "Select Model",
     "useThisModel": "Use This Model",
     "helpText": "Make sure <link>Ollama</link> is installed and running, then click Test to connect.",
-    "currentlyUsing": "Currently using"
+    "currentlyUsing": "Currently using",
+    "refreshModels": "Refresh model list"
   },
   "azure": {
     "apiKey": "API Key",

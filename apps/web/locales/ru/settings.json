@@ -122,7 +122,8 @@
   },
   "lmstudio": {
     "serverUrl": "URL сервера LM Studio",
-    "serverHint": "Запустите LM Studio и включите локальный сервер в настройках разработчика"
+    "serverHint": "Запустите LM Studio и включите локальный сервер в настройках разработчика",
+    "refreshModels": "Обновить список моделей"
   },
   "vertex": {
     "serviceAccountTab": "Сервисный аккаунт",
@@ -175,7 +176,8 @@
     "selectModel": "Выберите модель",
     "useThisModel": "Использовать эту модель",
     "helpText": "Убедитесь, что <link>Ollama</link> установлен и запущен, затем нажмите Тест для подключения.",
-    "currentlyUsing": "Используется сейчас"
+    "currentlyUsing": "Используется сейчас",
+    "refreshModels": "Обновить список моделей"
   },
   "azure": {
     "apiKey": "API-ключ",
