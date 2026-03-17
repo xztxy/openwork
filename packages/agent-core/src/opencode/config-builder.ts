@@ -132,6 +132,7 @@ export async function buildProviderConfigs(
     'amazon-bedrock',
     'vertex',
     'minimax',
+    'venice',
   ];
   let enabledProviders = baseProviders;
 
@@ -528,7 +529,7 @@ export async function buildProviderConfigs(
       id: 'zai-coding-plan',
       npm: '@ai-sdk/openai-compatible',
       name: 'Z.AI Coding Plan',
-      options: { baseURL: zaiEndpoint, apiKey: zaiKey },
+      options: { baseURL: zaiEndpoint },
       models: zaiModels,
     });
     console.log('[OpenCode Config Builder] Z.AI Coding Plan configured, region:', zaiRegion);
