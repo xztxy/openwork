@@ -19,6 +19,7 @@ export function CustomProviderForm({
   connectedProvider,
   onConnect,
   onDisconnect,
+  onModelChange: _onModelChange,
   showModelError,
 }: CustomProviderFormProps) {
   const [baseUrl, setBaseUrl] = useState('');
@@ -28,6 +29,7 @@ export function CustomProviderForm({
   const [error, setError] = useState<string | null>(null);
 
   const isConnected = connectedProvider?.connectionStatus === 'connected';
+  const customCredentials = connectedProvider?.credentials as CustomCredentials | undefined;
 
   const handleConnect = async () => {
     // Validate inputs
@@ -202,22 +204,19 @@ export function CustomProviderForm({
                   <label className="mb-2 block text-sm font-medium text-foreground">Base URL</label>
                   <input
                     type="text"
-                    value={(connectedProvider?.credentials as CustomCredentials)?.baseUrl || ''}
+                    value={customCredentials?.baseUrl || ''}
                     disabled
                     className="w-full rounded-md border border-input bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground"
                   />
                 </div>
-                {(connectedProvider?.credentials as CustomCredentials)?.hasApiKey && (
+                {customCredentials?.hasApiKey && (
                   <div>
                     <label className="mb-2 block text-sm font-medium text-foreground">
                       API Key
                     </label>
                     <input
                       type="text"
-                      value={
-                        (connectedProvider?.credentials as CustomCredentials)?.keyPrefix ||
-                        'API key saved'
-                      }
+                      value={customCredentials?.keyPrefix || 'API key saved'}
                       disabled
                       className="w-full rounded-md border border-input bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground"
                     />
@@ -227,7 +226,7 @@ export function CustomProviderForm({
                   <label className="mb-2 block text-sm font-medium text-foreground">Model</label>
                   <input
                     type="text"
-                    value={(connectedProvider?.credentials as CustomCredentials)?.modelName || ''}
+                    value={customCredentials?.modelName || ''}
                     disabled
                     className="w-full rounded-md border border-input bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground"
                   />
