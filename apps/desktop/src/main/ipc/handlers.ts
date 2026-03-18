@@ -895,8 +895,12 @@ export function registerIPCHandlers(): void {
       }
 
       let urlOverride: string | undefined;
+      let endpointConfig = providerConfig.modelsEndpoint;
       if (providerId === 'openai' && options?.baseUrl) {
         urlOverride = `${options.baseUrl.replace(/\/+$/, '')}/models`;
+        // Remove modelFilter for custom base URLs since non-OpenAI servers
+        // (e.g. vLLM, LiteLLM) return model IDs that don't match OpenAI naming
+        endpointConfig = { ...endpointConfig, modelFilter: undefined };
       }
       if (providerId === 'zai' && options?.zaiRegion) {
         const region = options.zaiRegion as import('@accomplish_ai/agent-core').ZaiRegion;
@@ -904,7 +908,7 @@ export function registerIPCHandlers(): void {
       }
 
       return fetchProviderModels({
-        endpointConfig: providerConfig.modelsEndpoint,
+        endpointConfig,
         apiKey,
         urlOverride,
         timeout: API_KEY_VALIDATION_TIMEOUT_MS,
