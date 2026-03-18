@@ -38,23 +38,28 @@ export function getActiveWorkspace(): string | null {
 export function initialize(): void {
   console.log('[WorkspaceManager] Initializing...');
 
-  // Initialize the meta database (workspace metadata only)
-  initializeMetaDatabase(getMetaDatabasePath());
+  try {
+    // Initialize the meta database (workspace metadata only)
+    initializeMetaDatabase(getMetaDatabasePath());
 
-  // Ensure default workspace exists
-  const defaultWorkspace = createDefaultWorkspace();
-  console.log('[WorkspaceManager] Default workspace:', defaultWorkspace.id);
+    // Ensure default workspace exists
+    const defaultWorkspace = createDefaultWorkspace();
+    console.log('[WorkspaceManager] Default workspace:', defaultWorkspace.id);
 
-  // Get the active workspace (or fall back to default)
-  let activeId = getActiveWorkspaceId();
-  if (!activeId || !getWorkspace(activeId)) {
-    activeId = defaultWorkspace.id;
-    setActiveWorkspaceId(activeId);
+    // Get the active workspace (or fall back to default)
+    let activeId = getActiveWorkspaceId();
+    if (!activeId || !getWorkspace(activeId)) {
+      activeId = defaultWorkspace.id;
+      setActiveWorkspaceId(activeId);
+    }
+
+    _activeWorkspaceId = activeId;
+
+    console.log('[WorkspaceManager] Initialized with active workspace:', activeId);
+  } catch (err) {
+    console.error('[WorkspaceManager] Initialization failed:', err);
+    _activeWorkspaceId = null;
   }
-
-  _activeWorkspaceId = activeId;
-
-  console.log('[WorkspaceManager] Initialized with active workspace:', activeId);
 }
 
 export function switchWorkspace(workspaceId: string): boolean {
@@ -112,9 +117,12 @@ export function deleteWorkspace(id: string): boolean {
 
     const allWorkspaces = listWorkspaces();
     const defaultWs = allWorkspaces.find((w) => w.isDefault);
-    if (defaultWs) {
-      _activeWorkspaceId = defaultWs.id;
-      setActiveWorkspaceId(defaultWs.id);
+    const fallbackId = defaultWs
+      ? defaultWs.id
+      : (allWorkspaces.find((w) => w.id !== id)?.id ?? null);
+    _activeWorkspaceId = fallbackId;
+    if (fallbackId) {
+      setActiveWorkspaceId(fallbackId);
     }
   }
 
