@@ -89,7 +89,7 @@ export function CustomProviderForm({
           baseUrl: baseUrl.trim(),
           modelName: modelName.trim(),
           hasApiKey: !!trimmedKey,
-          keyPrefix: trimmedKey ? trimmedKey.substring(0, 10) + '...' : undefined,
+          keyPrefix: trimmedKey ? '••••' + trimmedKey.slice(-4) : undefined,
         } as CustomCredentials,
         lastConnectedAt: new Date().toISOString(),
         availableModels: [{ id: fullModelId, name: modelName.trim() }],
@@ -124,8 +124,14 @@ export function CustomProviderForm({
               className="space-y-3"
             >
               <div>
-                <label className="mb-2 block text-sm font-medium text-foreground">Base URL</label>
+                <label
+                  htmlFor="custom-base-url"
+                  className="mb-2 block text-sm font-medium text-foreground"
+                >
+                  Base URL
+                </label>
                 <input
+                  id="custom-base-url"
                   type="text"
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
@@ -139,11 +145,15 @@ export function CustomProviderForm({
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-foreground">
+                <label
+                  htmlFor="custom-api-key"
+                  className="mb-2 block text-sm font-medium text-foreground"
+                >
                   API Key <span className="text-muted-foreground">(Optional)</span>
                 </label>
                 <div className="flex gap-2">
                   <input
+                    id="custom-api-key"
                     type="password"
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
@@ -172,8 +182,14 @@ export function CustomProviderForm({
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-foreground">Model Name</label>
+                <label
+                  htmlFor="custom-model-name"
+                  className="mb-2 block text-sm font-medium text-foreground"
+                >
+                  Model Name
+                </label>
                 <input
+                  id="custom-model-name"
                   type="text"
                   value={modelName}
                   onChange={(e) => setModelName(e.target.value)}
@@ -201,8 +217,14 @@ export function CustomProviderForm({
             >
               <div className="space-y-3">
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-foreground">Base URL</label>
+                  <label
+                    htmlFor="connected-base-url"
+                    className="mb-2 block text-sm font-medium text-foreground"
+                  >
+                    Base URL
+                  </label>
                   <input
+                    id="connected-base-url"
                     type="text"
                     value={customCredentials?.baseUrl || ''}
                     disabled
@@ -211,10 +233,14 @@ export function CustomProviderForm({
                 </div>
                 {customCredentials?.hasApiKey && (
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-foreground">
+                    <label
+                      htmlFor="connected-api-key"
+                      className="mb-2 block text-sm font-medium text-foreground"
+                    >
                       API Key
                     </label>
                     <input
+                      id="connected-api-key"
                       type="text"
                       value={customCredentials?.keyPrefix || 'API key saved'}
                       disabled
@@ -223,8 +249,14 @@ export function CustomProviderForm({
                   </div>
                 )}
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-foreground">Model</label>
+                  <label
+                    htmlFor="connected-model-name"
+                    className="mb-2 block text-sm font-medium text-foreground"
+                  >
+                    Model
+                  </label>
                   <input
+                    id="connected-model-name"
                     type="text"
                     value={customCredentials?.modelName || ''}
                     disabled
