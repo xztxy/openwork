@@ -94,10 +94,22 @@ export function updateWorkspace(id: string, input: WorkspaceUpdateInput): Worksp
 
 export function deleteWorkspace(id: string): boolean {
   const workspace = getWorkspace(id);
-  if (!workspace || workspace.isDefault) { return false; }
+  if (!workspace || workspace.isDefault) {
+    return false;
+  }
 
   // If deleting the active workspace, switch to default first
   if (_activeWorkspaceId === id) {
+    // Guard: don't delete active workspace while a task is running
+    const taskManager = getTaskManager();
+    const activeTaskId = taskManager.getActiveTaskId();
+    if (activeTaskId) {
+      console.warn(
+        `[WorkspaceManager] Cannot delete active workspace while task ${activeTaskId} is running`,
+      );
+      return false;
+    }
+
     const allWorkspaces = listWorkspaces();
     const defaultWs = allWorkspaces.find((w) => w.isDefault);
     if (defaultWs) {

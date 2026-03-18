@@ -42,13 +42,17 @@ export function WorkspacesPanel() {
   }, [loadWorkspaces]);
 
   const handleCreate = useCallback(async () => {
-    if (!newName.trim()) { return; }
+    if (!newName.trim()) {
+      return;
+    }
     const created = await createWorkspace({
       name: newName.trim(),
       description: newDescription.trim() || undefined,
       color: newColor,
     });
-    if (!created) { return; }
+    if (!created) {
+      return;
+    }
     setNewName('');
     setNewDescription('');
     setNewColor(WORKSPACE_COLORS[0]);
@@ -63,25 +67,31 @@ export function WorkspacesPanel() {
   }, []);
 
   const handleSaveEdit = useCallback(async () => {
-    if (!editingId || !editName.trim()) { return; }
+    if (!editingId || !editName.trim()) {
+      return;
+    }
     const updated = await updateWorkspace(editingId, {
       name: editName.trim(),
       description: editDescription.trim() || undefined,
       color: editColor,
     });
-    if (!updated) { return; }
+    if (!updated) {
+      return;
+    }
     setEditingId(null);
   }, [editingId, editName, editDescription, editColor, updateWorkspace]);
 
   const handleDelete = useCallback(
     async (id: string) => {
       const success = await deleteWorkspace(id);
-      if (success) { setDeletingId(null); }
+      if (success) {
+        setDeletingId(null);
+      }
     },
     [deleteWorkspace],
   );
 
-  const renderEditForm = (workspace: Workspace) => (
+  const renderEditForm = (_workspace: Workspace) => (
     <div className="space-y-3">
       <input
         type="text"
@@ -130,18 +140,14 @@ export function WorkspacesPanel() {
   const renderDeleteConfirm = (workspace: Workspace) => (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
-        Delete &quot;{workspace.name}&quot;? All tasks and history in this workspace will
-        be permanently removed.
+        Delete &quot;{workspace.name}&quot;? All tasks and history in this workspace will be
+        permanently removed.
       </p>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={() => setDeletingId(null)}>
           Cancel
         </Button>
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={() => handleDelete(workspace.id)}
-        >
+        <Button variant="destructive" size="sm" onClick={() => handleDelete(workspace.id)}>
           Delete
         </Button>
       </div>
@@ -161,9 +167,7 @@ export function WorkspacesPanel() {
           <div className="font-medium text-sm truncate">
             {workspace.name}
             {workspace.isDefault && (
-              <span className="ml-2 text-xs text-muted-foreground font-normal">
-                (Default)
-              </span>
+              <span className="ml-2 text-xs text-muted-foreground font-normal">(Default)</span>
             )}
           </div>
           {workspace.description && (
@@ -175,6 +179,7 @@ export function WorkspacesPanel() {
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
         <Button
+          type="button"
           variant="ghost"
           size="icon"
           className="h-7 w-7"
@@ -186,6 +191,7 @@ export function WorkspacesPanel() {
         </Button>
         {!workspace.isDefault && (
           <Button
+            type="button"
             variant="ghost"
             size="icon"
             className="h-7 w-7 text-muted-foreground hover:text-destructive"
@@ -209,8 +215,8 @@ export function WorkspacesPanel() {
             {editingId === workspace.id
               ? renderEditForm(workspace)
               : deletingId === workspace.id
-              ? renderDeleteConfirm(workspace)
-              : renderDefaultRow(workspace)}
+                ? renderDeleteConfirm(workspace)
+                : renderDefaultRow(workspace)}
           </div>
         ))}
       </div>
