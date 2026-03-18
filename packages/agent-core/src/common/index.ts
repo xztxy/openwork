@@ -110,6 +110,14 @@ export type {
 // Skills types
 export type { SkillSource, Skill, SkillFrontmatter } from './types/skills.js';
 
+// Connector types
+export {
+  OAuthProviderId,
+  getOAuthProviderDisplayName,
+  isOAuthProviderId,
+} from './types/connector.js';
+export type { ConnectorStatus, OAuthTokens, McpConnector } from './types/connector.js';
+
 // Other types
 export type { TodoItem } from './types/todo.js';
 export type { LogLevel, LogSource, LogEntry } from './types/logging.js';
@@ -123,6 +131,7 @@ export {
   PERMISSION_API_PORT,
   QUESTION_API_PORT,
   PERMISSION_REQUEST_TIMEOUT_MS,
+  CONNECTOR_AUTH_REQUIRED_MARKER,
   LOG_MAX_FILE_SIZE_BYTES,
   LOG_RETENTION_DAYS,
   LOG_BUFFER_FLUSH_INTERVAL_MS,
