@@ -1,10 +1,10 @@
-import { create } from "zustand";
+import { create } from 'zustand';
 import type {
   Workspace,
   WorkspaceCreateInput,
   WorkspaceUpdateInput,
-} from "@accomplish_ai/agent-core/common";
-import { getAccomplish } from "../lib/accomplish";
+} from '@accomplish_ai/agent-core/common';
+import { getAccomplish } from '../lib/accomplish';
 
 interface WorkspaceState {
   workspaces: Workspace[];
@@ -15,10 +15,7 @@ interface WorkspaceState {
   loadWorkspaces: () => Promise<void>;
   switchWorkspace: (id: string) => Promise<void>;
   createWorkspace: (input: WorkspaceCreateInput) => Promise<Workspace | null>;
-  updateWorkspace: (
-    id: string,
-    input: WorkspaceUpdateInput
-  ) => Promise<Workspace | null>;
+  updateWorkspace: (id: string, input: WorkspaceUpdateInput) => Promise<Workspace | null>;
   deleteWorkspace: (id: string) => Promise<boolean>;
   setActiveWorkspaceId: (id: string) => void;
 }
@@ -39,20 +36,22 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       ]);
       set({ workspaces, activeWorkspaceId: activeId, isLoading: false });
     } catch (err) {
-      console.error("[WorkspaceStore] Failed to load workspaces:", err);
+      console.error('[WorkspaceStore] Failed to load workspaces:', err);
       set({ isLoading: false });
     }
   },
 
   switchWorkspace: async (id: string) => {
-    if (id === get().activeWorkspaceId) return;
+    if (id === get().activeWorkspaceId) {
+      return;
+    }
     set({ isSwitching: true });
     try {
       const accomplish = getAccomplish();
       await accomplish.switchWorkspace(id);
       set({ activeWorkspaceId: id, isSwitching: false });
     } catch (err) {
-      console.error("[WorkspaceStore] Failed to switch workspace:", err);
+      console.error('[WorkspaceStore] Failed to switch workspace:', err);
       set({ isSwitching: false });
     }
   },
@@ -66,7 +65,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       }));
       return workspace;
     } catch (err) {
-      console.error("[WorkspaceStore] Failed to create workspace:", err);
+      console.error('[WorkspaceStore] Failed to create workspace:', err);
       return null;
     }
   },
@@ -82,7 +81,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       }
       return updated;
     } catch (err) {
-      console.error("[WorkspaceStore] Failed to update workspace:", err);
+      console.error('[WorkspaceStore] Failed to update workspace:', err);
       return null;
     }
   },
@@ -98,7 +97,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       }
       return deleted;
     } catch (err) {
-      console.error("[WorkspaceStore] Failed to delete workspace:", err);
+      console.error('[WorkspaceStore] Failed to delete workspace:', err);
       return false;
     }
   },
@@ -109,8 +108,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 }));
 
 // Subscribe to workspace events
-if (typeof window !== "undefined" && window.accomplish) {
-  window.accomplish.onWorkspaceChanged?.((data: { workspaceId: string }) => {
+let unsubscribeWorkspaceChanged: (() => void) | undefined;
+
+if (typeof window !== 'undefined' && window.accomplish) {
+  unsubscribeWorkspaceChanged?.();
+  const unsub = window.accomplish.onWorkspaceChanged?.((data: { workspaceId: string }) => {
     useWorkspaceStore.getState().setActiveWorkspaceId(data.workspaceId);
   });
+  if (unsub) {
+    unsubscribeWorkspaceChanged = unsub;
+  }
 }

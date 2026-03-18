@@ -1,46 +1,41 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useCallback } from "react";
-import { useWorkspaceStore } from "@/stores/workspaceStore";
-import { Button } from "@/components/ui/button";
-import { Pencil, Trash2, Plus, X, Check } from "lucide-react";
-import type { Workspace } from "@accomplish_ai/agent-core/common";
+import { useState, useEffect, useCallback } from 'react';
+import { useWorkspaceStore } from '@/stores/workspaceStore';
+import { Button } from '@/components/ui/button';
+import { Pencil, Trash2, Plus, X, Check } from 'lucide-react';
+import type { Workspace } from '@accomplish_ai/agent-core/common';
 
 const WORKSPACE_COLORS = [
-  "#6366f1", // indigo
-  "#8b5cf6", // violet
-  "#ec4899", // pink
-  "#ef4444", // red
-  "#f97316", // orange
-  "#eab308", // yellow
-  "#22c55e", // green
-  "#06b6d4", // cyan
-  "#3b82f6", // blue
-  "#64748b", // slate
+  '#6366f1', // indigo
+  '#8b5cf6', // violet
+  '#ec4899', // pink
+  '#ef4444', // red
+  '#f97316', // orange
+  '#eab308', // yellow
+  '#22c55e', // green
+  '#06b6d4', // cyan
+  '#3b82f6', // blue
+  '#64748b', // slate
 ];
 
 export function WorkspacesPanel() {
-  const {
-    workspaces,
-    loadWorkspaces,
-    createWorkspace,
-    updateWorkspace,
-    deleteWorkspace,
-  } = useWorkspaceStore();
+  const { workspaces, loadWorkspaces, createWorkspace, updateWorkspace, deleteWorkspace } =
+    useWorkspaceStore();
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Create form state
-  const [newName, setNewName] = useState("");
-  const [newDescription, setNewDescription] = useState("");
+  const [newName, setNewName] = useState('');
+  const [newDescription, setNewDescription] = useState('');
   const [newColor, setNewColor] = useState(WORKSPACE_COLORS[0]);
 
   // Edit form state
-  const [editName, setEditName] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [editColor, setEditColor] = useState("");
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editColor, setEditColor] = useState('');
 
   useEffect(() => {
     loadWorkspaces();
@@ -48,13 +43,14 @@ export function WorkspacesPanel() {
 
   const handleCreate = useCallback(async () => {
     if (!newName.trim()) return;
-    await createWorkspace({
+    const created = await createWorkspace({
       name: newName.trim(),
       description: newDescription.trim() || undefined,
       color: newColor,
     });
-    setNewName("");
-    setNewDescription("");
+    if (!created) return;
+    setNewName('');
+    setNewDescription('');
     setNewColor(WORKSPACE_COLORS[0]);
     setShowCreateForm(false);
   }, [newName, newDescription, newColor, createWorkspace]);
@@ -62,17 +58,18 @@ export function WorkspacesPanel() {
   const handleStartEdit = useCallback((workspace: Workspace) => {
     setEditingId(workspace.id);
     setEditName(workspace.name);
-    setEditDescription(workspace.description || "");
+    setEditDescription(workspace.description || '');
     setEditColor(workspace.color || WORKSPACE_COLORS[0]);
   }, []);
 
   const handleSaveEdit = useCallback(async () => {
     if (!editingId || !editName.trim()) return;
-    await updateWorkspace(editingId, {
+    const updated = await updateWorkspace(editingId, {
       name: editName.trim(),
       description: editDescription.trim() || undefined,
       color: editColor,
     });
+    if (!updated) return;
     setEditingId(null);
   }, [editingId, editName, editDescription, editColor, updateWorkspace]);
 
@@ -81,7 +78,7 @@ export function WorkspacesPanel() {
       await deleteWorkspace(id);
       setDeletingId(null);
     },
-    [deleteWorkspace]
+    [deleteWorkspace],
   );
 
   return (
@@ -89,10 +86,7 @@ export function WorkspacesPanel() {
       {/* Workspace List */}
       <div className="space-y-2">
         {workspaces.map((workspace) => (
-          <div
-            key={workspace.id}
-            className="rounded-lg border border-border bg-card p-4"
-          >
+          <div key={workspace.id} className="rounded-lg border border-border bg-card p-4">
             {editingId === workspace.id ? (
               /* Edit Mode */
               <div className="space-y-3">
@@ -118,26 +112,18 @@ export function WorkspacesPanel() {
                       onClick={() => setEditColor(color)}
                       className={`h-5 w-5 rounded-full transition-transform ${
                         editColor === color
-                          ? "ring-2 ring-primary ring-offset-2 ring-offset-card scale-110"
-                          : "hover:scale-110"
+                          ? 'ring-2 ring-primary ring-offset-2 ring-offset-card scale-110'
+                          : 'hover:scale-110'
                       }`}
                       style={{ backgroundColor: color }}
                     />
                   ))}
                 </div>
                 <div className="flex justify-end gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setEditingId(null)}
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => setEditingId(null)}>
                     Cancel
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSaveEdit}
-                    disabled={!editName.trim()}
-                  >
+                  <Button size="sm" onClick={handleSaveEdit} disabled={!editName.trim()}>
                     <Check className="h-3.5 w-3.5 mr-1" />
                     Save
                   </Button>
@@ -147,15 +133,11 @@ export function WorkspacesPanel() {
               /* Delete Confirmation */
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Delete &quot;{workspace.name}&quot;? All tasks, settings, and
-                  API keys in this workspace will be permanently removed.
+                  Delete &quot;{workspace.name}&quot;? All tasks and history in this workspace will
+                  be permanently removed.
                 </p>
                 <div className="flex justify-end gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setDeletingId(null)}
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => setDeletingId(null)}>
                     Cancel
                   </Button>
                   <Button
@@ -246,8 +228,8 @@ export function WorkspacesPanel() {
                 onClick={() => setNewColor(color)}
                 className={`h-5 w-5 rounded-full transition-transform ${
                   newColor === color
-                    ? "ring-2 ring-primary ring-offset-2 ring-offset-card scale-110"
-                    : "hover:scale-110"
+                    ? 'ring-2 ring-primary ring-offset-2 ring-offset-card scale-110'
+                    : 'hover:scale-110'
                 }`}
                 style={{ backgroundColor: color }}
               />
@@ -259,8 +241,8 @@ export function WorkspacesPanel() {
               size="sm"
               onClick={() => {
                 setShowCreateForm(false);
-                setNewName("");
-                setNewDescription("");
+                setNewName('');
+                setNewDescription('');
                 setNewColor(WORKSPACE_COLORS[0]);
               }}
             >

@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
@@ -18,8 +18,10 @@ import logoImage from '/assets/logo-1.png';
 export default function Sidebar() {
   const navigate = useNavigate();
   const [showSettings, setShowSettings] = useState(false);
-  const { tasks, loadTasks, updateTaskStatus, addTaskUpdate, openLauncher } =
-    useTaskStore();
+  const [settingsInitialTab, setSettingsInitialTab] = useState<
+    'providers' | 'voice' | 'skills' | 'connectors' | 'workspaces' | 'about'
+  >('providers');
+  const { tasks, loadTasks, updateTaskStatus, addTaskUpdate, openLauncher } = useTaskStore();
   const accomplish = getAccomplish();
   const { t } = useTranslation('sidebar');
 
@@ -53,7 +55,12 @@ export default function Sidebar() {
       <div className="flex h-screen w-[260px] flex-col border-r border-border bg-card pt-12">
         {/* Workspace Selector */}
         <div className="px-3 pt-3 pb-1">
-          <WorkspaceSelector onManageWorkspaces={() => setShowSettings(true)} />
+          <WorkspaceSelector
+            onManageWorkspaces={() => {
+              setSettingsInitialTab('workspaces');
+              setShowSettings(true);
+            }}
+          />
         </div>
 
         {/* Action Buttons */}
@@ -128,7 +135,10 @@ export default function Sidebar() {
             data-testid="sidebar-settings-button"
             variant="ghost"
             size="icon"
-            onClick={() => setShowSettings(true)}
+            onClick={() => {
+              setSettingsInitialTab('providers');
+              setShowSettings(true);
+            }}
             title={t('settings')}
           >
             <Gear className="h-4 w-4" />
@@ -136,7 +146,11 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <SettingsDialog open={showSettings} onOpenChange={setShowSettings} />
+      <SettingsDialog
+        open={showSettings}
+        onOpenChange={setShowSettings}
+        initialTab={settingsInitialTab}
+      />
     </>
   );
 }

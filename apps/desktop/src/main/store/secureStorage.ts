@@ -1,10 +1,6 @@
+import { app } from 'electron';
+import { createStorage, type StorageAPI } from '@accomplish_ai/agent-core';
 import type { ApiKeyProvider } from '@accomplish_ai/agent-core';
-import { getStorage } from './storage';
-
-export type { ApiKeyProvider };
-import { app } from "electron";
-import { createStorage, type StorageAPI } from "@accomplish_ai/agent-core";
-import type { ApiKeyProvider } from "@accomplish_ai/agent-core";
 
 export type { ApiKeyProvider };
 
@@ -13,14 +9,14 @@ let _storage: StorageAPI | null = null;
 function getStorage(): StorageAPI {
   if (!_storage) {
     _storage = createStorage({
-      userDataPath: app.getPath("userData"),
-      secureStorageFileName: app.isPackaged
-        ? "secure-storage.json"
-        : "secure-storage-dev.json",
+      userDataPath: app.getPath('userData'),
+      secureStorageFileName: app.isPackaged ? 'secure-storage.json' : 'secure-storage-dev.json',
     });
   }
   return _storage;
-}export function storeApiKey(provider: string, apiKey: string): void {
+}
+
+export function storeApiKey(provider: string, apiKey: string): void {
   getStorage().storeApiKey(provider, apiKey);
 }
 
@@ -34,10 +30,7 @@ export function deleteApiKey(provider: string): boolean {
 
 export async function getAllApiKeys(): Promise<Record<ApiKeyProvider, string | null>> {
   return getStorage().getAllApiKeys() as Promise<Record<ApiKeyProvider, string | null>>;
-export async function getAllApiKeys(): Promise<
-  Record<ApiKeyProvider, string | null>
-> {
-  return getStorage().getAllApiKeys();}
+}
 
 export function storeBedrockCredentials(credentials: string): void {
   getStorage().storeBedrockCredentials(credentials);

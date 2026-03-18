@@ -38,7 +38,7 @@ interface SettingsDialogProps {
   onApiKeySaved?: () => void;
   initialProvider?: ProviderId;
   /**
-   * Initial tab to show when dialog opens ('providers' or 'voice')
+   * Initial tab to show when dialog opens.
    */
   initialTab?: 'providers' | 'voice' | 'skills' | 'connectors' | 'workspaces' | 'about';
 }
