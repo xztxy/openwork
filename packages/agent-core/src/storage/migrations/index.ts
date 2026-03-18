@@ -1,5 +1,5 @@
-import type { Database } from "better-sqlite3";
-import { FutureSchemaError, MigrationError } from "./errors.js";
+import type { Database } from 'better-sqlite3';
+import { FutureSchemaError, MigrationError } from './errors.js';
 
 export interface Migration {
   version: number;
@@ -62,7 +62,7 @@ export function runMigrations(db: Database): void {
   }
 
   if (storedVersion === CURRENT_VERSION) {
-    console.log("[Migrations] Database is up to date");
+    console.log('[Migrations] Database is up to date');
     return;
   }
 
@@ -85,11 +85,7 @@ export function runMigrations(db: Database): void {
     }
   }
 
-  console.log("[Migrations] All migrations complete");
+  console.log('[Migrations] All migrations complete');
 }
 
-export {
-  FutureSchemaError,
-  MigrationError,
-  CorruptDatabaseError,
-} from "./errors.js";
+export { FutureSchemaError, MigrationError, CorruptDatabaseError } from './errors.js';

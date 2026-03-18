@@ -1,6 +1,6 @@
-import Database from "better-sqlite3";
-import fs from "fs";
-import path from "path";
+import Database from 'better-sqlite3';
+import fs from 'fs';
+import path from 'path';
 
 let _metaDb: Database.Database | null = null;
 let _metaDbPath: string | null = null;
@@ -37,17 +37,17 @@ export function initializeMetaDatabase(dbPath: string): Database.Database {
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  console.log("[MetaDB] Opening workspace meta database at:", dbPath);
+  console.log('[MetaDB] Opening workspace meta database at:', dbPath);
 
   _metaDb = new Database(dbPath);
   _metaDbPath = dbPath;
 
-  _metaDb.pragma("journal_mode = WAL");
-  _metaDb.pragma("foreign_keys = ON");
+  _metaDb.pragma('journal_mode = WAL');
+  _metaDb.pragma('foreign_keys = ON');
 
   _metaDb.exec(SCHEMA_SQL);
 
-  console.log("[MetaDB] Workspace meta database initialized");
+  console.log('[MetaDB] Workspace meta database initialized');
 
   return _metaDb;
 }
@@ -55,7 +55,7 @@ export function initializeMetaDatabase(dbPath: string): Database.Database {
 export function getMetaDatabase(): Database.Database {
   if (!_metaDb) {
     throw new Error(
-      "Workspace meta database not initialized. Call initializeMetaDatabase() first."
+      'Workspace meta database not initialized. Call initializeMetaDatabase() first.',
     );
   }
   return _metaDb;
@@ -63,7 +63,7 @@ export function getMetaDatabase(): Database.Database {
 
 export function closeMetaDatabase(): void {
   if (_metaDb) {
-    console.log("[MetaDB] Closing workspace meta database");
+    console.log('[MetaDB] Closing workspace meta database');
     _metaDb.close();
     _metaDb = null;
     _metaDbPath = null;

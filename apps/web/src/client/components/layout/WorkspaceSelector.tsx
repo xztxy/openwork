@@ -1,38 +1,31 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
-import { ChevronDown, Check, Settings2, Loader2 } from "lucide-react";
-import { useWorkspaceStore } from "@/stores/workspaceStore";
+import { useEffect } from 'react';
+import { ChevronDown, Check, Settings2, Loader2 } from 'lucide-react';
+import { useWorkspaceStore } from '@/stores/workspaceStore';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
 
 interface WorkspaceSelectorProps {
   onManageWorkspaces?: () => void;
 }
 
-export default function WorkspaceSelector({
-  onManageWorkspaces,
-}: WorkspaceSelectorProps) {
-  const {
-    workspaces,
-    activeWorkspaceId,
-    isSwitching,
-    loadWorkspaces,
-    switchWorkspace,
-  } = useWorkspaceStore();
+export default function WorkspaceSelector({ onManageWorkspaces }: WorkspaceSelectorProps) {
+  const { workspaces, activeWorkspaceId, isSwitching, loadWorkspaces, switchWorkspace } =
+    useWorkspaceStore();
 
   useEffect(() => {
     loadWorkspaces();
   }, [loadWorkspaces]);
 
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
-  const displayName = activeWorkspace?.name || "Default";
+  const displayName = activeWorkspace?.name || 'Default';
 
   return (
     <DropdownMenu>
@@ -75,9 +68,7 @@ export default function WorkspaceSelector({
               )}
               <span className="truncate">{workspace.name}</span>
             </span>
-            {workspace.id === activeWorkspaceId && (
-              <Check className="h-4 w-4 flex-shrink-0" />
-            )}
+            {workspace.id === activeWorkspaceId && <Check className="h-4 w-4 flex-shrink-0" />}
           </DropdownMenuItem>
         ))}
         {onManageWorkspaces && (
