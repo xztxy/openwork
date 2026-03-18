@@ -28,8 +28,8 @@ import type {
   Workspace,
   WorkspaceCreateInput,
   WorkspaceUpdateInput,
-} from '@accomplish_ai/agent-core/common';
-import type { StoredFavorite } from '@accomplish_ai/agent-core';
+  StoredFavorite,
+} from '@accomplish_ai/agent-core';
 
 // Define the API interface
 interface AccomplishAPI {
