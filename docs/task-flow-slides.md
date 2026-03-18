@@ -85,24 +85,28 @@ sequenceDiagram
   participant UI as React UI
   participant User
 
-  AI->>OC: start_task (plan + todos)
+  AI-->>OC: Response: tool_call start_task (plan + todos)
   OC-->>Main: Todos → UI sidebar
 
-  AI->>OC: browser_navigate("https://calendar.google.com")
-  OC->>MCP: MCP stdio: navigate
-  MCP->>Browser: Playwright: goto URL
+  AI-->>OC: Response: tool_call browser_navigate<br/>(url: "https://calendar.google.com")
+  OC->>MCP: MCP stdio: browser_navigate
+  MCP->>Browser: Playwright: page.goto(url)
   Browser-->>MCP: Page loaded (user already logged in)
+  MCP-->>OC: Tool result: "Page loaded"
+  OC->>AI: Next API call with tool result
 
-  AI->>OC: browser_snapshot()
-  OC->>MCP: MCP stdio: snapshot
+  AI-->>OC: Response: tool_call browser_snapshot
+  OC->>MCP: MCP stdio: browser_snapshot
   MCP->>Browser: Extract ARIA accessibility tree
   Browser-->>MCP: DOM snapshot with element refs
-  MCP-->>OC: Structured text: meetings, times, refs
+  MCP-->>OC: Structured text: meetings, times, [ref=eN]
+  OC->>AI: Next API call with snapshot text
 
-  Note over AI,OC: AI parses meeting info from snapshot
+  Note over AI: AI parses meeting info from<br/>ARIA snapshot text
 
   Note over OC,Main: Need clarification?
-  OC->>Main: MCP stdio → HTTP :9227 (ask_user)
+  AI-->>OC: Response: tool_call AskUserQuestion
+  OC->>Main: MCP stdio → HTTP :9227
   Main->>UI: Question dialog
   UI->>User: "Include all-day events?"
   User->>UI: "Yes"
@@ -188,6 +192,7 @@ sequenceDiagram
   participant UI as React UI
   participant Main as Electron Main
   participant OC as OpenCode CLI
+  participant MCP as MCP: dev-browser-mcp
   participant OC_DB as OpenCode DB
   participant AI as AI Provider
 
@@ -207,10 +212,12 @@ sequenceDiagram
 
   Note over AI: Has complete context<br/>from original task
 
-  AI->>OC: browser_navigate + browser_snapshot<br/>(Google Calendar → Thursday view)
+  AI-->>OC: tool_call browser_navigate + browser_snapshot
+  OC->>MCP: MCP stdio → Playwright → Chromium<br/>(Google Calendar → Thursday view)
+  MCP-->>OC: ARIA snapshot with Thursday meetings
   OC-->>Main: Stream results → UI
 
-  AI->>OC: complete_task(success)
+  AI-->>OC: tool_call complete_task(success)
   OC-->>Main: PTY exits
   Main->>UI: Task complete (same tsk_001)
 ```
