@@ -28,12 +28,8 @@ export function deleteApiKey(provider: string): boolean {
   return getStorage().deleteApiKey(provider);
 }
 
-export async function getAllApiKeys(): Promise<Record<ApiKeyProvider, string | null>> {
-  return getStorage().getAllApiKeys() as Promise<Record<ApiKeyProvider, string | null>>;
-}
-
-export function storeBedrockCredentials(credentials: string): void {
-  getStorage().storeBedrockCredentials(credentials);
+export async function getAllApiKeys(): Promise<Record<string, string | null>> {
+  return getStorage().getAllApiKeys();
 }
 
 export function getBedrockCredentials(): Record<string, string> | null {

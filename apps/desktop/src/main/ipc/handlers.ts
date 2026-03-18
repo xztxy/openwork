@@ -1773,12 +1773,24 @@ export function registerIPCHandlers(): void {
   handle('workspace:switch', async (event: IpcMainInvokeEvent, workspaceId: string) => {
     const window = BrowserWindow.fromWebContents(event.sender);
 
-    workspaceManager.switchWorkspace(workspaceId);
+    let switched: boolean;
+    try {
+      switched = workspaceManager.switchWorkspace(workspaceId);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      return { success: false, reason };
+    }
+
+    if (!switched) {
+      return { success: false, reason: 'Switch did not complete (task running or same workspace)' };
+    }
 
     // Broadcast workspace change to renderer so it reloads tasks
     if (window && !window.isDestroyed()) {
       window.webContents.send('workspace:changed', { workspaceId });
     }
+
+    return { success: true };
   });
 
   handle('workspace:create', async (_event: IpcMainInvokeEvent, input: WorkspaceCreateInput) => {

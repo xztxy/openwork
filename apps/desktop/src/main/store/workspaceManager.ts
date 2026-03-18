@@ -57,9 +57,9 @@ export function initialize(): void {
   console.log('[WorkspaceManager] Initialized with active workspace:', activeId);
 }
 
-export function switchWorkspace(workspaceId: string): void {
+export function switchWorkspace(workspaceId: string): boolean {
   if (workspaceId === _activeWorkspaceId) {
-    return;
+    return false;
   }
 
   // Guard: don't switch workspace while a task is running
@@ -69,7 +69,7 @@ export function switchWorkspace(workspaceId: string): void {
     console.warn(
       `[WorkspaceManager] Cannot switch workspace while task ${activeTaskId} is running`,
     );
-    return;
+    return false;
   }
 
   const workspace = getWorkspace(workspaceId);
@@ -81,6 +81,7 @@ export function switchWorkspace(workspaceId: string): void {
 
   _activeWorkspaceId = workspaceId;
   setActiveWorkspaceId(workspaceId);
+  return true;
 }
 
 export function createWorkspace(input: WorkspaceCreateInput): Workspace {
@@ -93,7 +94,7 @@ export function updateWorkspace(id: string, input: WorkspaceUpdateInput): Worksp
 
 export function deleteWorkspace(id: string): boolean {
   const workspace = getWorkspace(id);
-  if (!workspace || workspace.isDefault) return false;
+  if (!workspace || workspace.isDefault) { return false; }
 
   // If deleting the active workspace, switch to default first
   if (_activeWorkspaceId === id) {

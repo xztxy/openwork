@@ -119,3 +119,8 @@ if (typeof window !== 'undefined' && window.accomplish) {
     unsubscribeWorkspaceChanged = unsub;
   }
 }
+
+import.meta.hot?.dispose(() => {
+  unsubscribeWorkspaceChanged?.();
+  unsubscribeWorkspaceChanged = undefined;
+});
