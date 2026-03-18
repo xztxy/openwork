@@ -22,7 +22,7 @@ export interface CustomConnectionResult {
  */
 export async function testCustomConnection(
   baseUrl: string,
-  apiKey?: string
+  apiKey?: string,
 ): Promise<CustomConnectionResult> {
   const sanitizedUrl = sanitizeString(baseUrl, 'customUrl', 256);
   const sanitizedApiKey = apiKey ? sanitizeString(apiKey, 'apiKey', 256) : undefined;
@@ -46,14 +46,25 @@ export async function testCustomConnection(
 
     // Try to reach the /models endpoint (standard OpenAI-compatible endpoint)
     // We consider it a success if we can reach the server, even if /models fails
-    const modelsUrl = normalizedUrl.endsWith('/v1')
-      ? `${normalizedUrl}/models`
-      : `${normalizedUrl}/v1/models`;
+    const parsedUrl = new URL(normalizedUrl);
+    const pathname = parsedUrl.pathname;
+    let modelsUrl: string;
+    if (pathname === '/' || pathname === '' || pathname.endsWith('/v1')) {
+      modelsUrl = normalizedUrl.endsWith('/v1')
+        ? `${normalizedUrl}/models`
+        : `${normalizedUrl}/v1/models`;
+    } else {
+      console.warn(
+        '[Custom] URL path appears to be a specific endpoint rather than a base URL. ' +
+          'For best results, provide a base URL ending in /v1 (e.g., https://api.example.com/v1).',
+      );
+      modelsUrl = normalizedUrl;
+    }
 
     const response = await fetchWithTimeout(
       modelsUrl,
       { method: 'GET', headers },
-      DEFAULT_TIMEOUT_MS
+      DEFAULT_TIMEOUT_MS,
     );
 
     // Any response from the server indicates the endpoint is reachable
@@ -75,7 +86,9 @@ export async function testCustomConnection(
       // If user provided an API key but /models returns 401/403, the endpoint
       // might not support /models at all. Trust the user and allow connection.
       // The real validation happens when they make an actual request.
-      console.log('[Custom] Connection successful (server reachable, /models may not be supported)');
+      console.log(
+        '[Custom] Connection successful (server reachable, /models may not be supported)',
+      );
       return { success: true };
     }
 
@@ -92,14 +105,17 @@ export async function testCustomConnection(
     };
     const errorMessage = errorData?.error?.message || `Server returned status ${status}`;
     // Still allow connection for most errors - the server is reachable
-    console.log(`[Custom] Server returned ${status}, but connection is reachable`);
+    console.log(`[Custom] ${errorMessage}, but connection is reachable`);
     return { success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Connection failed';
     console.warn('[Custom] Connection failed:', message);
 
     if (error instanceof Error && error.name === 'AbortError') {
-      return { success: false, error: 'Connection timed out. Make sure the endpoint is accessible.' };
+      return {
+        success: false,
+        error: 'Connection timed out. Make sure the endpoint is accessible.',
+      };
     }
 
     return { success: false, error: `Cannot connect to endpoint: ${message}` };
