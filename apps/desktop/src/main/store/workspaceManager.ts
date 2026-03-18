@@ -25,6 +25,11 @@ function getMetaDatabasePath(): string {
 }
 
 let _activeWorkspaceId: string | null = null;
+let _initialized = false;
+
+export function isInitialized(): boolean {
+  return _initialized;
+}
 
 export function getActiveWorkspace(): string | null {
   return _activeWorkspaceId;
@@ -54,11 +59,13 @@ export function initialize(): void {
     }
 
     _activeWorkspaceId = activeId;
+    _initialized = true;
 
     console.log('[WorkspaceManager] Initialized with active workspace:', activeId);
   } catch (err) {
     console.error('[WorkspaceManager] Initialization failed:', err);
     _activeWorkspaceId = null;
+    throw err;
   }
 }
 
@@ -135,4 +142,5 @@ export function close(): void {
   console.log('[WorkspaceManager] Closing...');
   closeMetaDatabase();
   _activeWorkspaceId = null;
+  _initialized = false;
 }

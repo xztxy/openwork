@@ -547,7 +547,7 @@ const accomplishAPI = {
   // Workspace management
   listWorkspaces: (): Promise<Workspace[]> => ipcRenderer.invoke('workspace:list'),
   getActiveWorkspaceId: (): Promise<string | null> => ipcRenderer.invoke('workspace:get-active'),
-  switchWorkspace: (workspaceId: string): Promise<void> =>
+  switchWorkspace: (workspaceId: string): Promise<{ success: boolean; reason?: string }> =>
     ipcRenderer.invoke('workspace:switch', workspaceId),
   createWorkspace: (input: WorkspaceCreateInput): Promise<Workspace> =>
     ipcRenderer.invoke('workspace:create', input),

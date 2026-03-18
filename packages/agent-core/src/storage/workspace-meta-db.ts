@@ -39,13 +39,18 @@ export function initializeMetaDatabase(dbPath: string): Database.Database {
 
   console.log('[MetaDB] Opening workspace meta database at:', dbPath);
 
-  _metaDb = new Database(dbPath);
+  const db = new Database(dbPath);
+  try {
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+    db.exec(SCHEMA_SQL);
+  } catch (err) {
+    db.close();
+    throw err;
+  }
+
+  _metaDb = db;
   _metaDbPath = dbPath;
-
-  _metaDb.pragma('journal_mode = WAL');
-  _metaDb.pragma('foreign_keys = ON');
-
-  _metaDb.exec(SCHEMA_SQL);
 
   console.log('[MetaDB] Workspace meta database initialized');
 

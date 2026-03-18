@@ -395,7 +395,7 @@ interface AccomplishAPI {
   // Workspace management
   listWorkspaces(): Promise<Workspace[]>;
   getActiveWorkspaceId(): Promise<string | null>;
-  switchWorkspace(workspaceId: string): Promise<void>;
+  switchWorkspace(workspaceId: string): Promise<{ success: boolean; reason?: string }>;
   createWorkspace(input: WorkspaceCreateInput): Promise<Workspace>;
   updateWorkspace(id: string, input: WorkspaceUpdateInput): Promise<Workspace | null>;
   deleteWorkspace(id: string): Promise<boolean>;

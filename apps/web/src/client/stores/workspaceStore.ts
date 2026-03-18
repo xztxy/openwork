@@ -48,8 +48,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({ isSwitching: true });
     try {
       const accomplish = getAccomplish();
-      await accomplish.switchWorkspace(id);
-      set({ activeWorkspaceId: id, isSwitching: false });
+      const result = await accomplish.switchWorkspace(id);
+      if (result.success) {
+        set({ activeWorkspaceId: id, isSwitching: false });
+      } else {
+        console.warn('[WorkspaceStore] Workspace switch rejected:', result.reason);
+        set({ isSwitching: false });
+      }
     } catch (err) {
       console.error('[WorkspaceStore] Failed to switch workspace:', err);
       set({ isSwitching: false });
