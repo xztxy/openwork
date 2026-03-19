@@ -4,7 +4,7 @@ import type {
   CloudBrowserConfig,
   CloudBrowserProvider,
   CloudBrowserProviderConfig,
-} from '@accomplish_ai/agent-core';
+} from '@accomplish_ai/agent-core/common';
 import ProviderForm from './ProviderForm';
 
 const PROVIDERS: {
