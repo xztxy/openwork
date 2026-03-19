@@ -1024,7 +1024,9 @@ export function registerIPCHandlers(): void {
       if (cfg.activeProvider !== null && typeof cfg.activeProvider !== 'string') {
         throw new Error('Invalid cloud browser config: activeProvider must be string or null');
       }
-      storage.setCloudBrowserConfig(cfg as Parameters<typeof storage.setCloudBrowserConfig>[0]);
+      storage.setCloudBrowserConfig(
+        cfg as unknown as Parameters<typeof storage.setCloudBrowserConfig>[0],
+      );
     },
   );
 
