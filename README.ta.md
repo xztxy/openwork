@@ -14,6 +14,8 @@
   <a href="https://downloads.accomplish.ai/downloads/0.4.0/macos/Accomplish-0.4.0-mac-arm64.dmg"><img src="https://img.shields.io/badge/Download-macOS_(Apple_Silicon)-0ea5e9?style=flat-square" alt="macOS (Apple Silicon) க்கான பதிவிறக்கம்" /></a>
   <a href="https://downloads.accomplish.ai/downloads/0.4.0/macos/Accomplish-0.4.0-mac-x64.dmg"><img src="https://img.shields.io/badge/Download-macOS_(Intel)-0ea5e9?style=flat-square" alt="macOS (Intel) க்கான பதிவிறக்கம்" /></a>
   <a href="https://downloads.accomplish.ai/downloads/0.4.0/windows/Accomplish-0.4.0-win-x64.exe"><img src="https://img.shields.io/badge/Download-Windows_11-0ea5e9?style=flat-square" alt="Windows 11 க்கான பதிவிறக்கம்" /></a>
+  <a href="https://downloads.accomplish.ai/downloads/0.4.0/linux/Accomplish-0.4.0-linux-arm64.AppImage"><img src="https://img.shields.io/badge/Download-Linux_(ARM64)-0ea5e9?style=flat-square" alt="Download for Linux (ARM64)" /></a>
+  <a href="https://downloads.accomplish.ai/downloads/0.4.0/linux/Accomplish-0.4.0-linux-x64.AppImage"><img src="https://img.shields.io/badge/Download-Linux_(x64)-0ea5e9?style=flat-square" alt="Download for Linux (x64)" /></a>
   <a href="https://discord.gg/MepaTT55"><img src="https://img.shields.io/badge/Discord-Join-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
@@ -31,6 +33,10 @@ Accomplish என்பது உங்கள் கணினியிலேய�
   <a href="https://downloads.accomplish.ai/downloads/0.4.0/macos/Accomplish-0.4.0-mac-x64.dmg"><strong>Mac (Intel) க்கான பதிவிறக்கம்</strong></a>
   ·
   <a href="https://downloads.accomplish.ai/downloads/0.4.0/windows/Accomplish-0.4.0-win-x64.exe"><strong>Windows 11 க்கான பதிவிறக்கம்</strong></a>
+  ·
+  <a href="https://downloads.accomplish.ai/downloads/0.4.0/linux/Accomplish-0.4.0-linux-arm64.AppImage"><strong>Download for Linux (ARM64)</strong></a>
+  ·
+  <a href="https://downloads.accomplish.ai/downloads/0.4.0/linux/Accomplish-0.4.0-linux-x64.AppImage"><strong>Download for Linux (x64)</strong></a>
   ·
   <a href="https://www.accomplish.ai/">Accomplish வலைத்தளம்</a>
   ·
@@ -166,6 +172,8 @@ Accomplish உங்கள் கணினியிலேயே இயங்க�
 
 - macOS (Apple Silicon)
 - Windows 11
+- Ubuntu (ARM64)
+- Ubuntu (x64)
 
 <br />
 
@@ -190,7 +198,7 @@ Accomplish உங்கள் கணினியிலேயே இயங்க�
 
 <div align="center">
 
-[**Mac (Apple Silicon) க்கான பதிவிறக்கம்**](https://downloads.accomplish.ai/downloads/0.4.0/macos/Accomplish-0.4.0-mac-arm64.dmg) · [**Mac (Intel) க்கான பதிவிறக்கம்**](https://downloads.accomplish.ai/downloads/0.4.0/macos/Accomplish-0.4.0-mac-x64.dmg) · [**Windows 11 க்கான பதிவிறக்கம்**](https://downloads.accomplish.ai/downloads/0.4.0/windows/Accomplish-0.4.0-win-x64.exe)
+[**Mac (Apple Silicon) க்கான பதிவிறக்கம்**](https://downloads.accomplish.ai/downloads/0.4.0/macos/Accomplish-0.4.0-mac-arm64.dmg) · [**Mac (Intel) க்கான பதிவிறக்கம்**](https://downloads.accomplish.ai/downloads/0.4.0/macos/Accomplish-0.4.0-mac-x64.dmg) · [**Windows 11 க்கான பதிவிறக்கம்**](https://downloads.accomplish.ai/downloads/0.4.0/windows/Accomplish-0.4.0-win-x64.exe) · [**Download for Linux (ARM64)**](https://downloads.accomplish.ai/downloads/0.4.0/linux/Accomplish-0.4.0-linux-arm64.AppImage) · [**Download for Linux (x64)**](https://downloads.accomplish.ai/downloads/0.4.0/linux/Accomplish-0.4.0-linux-x64.AppImage)
 
 </div>
 
@@ -228,7 +236,7 @@ macOS இல் Accomplish பற்றிய ஒரு விரைவான �
 ஆம். Accomplish திறந்த மூல மற்றும் MIT உரிமம் பெற்றது.
 
 **எந்த தளங்கள் ஆதரிக்கப்படுகின்றன?**
-macOS (Apple Silicon) மற்றும் Windows 11 இப்போது கிடைக்கின்றன.
+macOS (Apple Silicon) மற்றும் Windows 11 இப்போது கிடைக்கின்றன. Ubuntu (ARM64) மற்றும் Ubuntu (x64) ஆகியவையும் ஆதரிக்கப்படுகின்றன.
 
 <br />
 

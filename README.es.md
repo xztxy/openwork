@@ -14,6 +14,8 @@
   <a href="https://downloads.accomplish.ai/downloads/0.4.0/macos/Accomplish-0.4.0-mac-arm64.dmg"><img src="https://img.shields.io/badge/Download-macOS_(Apple_Silicon)-0ea5e9?style=flat-square" alt="Descargar para macOS (Apple Silicon)" /></a>
   <a href="https://downloads.accomplish.ai/downloads/0.4.0/macos/Accomplish-0.4.0-mac-x64.dmg"><img src="https://img.shields.io/badge/Download-macOS_(Intel)-0ea5e9?style=flat-square" alt="Descargar para macOS (Intel)" /></a>
   <a href="https://downloads.accomplish.ai/downloads/0.4.0/windows/Accomplish-0.4.0-win-x64.exe"><img src="https://img.shields.io/badge/Download-Windows_11-0ea5e9?style=flat-square" alt="Descargar para Windows 11" /></a>
+  <a href="https://downloads.accomplish.ai/downloads/0.4.0/linux/Accomplish-0.4.0-linux-arm64.AppImage"><img src="https://img.shields.io/badge/Download-Linux_(ARM64)-0ea5e9?style=flat-square" alt="Download for Linux (ARM64)" /></a>
+  <a href="https://downloads.accomplish.ai/downloads/0.4.0/linux/Accomplish-0.4.0-linux-x64.AppImage"><img src="https://img.shields.io/badge/Download-Linux_(x64)-0ea5e9?style=flat-square" alt="Download for Linux (x64)" /></a>
   <a href="https://discord.gg/YH86b2P8"><img src="https://img.shields.io/badge/Discord-Join-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
@@ -31,6 +33,10 @@ Accomplish es un agente de escritorio de IA de código abierto que automatiza la
   <a href="https://downloads.accomplish.ai/downloads/0.4.0/macos/Accomplish-0.4.0-mac-x64.dmg"><strong>Descargar para Mac (Intel)</strong></a>
   ·
   <a href="https://downloads.accomplish.ai/downloads/0.4.0/windows/Accomplish-0.4.0-win-x64.exe"><strong>Descargar para Windows 11</strong></a>
+  ·
+  <a href="https://downloads.accomplish.ai/downloads/0.4.0/linux/Accomplish-0.4.0-linux-arm64.AppImage"><strong>Download for Linux (ARM64)</strong></a>
+  ·
+  <a href="https://downloads.accomplish.ai/downloads/0.4.0/linux/Accomplish-0.4.0-linux-x64.AppImage"><strong>Download for Linux (x64)</strong></a>
   ·
   <a href="https://www.accomplish.ai/">Sitio web de Accomplish</a>
   ·
@@ -166,6 +172,8 @@ Accomplish se ejecuta localmente en tu máquina. Tus archivos permanecen en tu d
 
 - macOS (Apple Silicon)
 - Windows 11
+- Ubuntu (ARM64)
+- Ubuntu (x64)
 
 <br />
 
@@ -190,7 +198,7 @@ Accomplish se ejecuta localmente en tu máquina. Tus archivos permanecen en tu d
 
 <div align="center">
 
-[**Descargar para Mac (Apple Silicon)**](https://downloads.accomplish.ai/downloads/0.4.0/macos/Accomplish-0.4.0-mac-arm64.dmg) · [**Descargar para Mac (Intel)**](https://downloads.accomplish.ai/downloads/0.4.0/macos/Accomplish-0.4.0-mac-x64.dmg) · [**Descargar para Windows 11**](https://downloads.accomplish.ai/downloads/0.4.0/windows/Accomplish-0.4.0-win-x64.exe)
+[**Descargar para Mac (Apple Silicon)**](https://downloads.accomplish.ai/downloads/0.4.0/macos/Accomplish-0.4.0-mac-arm64.dmg) · [**Descargar para Mac (Intel)**](https://downloads.accomplish.ai/downloads/0.4.0/macos/Accomplish-0.4.0-mac-x64.dmg) · [**Descargar para Windows 11**](https://downloads.accomplish.ai/downloads/0.4.0/windows/Accomplish-0.4.0-win-x64.exe) · [**Download for Linux (ARM64)**](https://downloads.accomplish.ai/downloads/0.4.0/linux/Accomplish-0.4.0-linux-arm64.AppImage) · [**Download for Linux (x64)**](https://downloads.accomplish.ai/downloads/0.4.0/linux/Accomplish-0.4.0-linux-x64.AppImage)
 
 </div>
 
@@ -228,7 +236,7 @@ Puedes usar tus propias claves API (OpenAI, Anthropic, Google, xAI, etc.) o ejec
 Sí. Accomplish es de código abierto y tiene licencia MIT.
 
 **¿Qué plataformas son compatibles?**
-macOS (Apple Silicon) y Windows 11 están disponibles ahora.
+macOS (Apple Silicon) y Windows 11 están disponibles ahora. Ubuntu (ARM64) y Ubuntu (x64) también son compatibles.
 
 <br />
 
