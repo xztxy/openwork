@@ -248,7 +248,8 @@
     "skills": "Compétences",
     "voiceInput": "Saisie vocale",
     "appearance": "Apparence",
-    "about": "À propos"
+    "about": "À propos",
+    "browsers": "Navigateurs cloud"
   },
   "appearance": {
     "title": "Thème",
@@ -285,7 +286,28 @@
     "enable": "Activer",
     "disable": "Désactiver",
     "confirmDelete": "Cliquez à nouveau pour confirmer",
-    "delete": "Supprimer"
+    "delete": "Supprimer",
+    "customTitle": "Serveurs MCP personnalisés",
+    "customDescription": "Ajoutez votre propre URL de serveur MCP distant. OAuth est pris en charge pour les serveurs qui exposent le flux d'autorisation standard.",
+    "slack": {
+      "title": "Slack",
+      "description": "Authentifiez Slack pour que l'agent puisse envoyer des messages et utiliser le contexte Slack via le MCP Slack intégré.",
+      "authenticate": "Authentifier Slack",
+      "authenticating": "Authentification...",
+      "restartAuth": "Relancer l'authentification",
+      "disconnect": "Déconnecter Slack",
+      "disconnecting": "Déconnexion...",
+      "authHint": "Accomplish ouvrira votre navigateur pour que vous puissiez approuver l'accès Slack.",
+      "pendingHint": "Une connexion Slack a été initiée mais non terminée. Relancez-la pour réessayer.",
+      "connectedHint": "Slack est authentifié et prêt à être utilisé par l'agent.",
+      "authFailed": "Échec de l'authentification Slack",
+      "disconnectFailed": "Échec de la déconnexion Slack",
+      "status": {
+        "connected": "Connecté",
+        "disconnected": "Non connecté",
+        "pending": "Autorisation initiée"
+      }
+    }
   },
   "zai": {
     "region": "Région",
