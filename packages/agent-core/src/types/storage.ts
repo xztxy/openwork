@@ -14,6 +14,7 @@ import type {
 } from '../common/types/providerSettings.js';
 import type { McpConnector, ConnectorStatus, OAuthTokens } from '../common/types/connector.js';
 import type { SandboxConfig } from '../common/types/sandbox.js';
+import type { CloudBrowserConfig } from '../common/types/cloud-browser.js';
 
 /** Options for creating a Storage instance */
 export interface StorageOptions {
@@ -142,6 +143,10 @@ export interface AppSettingsAPI {
   getTheme(): ThemePreference;
   /** Set the theme preference */
   setTheme(theme: ThemePreference): void;
+  /** Get cloud browser configuration */
+  getCloudBrowserConfig(): CloudBrowserConfig | null;
+  /** Set cloud browser configuration */
+  setCloudBrowserConfig(config: CloudBrowserConfig | null): void;
   /** Get all application settings as a snapshot */
   getAppSettings(): AppSettings;
   /** Reset all application settings to defaults */
@@ -272,4 +277,5 @@ export type {
   McpConnector,
   ConnectorStatus,
   OAuthTokens,
+  CloudBrowserConfig,
 };

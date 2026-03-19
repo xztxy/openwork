@@ -997,6 +997,37 @@ export function registerIPCHandlers(): void {
     return storage.getAppSettings();
   });
 
+  handle('settings:cloud-browser-config:get', async (_event: IpcMainInvokeEvent) => {
+    return storage.getCloudBrowserConfig();
+  });
+
+  handle(
+    'settings:cloud-browser-config:set',
+    async (_event: IpcMainInvokeEvent, config: string | null) => {
+      if (config === null) {
+        storage.setCloudBrowserConfig(null);
+        return;
+      }
+      if (typeof config !== 'string') {
+        throw new Error('Invalid cloud browser config');
+      }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(config);
+      } catch {
+        throw new Error('Invalid cloud browser config: malformed JSON');
+      }
+      if (typeof parsed !== 'object' || parsed === null) {
+        throw new Error('Invalid cloud browser config: expected object');
+      }
+      const cfg = parsed as Record<string, unknown>;
+      if (cfg.activeProvider !== null && typeof cfg.activeProvider !== 'string') {
+        throw new Error('Invalid cloud browser config: activeProvider must be string or null');
+      }
+      storage.setCloudBrowserConfig(cfg as Parameters<typeof storage.setCloudBrowserConfig>[0]);
+    },
+  );
+
   handle('sandbox:get-config', async (_event: IpcMainInvokeEvent) => {
     return storage.getSandboxConfig();
   });
