@@ -52,6 +52,8 @@ export function registerSettingsHandlers(): void {
     return storage.getCloudBrowserConfig();
   });
 
+  const VALID_CLOUD_BROWSER_PROVIDERS = new Set(['aws-agentcore', 'browserbase', 'steel']);
+
   handle(
     'settings:cloud-browser-config:set',
     async (_event: IpcMainInvokeEvent, config: string | null) => {
@@ -72,10 +74,18 @@ export function registerSettingsHandlers(): void {
         throw new Error('Invalid cloud browser config: expected object');
       }
       const cfg = parsed as Record<string, unknown>;
-      if (cfg.activeProvider !== null && typeof cfg.activeProvider !== 'string') {
-        throw new Error('Invalid cloud browser config: activeProvider must be string or null');
+      if (
+        cfg.activeProvider !== null &&
+        (typeof cfg.activeProvider !== 'string' ||
+          !VALID_CLOUD_BROWSER_PROVIDERS.has(cfg.activeProvider as string))
+      ) {
+        throw new Error(
+          'Invalid cloud browser config: activeProvider must be a valid provider or null',
+        );
       }
-      storage.setCloudBrowserConfig(cfg as Parameters<typeof storage.setCloudBrowserConfig>[0]);
+      storage.setCloudBrowserConfig(
+        cfg as unknown as Parameters<typeof storage.setCloudBrowserConfig>[0],
+      );
     },
   );
 

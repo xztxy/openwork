@@ -9,6 +9,7 @@ import {
   isTokenExpired,
   refreshAccessToken,
 } from '@accomplish_ai/agent-core';
+import type { BrowserConfig } from '@accomplish_ai/agent-core';
 import { getApiKey, getAllApiKeys } from '../store/secureStorage';
 import { getStorage } from '../store/storage';
 import { getBundledNodePaths } from '../utils/bundled-node';
@@ -134,13 +135,7 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
 
   // Build browser config from cloud browser settings
   const cloudBrowserConfig = storage.getCloudBrowserConfig();
-  let browserConfig:
-    | {
-        mode: 'builtin' | 'remote' | 'none';
-        cdpEndpoint?: string;
-        cdpHeaders?: Record<string, string>;
-      }
-    | undefined;
+  let browserConfig: BrowserConfig | undefined;
   if (cloudBrowserConfig?.activeProvider) {
     const providerCfg = cloudBrowserConfig.providers[cloudBrowserConfig.activeProvider];
     if (providerCfg?.endpoint) {

@@ -8,6 +8,7 @@ import {
   sanitizeString,
   getOpenAiOauthAccessToken,
   getOpenAiOauthStatus,
+  validateAzureFoundry,
 } from '@accomplish_ai/agent-core';
 import type { BedrockCredentials } from '@accomplish_ai/agent-core';
 import {
