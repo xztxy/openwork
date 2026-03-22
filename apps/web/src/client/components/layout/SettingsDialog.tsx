@@ -77,7 +77,14 @@ export function SettingsDialog({
   const [closeWarning, setCloseWarning] = useState(false);
   const [showModelError, setShowModelError] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    'providers' | 'voice' | 'skills' | 'connectors' | 'browsers' | 'workspaces' | 'integrations' | 'about'
+    | 'providers'
+    | 'voice'
+    | 'skills'
+    | 'connectors'
+    | 'browsers'
+    | 'workspaces'
+    | 'integrations'
+    | 'about'
   >(initialTab);
   const [appVersion, setAppVersion] = useState<string>('');
   const [skillsRefreshTrigger, setSkillsRefreshTrigger] = useState(0);

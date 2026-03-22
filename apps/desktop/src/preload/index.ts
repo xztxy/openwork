@@ -596,11 +596,9 @@ const accomplishAPI = {
     lastConnectedAt?: number;
   } | null> => ipcRenderer.invoke('integrations:whatsapp:get-config'),
 
-  connectWhatsApp: (): Promise<void> =>
-    ipcRenderer.invoke('integrations:whatsapp:connect'),
+  connectWhatsApp: (): Promise<void> => ipcRenderer.invoke('integrations:whatsapp:connect'),
 
-  disconnectWhatsApp: (): Promise<void> =>
-    ipcRenderer.invoke('integrations:whatsapp:disconnect'),
+  disconnectWhatsApp: (): Promise<void> => ipcRenderer.invoke('integrations:whatsapp:disconnect'),
 
   setWhatsAppEnabled: (enabled: boolean): Promise<void> =>
     ipcRenderer.invoke('integrations:whatsapp:set-enabled', enabled),

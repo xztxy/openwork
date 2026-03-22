@@ -128,64 +128,69 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
 
       this.socket.ev.on('creds.update', saveCreds);
 
-      this.socket.ev.on('connection.update', (update: {
-        connection?: string;
-        lastDisconnect?: { error?: unknown };
-        qr?: string;
-      }) => {
-        const { connection, lastDisconnect, qr } = update;
+      this.socket.ev.on(
+        'connection.update',
+        (update: { connection?: string; lastDisconnect?: { error?: unknown }; qr?: string }) => {
+          const { connection, lastDisconnect, qr } = update;
 
-        if (qr) {
-          this.qrCode = qr;
-          this.setStatus('qr_ready');
-          this.emit('qr', qr);
-        }
+          if (qr) {
+            this.qrCode = qr;
+            this.setStatus('qr_ready');
+            this.emit('qr', qr);
+          }
 
-        if (connection === 'close') {
-          this.qrCode = null;
-          const boomError = lastDisconnect?.error as { output?: { statusCode?: number } } | undefined;
-          const statusCode = boomError?.output?.statusCode;
+          if (connection === 'close') {
+            this.qrCode = null;
+            const boomError = lastDisconnect?.error as
+              | { output?: { statusCode?: number } }
+              | undefined;
+            const statusCode = boomError?.output?.statusCode;
 
-          if (statusCode === DisconnectReason.loggedOut) {
-            this.setStatus('logged_out');
-            this.cleanupAuthState();
-          } else if (statusCode === DisconnectReason.restartRequired) {
-            if (!this.disposed) {
-              this.connect().catch((err) => console.error('[WhatsApp] Restart reconnect failed:', err));
+            if (statusCode === DisconnectReason.loggedOut) {
+              this.setStatus('logged_out');
+              this.cleanupAuthState();
+            } else if (statusCode === DisconnectReason.restartRequired) {
+              if (!this.disposed) {
+                this.connect().catch((err) =>
+                  console.error('[WhatsApp] Restart reconnect failed:', err),
+                );
+              }
+            } else if (statusCode === DisconnectReason.connectionReplaced) {
+              console.warn('[WhatsApp] Connection replaced by another session');
+              this.setStatus('disconnected');
+            } else if (statusCode === DisconnectReason.forbidden) {
+              console.error('[WhatsApp] Account forbidden (banned or restricted)');
+              this.setStatus('logged_out');
+              this.cleanupAuthState();
+            } else if (statusCode === DisconnectReason.badSession) {
+              console.error('[WhatsApp] Bad session — cleaning up auth state');
+              this.cleanupAuthState();
+              if (!this.disposed) {
+                this.connect().catch((err) =>
+                  console.error('[WhatsApp] Reconnect after bad session:', err),
+                );
+              }
+            } else if (!this.disposed) {
+              this.attemptReconnect();
             }
-          } else if (statusCode === DisconnectReason.connectionReplaced) {
-            console.warn('[WhatsApp] Connection replaced by another session');
-            this.setStatus('disconnected');
-          } else if (statusCode === DisconnectReason.forbidden) {
-            console.error('[WhatsApp] Account forbidden (banned or restricted)');
-            this.setStatus('logged_out');
-            this.cleanupAuthState();
-          } else if (statusCode === DisconnectReason.badSession) {
-            console.error('[WhatsApp] Bad session — cleaning up auth state');
-            this.cleanupAuthState();
-            if (!this.disposed) {
-              this.connect().catch((err) => console.error('[WhatsApp] Reconnect after bad session:', err));
+          }
+
+          if (connection === 'open') {
+            this.qrCode = null;
+            this.reconnectAttempts = 0;
+            this.setStatus('connected');
+
+            const user = this.socket?.user;
+            if (user?.id) {
+              const phoneNumber = user.id.split(':')[0].split('@')[0];
+              this.emit('phoneNumber', phoneNumber);
             }
-          } else if (!this.disposed) {
-            this.attemptReconnect();
+            if (user?.lid) {
+              this.emit('ownerLid', jidNormalizedUser(user.lid));
+            }
           }
-        }
-
-        if (connection === 'open') {
-          this.qrCode = null;
-          this.reconnectAttempts = 0;
-          this.setStatus('connected');
-
-          const user = this.socket?.user;
-          if (user?.id) {
-            const phoneNumber = user.id.split(':')[0].split('@')[0];
-            this.emit('phoneNumber', phoneNumber);
-          }
-          if (user?.lid) {
-            this.emit('ownerLid', jidNormalizedUser(user.lid));
-          }
-        }
-      });
+        },
+      );
 
       this.socket.ev.on('messages.upsert', (upsert: { type: string; messages: unknown[] }) => {
         if (upsert.type !== 'notify') return;
@@ -199,15 +204,14 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
           const videoMsg = message.videoMessage as Record<string, unknown> | undefined;
           const docMsg = message.documentMessage as Record<string, unknown> | undefined;
 
-          const text = (
+          const text =
             (message.conversation as string) ||
             (extendedText?.text as string) ||
             (imageMsg?.caption as string) ||
             (videoMsg?.caption as string) ||
             (docMsg?.caption as string) ||
             (docMsg?.title as string) ||
-            ''
-          );
+            '';
 
           if (!text.trim()) continue;
 
@@ -221,7 +225,11 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
           let ts: number;
           if (typeof rawTs === 'number') {
             ts = rawTs;
-          } else if (rawTs != null && typeof rawTs === 'object' && 'toNumber' in (rawTs as object)) {
+          } else if (
+            rawTs != null &&
+            typeof rawTs === 'object' &&
+            'toNumber' in (rawTs as object)
+          ) {
             ts = (rawTs as { toNumber(): number }).toNumber();
           } else {
             ts = 0;
@@ -292,7 +300,9 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
     this.status = 'connecting';
 
     const delay = INITIAL_RECONNECT_DELAY_MS * Math.pow(2, this.reconnectAttempts - 1);
-    console.log(`[WhatsApp] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+    console.log(
+      `[WhatsApp] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`,
+    );
 
     this.reconnectTimer = setTimeout(() => {
       this.connect().catch((err) => console.error('[WhatsApp] Reconnect failed:', err));

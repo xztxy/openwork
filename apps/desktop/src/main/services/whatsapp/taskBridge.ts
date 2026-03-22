@@ -218,13 +218,14 @@ export class TaskBridge {
       return;
     }
 
-    // Mark task as active immediately to prevent duplicates before onTaskRequest resolves
-    this.setActiveTask(msg.senderId, 'pending');
-
-    // Sanitize senderName to prevent prompt injection via WhatsApp display name
+    // Sanitize senderName before locking the sender as active, so a throw here
+    // does not leave the sender stuck behind the "previous task is still running" guard
     const safeSenderName = msg.senderName
       ? sanitizeString(msg.senderName, 'senderName', 128)
       : undefined;
+
+    // Mark task as active immediately to prevent duplicates before onTaskRequest resolves
+    this.setActiveTask(msg.senderId, 'pending');
 
     try {
       await this.onTaskRequest(msg.senderId, safeSenderName, sanitizedText);

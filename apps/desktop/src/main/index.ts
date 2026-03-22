@@ -350,7 +350,11 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   disposeTaskManager(); // Also cleans up proxies internally
   // Dispose WhatsApp service (ENG-684) — best-effort, non-fatal
-  try { disposeWhatsAppService(); } catch { /* ignore */ }
+  try {
+    disposeWhatsAppService();
+  } catch {
+    /* ignore */
+  }
   cleanupVertexServiceAccountKey();
   oauthBrowserFlow.dispose();
   slackMcpOAuthFlow.dispose();

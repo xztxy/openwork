@@ -17,8 +17,9 @@ process.env.ACCOMPLISH_ROUTER_URL = 'http://localhost:5173';
 // Ensure System32 is in PATH on Windows so vite-plugin-electron can use taskkill
 if (process.platform === 'win32') {
   const sys32 = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32');
-  if (!process.env.PATH?.includes(sys32)) {
-    process.env.PATH = `${sys32};${process.env.PATH}`;
+  const currentPath = process.env.PATH || '';
+  if (!currentPath.toLowerCase().includes(sys32.toLowerCase())) {
+    process.env.PATH = `${sys32};${currentPath}`;
   }
 }
 
@@ -38,6 +39,10 @@ vite.on('error', (err) => {
   process.exit(1);
 });
 
-vite.on('exit', (code) => {
-  process.exit(code || 0);
+vite.on('exit', (code, signal) => {
+  if (signal) {
+    console.error(`[dev-vite] Vite terminated by signal: ${signal}`);
+    process.exit(1);
+  }
+  process.exit(code ?? 0);
 });

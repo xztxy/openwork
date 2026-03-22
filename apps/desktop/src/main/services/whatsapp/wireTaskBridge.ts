@@ -75,7 +75,10 @@ export function wireTaskBridge(service: WhatsAppService): { bridge: TaskBridge }
 
     bridge.setActiveTask(senderId, taskId);
     service
-      .sendMessage(senderId, `⏳ Task started: "${text.slice(0, 80)}${text.length > 80 ? '…' : ''}"`)
+      .sendMessage(
+        senderId,
+        `⏳ Task started: "${text.slice(0, 80)}${text.length > 80 ? '…' : ''}"`,
+      )
       .catch(() => {});
 
     const activeModel = storage.getActiveProviderModel();
@@ -135,7 +138,9 @@ export function wireTaskBridge(service: WhatsAppService): { bridge: TaskBridge }
                 'Task requires a permission that cannot be auto-approved. It has been denied for safety.',
               )
               .catch(() => {});
-            getTaskManager().sendResponse(taskId, 'no').catch(() => {});
+            getTaskManager()
+              .sendResponse(taskId, 'no')
+              .catch(() => {});
           },
           onComplete: (result: { status: string; sessionId?: string }) => {
             if (result.sessionId && result.status === 'success') {
@@ -147,7 +152,8 @@ export function wireTaskBridge(service: WhatsAppService): { bridge: TaskBridge }
                 ? 'Task completed successfully.'
                 : `Task finished with status: ${result.status}`);
             if (replyText.length > MAX_MESSAGE_LENGTH) {
-              replyText = replyText.substring(0, MAX_MESSAGE_LENGTH - 22) + '\n\n[Response truncated]';
+              replyText =
+                replyText.substring(0, MAX_MESSAGE_LENGTH - 22) + '\n\n[Response truncated]';
             }
             service.sendMessage(senderId, replyText).catch(() => {});
             bridge.clearActiveTask(senderId);

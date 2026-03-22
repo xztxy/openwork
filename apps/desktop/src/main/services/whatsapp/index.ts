@@ -1,5 +1,9 @@
 export { WhatsAppService } from './WhatsAppService';
-export type { WhatsAppServiceEvents, InboundChannelMessage, OutboundProgressEvent } from './WhatsAppService';
+export type {
+  WhatsAppServiceEvents,
+  InboundChannelMessage,
+  OutboundProgressEvent,
+} from './WhatsAppService';
 export { TaskBridge } from './taskBridge';
 export type { InboundMessage, MessageTransport } from './taskBridge';
 export { wireTaskBridge, wireStatusListeners } from './wireTaskBridge';

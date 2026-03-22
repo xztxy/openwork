@@ -42,8 +42,8 @@ function generateQRPattern(input: string, gridSize: number): boolean[][] {
         const inner = localR >= 2 && localR <= 4 && localC >= 2 && localC <= 4;
         rowArr.push(border || inner);
       } else {
-        const seed = (hash ^ (row * 31 + col * 17) * 2654435761) >>> 0;
-        rowArr.push((seed % 100) < 55);
+        const seed = (hash ^ ((row * 31 + col * 17) * 2654435761)) >>> 0;
+        rowArr.push(seed % 100 < 55);
       }
     }
     grid.push(rowArr);
@@ -52,22 +52,23 @@ function generateQRPattern(input: string, gridSize: number): boolean[][] {
 }
 
 export function QRCodeDisplay({ qrString, expiresAt, onExpired, size = 200 }: QRCodeDisplayProps) {
-  const [timeLeft, setTimeLeft] = useState(
-    Math.max(0, Math.floor((expiresAt - Date.now()) / 1000)),
-  );
-  const [expired, setExpired] = useState(timeLeft === 0);
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [expired, setExpired] = useState(false);
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    const tick = () => {
       const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
       setTimeLeft(remaining);
-      if (remaining === 0 && !expired) {
+      if (remaining === 0) {
         setExpired(true);
         onExpired?.();
+        clearInterval(interval);
       }
-    }, 1000);
+    };
+    tick(); // run immediately on mount to avoid 1s delay
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [expiresAt, expired, onExpired]);
+  }, [expiresAt, onExpired]);
 
   const cells = generateQRPattern(qrString, 25);
 

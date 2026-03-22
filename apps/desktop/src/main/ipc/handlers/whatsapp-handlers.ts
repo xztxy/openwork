@@ -6,17 +6,16 @@
  * and bridges service events to the renderer over IPC push channels.
  */
 import type { IpcMainInvokeEvent } from 'electron';
-import type { IpcHandler } from '../../types';
-import { getStorage } from '../../../store/storage';
+import type { IpcHandler } from '../types';
+import { getStorage } from '../../store/storage';
 import {
   getOrCreateWhatsAppService,
   getWhatsAppService,
   disposeWhatsAppService,
   setActiveWhatsAppBridge,
   getActiveWhatsAppBridge,
-} from '../../../services/whatsapp/singleton';
-import { wireTaskBridge, wireStatusListeners } from '../../../services/whatsapp/wireTaskBridge';
-import { TaskBridge } from '../../../services/whatsapp/taskBridge';
+} from '../../services/whatsapp/singleton';
+import { wireTaskBridge, wireStatusListeners } from '../../services/whatsapp/wireTaskBridge';
 import type { MessagingConnectionStatus } from '@accomplish_ai/agent-core/common';
 
 export function registerWhatsAppHandlers(handle: IpcHandler): void {
@@ -133,6 +132,8 @@ export function registerWhatsAppHandlers(handle: IpcHandler): void {
           },
         },
       });
+      // Propagate to the live bridge so in-memory state reflects the new value immediately
+      getActiveWhatsAppBridge()?.setEnabled(enabled);
     },
   );
 }

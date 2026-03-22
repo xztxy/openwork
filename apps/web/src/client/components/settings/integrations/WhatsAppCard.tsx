@@ -50,7 +50,11 @@ export function WhatsAppCard() {
     try {
       const result = await accomplish.getWhatsAppConfig();
       if (result?.enabled) {
-        setConfig({ status: result.status, phoneNumber: result.phoneNumber, lastConnectedAt: result.lastConnectedAt });
+        setConfig({
+          status: result.status,
+          phoneNumber: result.phoneNumber,
+          lastConnectedAt: result.lastConnectedAt,
+        });
       } else {
         setConfig(null);
       }
@@ -73,6 +77,7 @@ export function WhatsAppCard() {
         clearTimeout(connectTimeoutRef.current);
         connectTimeoutRef.current = null;
       }
+      setConnecting(false);
       setConfig((prev) => (prev ? { ...prev, status: 'qr_ready' } : { status: 'qr_ready' }));
     });
 
@@ -82,15 +87,27 @@ export function WhatsAppCard() {
       if (status === 'connected') {
         setQrCode(null);
         setConnecting(false);
-        if (qrTimerRef.current) { clearInterval(qrTimerRef.current); qrTimerRef.current = null; }
-        if (connectTimeoutRef.current) { clearTimeout(connectTimeoutRef.current); connectTimeoutRef.current = null; }
+        if (qrTimerRef.current) {
+          clearInterval(qrTimerRef.current);
+          qrTimerRef.current = null;
+        }
+        if (connectTimeoutRef.current) {
+          clearTimeout(connectTimeoutRef.current);
+          connectTimeoutRef.current = null;
+        }
         fetchConfig();
       }
       if (status === 'disconnected' || status === 'logged_out') {
         setQrCode(null);
         setConnecting(false);
-        if (qrTimerRef.current) { clearInterval(qrTimerRef.current); qrTimerRef.current = null; }
-        if (connectTimeoutRef.current) { clearTimeout(connectTimeoutRef.current); connectTimeoutRef.current = null; }
+        if (qrTimerRef.current) {
+          clearInterval(qrTimerRef.current);
+          qrTimerRef.current = null;
+        }
+        if (connectTimeoutRef.current) {
+          clearTimeout(connectTimeoutRef.current);
+          connectTimeoutRef.current = null;
+        }
       }
     });
 
@@ -116,7 +133,10 @@ export function WhatsAppCard() {
     try {
       await accomplish.connectWhatsApp();
     } catch (err) {
-      if (connectTimeoutRef.current) { clearTimeout(connectTimeoutRef.current); connectTimeoutRef.current = null; }
+      if (connectTimeoutRef.current) {
+        clearTimeout(connectTimeoutRef.current);
+        connectTimeoutRef.current = null;
+      }
       setError(err instanceof Error ? err.message : 'Failed to connect');
       setConnecting(false);
     }
@@ -172,15 +192,16 @@ export function WhatsAppCard() {
         </div>
         <div>
           <h3 className="text-sm font-medium text-foreground">WhatsApp</h3>
-          <p className="text-xs text-muted-foreground">
-            Send and receive messages via WhatsApp
-          </p>
+          <p className="text-xs text-muted-foreground">Send and receive messages via WhatsApp</p>
         </div>
       </div>
 
       {/* Error */}
       {error && (
-        <div role="alert" className="mb-3 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+        <div
+          role="alert"
+          className="mb-3 rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
+        >
           {error}
         </div>
       )}
@@ -203,7 +224,9 @@ export function WhatsAppCard() {
             type="button"
             onClick={handleDisconnect}
             disabled={disconnecting}
-            aria-label={confirmDisconnect ? 'Confirm disconnect from WhatsApp' : 'Disconnect from WhatsApp'}
+            aria-label={
+              confirmDisconnect ? 'Confirm disconnect from WhatsApp' : 'Disconnect from WhatsApp'
+            }
             data-testid="whatsapp-disconnect-button"
             className={`w-full rounded-md border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
               confirmDisconnect
@@ -211,7 +234,11 @@ export function WhatsAppCard() {
                 : 'border-border hover:bg-muted'
             }`}
           >
-            {disconnecting ? 'Disconnecting…' : confirmDisconnect ? 'Confirm Disconnect?' : 'Disconnect'}
+            {disconnecting
+              ? 'Disconnecting…'
+              : confirmDisconnect
+                ? 'Confirm Disconnect?'
+                : 'Disconnect'}
           </button>
         </div>
       )}
@@ -246,8 +273,8 @@ export function WhatsAppCard() {
             size={200}
           />
           <p className="text-sm text-center text-muted-foreground">
-            Open WhatsApp on your phone, go to{' '}
-            <strong>Settings &gt; Linked Devices</strong>, and scan this code.
+            Open WhatsApp on your phone, go to <strong>Settings &gt; Linked Devices</strong>, and
+            scan this code.
           </p>
         </div>
       )}
