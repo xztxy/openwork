@@ -479,7 +479,7 @@ describe('Execution Page Integration', () => {
       expect(screen.getByText(/tool:\s*bash/i)).toBeInTheDocument();
     });
 
-    it('should render Allow and Deny buttons in permission dialog', () => {
+    it('should render Allow and Deny buttons in permission inline card', () => {
       mockStoreState.currentTask = createMockTask('task-123', 'Task', 'running');
       mockStoreState.permissionRequest = {
         id: 'perm-1',
@@ -491,8 +491,8 @@ describe('Execution Page Integration', () => {
 
       renderWithRouter('task-123');
 
-      expect(screen.getByRole('button', { name: /allow/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /deny/i })).toBeInTheDocument();
+      expect(screen.getByTestId('permission-allow-button')).toBeInTheDocument();
+      expect(screen.getByTestId('permission-deny-button')).toBeInTheDocument();
     });
 
     it('should call respondToPermission with allow when Allow is clicked', async () => {
@@ -507,7 +507,7 @@ describe('Execution Page Integration', () => {
 
       renderWithRouter('task-123');
 
-      const allowButton = screen.getByRole('button', { name: /allow/i });
+      const allowButton = screen.getByTestId('permission-allow-button');
       fireEvent.click(allowButton);
 
       await waitFor(() => {
@@ -551,7 +551,7 @@ describe('Execution Page Integration', () => {
 
       renderWithRouter('task-123');
 
-      const denyButton = screen.getByRole('button', { name: /deny/i });
+      const denyButton = screen.getByTestId('permission-deny-button');
       fireEvent.click(denyButton);
 
       await waitFor(() => {

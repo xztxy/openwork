@@ -962,6 +962,16 @@ export function ExecutionPage() {
                   elapsedTime={elapsedTime}
                 />
 
+                {/* Inline permission / question card — scoped to this task */}
+                <AnimatePresence>
+                  {permissionRequest && permissionRequest.taskId === id && (
+                    <PermissionDialog
+                      permissionRequest={permissionRequest}
+                      onRespond={handlePermissionResponse}
+                    />
+                  )}
+                </AnimatePresence>
+
                 <div ref={messagesEndRef} />
 
                 <AnimatePresence>
@@ -993,15 +1003,7 @@ export function ExecutionPage() {
           </div>
         )}
 
-        {/* Permission Request Modal */}
-        <AnimatePresence>
-          {permissionRequest && (
-            <PermissionDialog
-              permissionRequest={permissionRequest}
-              onRespond={handlePermissionResponse}
-            />
-          )}
-        </AnimatePresence>
+        {/* Permission requests are now rendered inline in the scroll area above */}
 
         {/* Running state input with Stop button */}
         {currentTask.status === 'running' && !permissionRequest && (

@@ -44,6 +44,31 @@ export function initPermissionApi(
 }
 
 /**
+ * Resolve the task ID from a request body, preferring an explicit taskId
+ * from the request (set by MCP server via ACCOMPLISH_TASK_ID env) over
+ * the active-task fallback for backwards compatibility.
+ */
+function resolveTaskIdFromRequest(
+  requestTaskId: unknown,
+  taskIdGetter: () => string | null,
+): { taskId: string | null; error?: string } {
+  if (requestTaskId === undefined) {
+    return { taskId: taskIdGetter() };
+  }
+
+  if (typeof requestTaskId !== 'string') {
+    return { taskId: null, error: 'Invalid task ID' };
+  }
+
+  const trimmed = requestTaskId.trim();
+  if (trimmed.length === 0) {
+    return { taskId: taskIdGetter() };
+  }
+
+  return { taskId: trimmed };
+}
+
+/**
  * Resolve a pending permission request from the MCP server
  * Called when user responds via the UI
  */
@@ -89,15 +114,19 @@ export function startPermissionApiServer(): http.Server {
       body += chunk;
     }
 
-    let data: FilePermissionRequestData;
+    let parsed: Record<string, unknown>;
 
     try {
-      data = JSON.parse(body);
+      parsed = JSON.parse(body);
     } catch {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Invalid JSON' }));
       return;
     }
+
+    // Extract taskId before type-narrowing the rest of the request
+    const requestTaskId = parsed.taskId;
+    const data = parsed as FilePermissionRequestData;
 
     // Validate request using core handler
     const validation = permissionHandler.validateFilePermissionRequest(data);
@@ -117,7 +146,13 @@ export function startPermissionApiServer(): http.Server {
       return;
     }
 
-    const taskId = getActiveTaskId();
+    const { taskId, error } = resolveTaskIdFromRequest(requestTaskId, getActiveTaskId);
+    if (error) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error }));
+      return;
+    }
+
     if (!taskId) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'No active task' }));
@@ -195,15 +230,19 @@ export function startQuestionApiServer(): http.Server {
       body += chunk;
     }
 
-    let data: QuestionRequestData;
+    let parsed: Record<string, unknown>;
 
     try {
-      data = JSON.parse(body);
+      parsed = JSON.parse(body);
     } catch {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Invalid JSON' }));
       return;
     }
+
+    // Extract taskId before type-narrowing the rest of the request
+    const requestTaskId = parsed.taskId;
+    const data = parsed as QuestionRequestData;
 
     // Validate request using core handler
     const validation = permissionHandler.validateQuestionRequest(data);
@@ -223,7 +262,13 @@ export function startQuestionApiServer(): http.Server {
       return;
     }
 
-    const taskId = getActiveTaskId();
+    const { taskId, error } = resolveTaskIdFromRequest(requestTaskId, getActiveTaskId);
+    if (error) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error }));
+      return;
+    }
+
     if (!taskId) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'No active task' }));
