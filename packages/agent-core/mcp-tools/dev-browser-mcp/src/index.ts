@@ -470,7 +470,7 @@ async function startScreencast(pageName?: string): Promise<void> {
   }
 }
 
-async function stopScreencast(pageName?: string): Promise<void> {
+async function _stopScreencast(pageName?: string): Promise<void> {
   const fullPageName = getFullPageName(pageName);
 
   try {

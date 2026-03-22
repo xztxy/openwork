@@ -67,16 +67,18 @@ export class ScreencastController {
           },
         };
 
-        this.onFrame?.(frame);
-
-        // Acknowledge frame to allow CDP to send the next one
-        this.cdpSession
-          ?.send('Page.screencastFrameAck', {
-            sessionId: params.sessionId,
-          })
-          .catch((err) => {
-            console.error('[Screencast] Failed to ack frame:', err);
-          });
+        try {
+          this.onFrame?.(frame);
+        } finally {
+          // Acknowledge frame to allow CDP to send the next one (always, even if onFrame throws)
+          this.cdpSession
+            ?.send('Page.screencastFrameAck', {
+              sessionId: params.sessionId,
+            })
+            .catch((err) => {
+              console.error('[Screencast] Failed to ack frame:', err);
+            });
+        }
       });
 
       await this.cdpSession.send('Page.startScreencast', {
@@ -105,8 +107,8 @@ export class ScreencastController {
     }
 
     this.setStatus('stopping');
-    await this.cleanup();
     this.setStatus('idle');
+    await this.cleanup();
   }
 
   getStatus(): ScreencastStatus {

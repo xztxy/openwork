@@ -133,6 +133,14 @@ export const BrowserPreview = memo(function BrowserPreview({
   const handleStatus = useCallback(
     (event: { taskId: string; pageName: string; status: string; message?: string }) => {
       if (event.taskId !== taskId) return;
+      if (event.status === 'stopped') {
+        screencastStartedRef.current = false;
+        setStatus('idle');
+        return;
+      }
+      if (event.status === 'error') {
+        screencastStartedRef.current = false;
+      }
       setStatus(event.status as ViewStatus);
       if (event.message) {
         setError(event.message);

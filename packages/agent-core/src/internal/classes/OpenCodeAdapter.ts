@@ -156,7 +156,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
       for (const line of lines) {
         const trimmed = line.trim();
-        if (!trimmed) continue;
+        if (!trimmed) { continue; }
 
         try {
           const parsed = JSON.parse(trimmed) as {
@@ -389,10 +389,10 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
           .replace(/\x1B\][^\x07]*\x07/g, '')
           .replace(/\x1B\][^\x1B]*\x1B\\/g, '');
         /* eslint-enable no-control-regex */
-        if (cleanData.trim()) {
-          // Check for embedded browser-frame JSON lines before logging/parsing
-          this.checkForBrowserFrame(cleanData);
+        // Check for embedded browser-frame JSON lines (even for split PTY chunks)
+        this.checkForBrowserFrame(cleanData);
 
+        if (cleanData.trim()) {
           const truncated =
             cleanData.substring(0, LOG_TRUNCATION_LIMIT) +
             (cleanData.length > LOG_TRUNCATION_LIMIT ? '...' : '');
