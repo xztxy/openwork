@@ -15,6 +15,7 @@ import type {
 import type { McpConnector, ConnectorStatus, OAuthTokens } from '../common/types/connector.js';
 import type { SandboxConfig } from '../common/types/sandbox.js';
 import type { CloudBrowserConfig } from '../common/types/cloud-browser.js';
+import type { MessagingConfig } from '../common/types/messaging.js';
 
 /** Options for creating a Storage instance */
 export interface StorageOptions {
@@ -147,6 +148,10 @@ export interface AppSettingsAPI {
   getCloudBrowserConfig(): CloudBrowserConfig | null;
   /** Set cloud browser configuration */
   setCloudBrowserConfig(config: CloudBrowserConfig | null): void;
+  /** Get messaging integration configuration (ENG-684) */
+  getMessagingConfig(): MessagingConfig | null;
+  /** Set messaging integration configuration (ENG-684) */
+  setMessagingConfig(config: MessagingConfig | null): void;
   /** Get all application settings as a snapshot */
   getAppSettings(): AppSettings;
   /** Reset all application settings to defaults */
@@ -278,4 +283,5 @@ export type {
   ConnectorStatus,
   OAuthTokens,
   CloudBrowserConfig,
+  MessagingConfig,
 };

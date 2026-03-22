@@ -16,6 +16,7 @@ import { AboutTab } from '@/components/settings/AboutTab';
 import { DebugSection } from '@/components/settings/DebugSection';
 import { SandboxSection } from '@/components/settings/SandboxSection';
 import { ConnectorsPanel } from '@/components/settings/connectors';
+import { IntegrationsPanel } from '@/components/settings/integrations';
 import { CloudBrowsersPanel } from '@/components/settings/CloudBrowsersPanel';
 import {
   Key,
@@ -25,6 +26,7 @@ import {
   Plugs,
   FolderSimple,
   Globe,
+  ChatCircle,
 } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import logoImage from '/assets/logo-1.png';
@@ -35,6 +37,7 @@ const TABS = [
   { id: 'connectors' as const, labelKey: 'tabs.connectors', icon: Plugs },
   { id: 'browsers' as const, labelKey: 'tabs.browsers', icon: Globe },
   { id: 'workspaces' as const, labelKey: 'tabs.workspaces', icon: FolderSimple },
+  { id: 'integrations' as const, labelKey: 'tabs.integrations', icon: ChatCircle },
   { id: 'voice' as const, labelKey: 'tabs.voiceInput', icon: Microphone },
   { id: 'about' as const, labelKey: 'tabs.about', icon: Info },
 ];
@@ -57,6 +60,7 @@ interface SettingsDialogProps {
     | 'connectors'
     | 'browsers'
     | 'workspaces'
+    | 'integrations'
     | 'about';
 }
 
@@ -73,7 +77,7 @@ export function SettingsDialog({
   const [closeWarning, setCloseWarning] = useState(false);
   const [showModelError, setShowModelError] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    'providers' | 'voice' | 'skills' | 'connectors' | 'browsers' | 'workspaces' | 'about'
+    'providers' | 'voice' | 'skills' | 'connectors' | 'browsers' | 'workspaces' | 'integrations' | 'about'
   >(initialTab);
   const [appVersion, setAppVersion] = useState<string>('');
   const [skillsRefreshTrigger, setSkillsRefreshTrigger] = useState(0);
@@ -465,6 +469,13 @@ export function SettingsDialog({
               {activeTab === 'browsers' && (
                 <div className="space-y-6">
                   <CloudBrowsersPanel />
+                </div>
+              )}
+
+              {/* Integrations Tab (ENG-684) */}
+              {activeTab === 'integrations' && (
+                <div className="space-y-6">
+                  <IntegrationsPanel />
                 </div>
               )}
 

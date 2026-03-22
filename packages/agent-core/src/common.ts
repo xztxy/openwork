@@ -144,6 +144,18 @@ export type {
   CloudBrowserConfig,
 } from './common/types/cloud-browser.js';
 
+// Messaging integration types (ENG-684)
+export type {
+  MessagingPlatform,
+  MessagingProviderId,
+  MessagingConnectionStatus,
+  MessagingIntegrationConfig,
+  MessagingConfig,
+  MessagingQRCode,
+  IncomingMessage,
+  ChannelAdapter,
+} from './common/types/messaging.js';
+
 // Other types
 export type { TodoItem } from './common/types/todo.js';
 export type { LogLevel, LogSource, LogEntry } from './common/types/logging.js';

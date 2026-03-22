@@ -8,6 +8,7 @@ import { registerSandboxHandlers } from './settings-handlers/sandbox-handlers';
 import { registerAuthHandlers } from './settings-handlers/auth-handlers';
 import { registerOnboardingHandlers } from './settings-handlers/onboarding-handlers';
 import { registerOpenCodeHandlers } from './settings-handlers/opencode-handlers';
+import { registerWhatsAppHandlers } from './whatsapp-handlers';
 
 export function registerSettingsHandlers(): void {
   const storage = getStorage();
@@ -54,4 +55,6 @@ export function registerSettingsHandlers(): void {
   registerAuthHandlers(handle);
   registerOnboardingHandlers(handle);
   registerOpenCodeHandlers(handle);
+  // WhatsApp integration (ENG-684)
+  registerWhatsAppHandlers(handle);
 }

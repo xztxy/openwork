@@ -95,6 +95,22 @@ interface AccomplishAPI {
   getAppSettings(): Promise<{ debugMode: boolean; onboardingComplete: boolean; theme: string }>;
   getCloudBrowserConfig(): Promise<CloudBrowserConfig | null>;
   setCloudBrowserConfig(config: CloudBrowserConfig | null): Promise<void>;
+
+  // WhatsApp Integration (ENG-684)
+  // Contributed by aryan877 (PR #595) and kartikangiras (PR #455)
+  getWhatsAppConfig(): Promise<{
+    providerId: string;
+    enabled: boolean;
+    status: string;
+    phoneNumber?: string;
+    lastConnectedAt?: number;
+  } | null>;
+  connectWhatsApp(): Promise<void>;
+  disconnectWhatsApp(): Promise<void>;
+  setWhatsAppEnabled(enabled: boolean): Promise<void>;
+  onWhatsAppQR(callback: (qr: string) => void): () => void;
+  onWhatsAppStatus(callback: (status: string) => void): () => void;
+
   getOpenAiBaseUrl(): Promise<string>;
   setOpenAiBaseUrl(baseUrl: string): Promise<void>;
   getOpenAiOauthStatus(): Promise<{ connected: boolean; expires?: number }>;
