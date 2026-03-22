@@ -178,6 +178,7 @@ export const BrowserPreview = memo(function BrowserPreview({
   currentTool,
   className,
 }: BrowserPreviewProps) {
+  const contentId = `browser-preview-content-${taskId}`;
   const imgRef = useRef<HTMLImageElement>(null);
   const isPausedRef = useRef(false);
   const screencastStartedRef = useRef(false);
@@ -237,6 +238,9 @@ export const BrowserPreview = memo(function BrowserPreview({
       }
       // Dev-browser server may not be ready yet — reset so we can retry on next tool call
       screencastStartedRef.current = false;
+      setFrameData(null);
+      setCurrentUrl('');
+      setError(undefined);
       setStatus('idle');
     });
 
@@ -280,6 +284,9 @@ export const BrowserPreview = memo(function BrowserPreview({
       }
       if (event.status === 'stopped') {
         screencastStartedRef.current = false;
+        setFrameData(null);
+        setCurrentUrl('');
+        setError(undefined);
         setStatus('idle');
         return;
       }
@@ -351,7 +358,7 @@ export const BrowserPreview = memo(function BrowserPreview({
           className="text-muted-foreground hover:text-foreground transition-colors ml-1"
           aria-label={isCollapsed ? 'Expand' : 'Collapse'}
           aria-expanded={!isCollapsed}
-          aria-controls="browser-preview-content"
+          aria-controls={contentId}
         >
           {isCollapsed ? (
             <ChevronDown className="h-4 w-4" />
@@ -365,7 +372,7 @@ export const BrowserPreview = memo(function BrowserPreview({
       <AnimatePresence>
         {!isCollapsed && (
           <motion.div
-            id="browser-preview-content"
+            id={contentId}
             initial={{ height: 0 }}
             animate={{ height: 'auto' }}
             exit={{ height: 0 }}
