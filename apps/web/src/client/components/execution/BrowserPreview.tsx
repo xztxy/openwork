@@ -146,6 +146,16 @@ export const BrowserPreview = memo(function BrowserPreview({
   const [error, setError] = useState<string | undefined>();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
+  // Reset all preview state when taskId changes to avoid stale guard/frame bleed
+  useEffect(() => {
+    screencastStartedRef.current = false;
+    setFrameData(null);
+    setCurrentUrl('');
+    setStatus('idle');
+    setError(undefined);
+    setIsCollapsed(false);
+  }, [taskId]);
+
   // Pause frame updates when the tab is hidden
   useEffect(() => {
     const handleVisibility = () => {
