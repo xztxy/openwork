@@ -625,7 +625,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
         if (message.part.reason === 'error') {
           if (!this.hasCompleted) {
             this.hasCompleted = true;
-            const errorMessage = classifyProcessError(1, this.outputBuffer);
+            const errorMessage = classifyProcessError(undefined, this.outputBuffer);
             this.emit('complete', {
               status: 'error',
               sessionId: this.currentSessionId || undefined,

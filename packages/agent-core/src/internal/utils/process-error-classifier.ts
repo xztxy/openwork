@@ -5,7 +5,7 @@
  * Returns a human-readable error message that can be shown directly in the UI
  * instead of the generic "Task failed" text.
  */
-export function classifyProcessError(exitCode: number, outputBuffer: string): string {
+export function classifyProcessError(exitCode: number | undefined, outputBuffer: string): string {
   const output = outputBuffer.toLowerCase();
 
   // Quota / billing errors
@@ -72,5 +72,8 @@ export function classifyProcessError(exitCode: number, outputBuffer: string): st
     return 'Network error. Check your internet connection and try again.';
   }
 
-  return `Task failed (exit code ${exitCode}). Check the debug panel for details.`;
+  if (typeof exitCode === 'number') {
+    return `Task failed (exit code ${exitCode}). Check the debug panel for details.`;
+  }
+  return 'Task failed. Check the debug panel for details.';
 }

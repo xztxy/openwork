@@ -78,7 +78,11 @@ function ExecutionCompleteFooter({
   const canFavorite = FAVORITABLE_STATUSES.includes(rawStatus);
 
   const failedErrorMessage =
-    currentTask?.status === 'failed' ? currentTask.result?.error || 'Task failed' : null;
+    currentTask?.status === 'failed'
+      ? (currentTask.result?.errorMessage ??
+        currentTask.result?.error ??
+        tExecution('status.failed'))
+      : null;
 
   return (
     <div className="flex-shrink-0 border-t border-border bg-card/50 px-6 py-4 flex flex-col items-center gap-3">
