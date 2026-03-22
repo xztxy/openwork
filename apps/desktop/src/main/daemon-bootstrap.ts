@@ -33,6 +33,7 @@ import type {
   PermissionResponse,
 } from '@accomplish_ai/agent-core';
 import { app } from 'electron';
+import { getLogCollector } from './logging';
 
 let server: DaemonServer | null = null;
 let client: DaemonClient | null = null;
@@ -55,12 +56,16 @@ export async function bootstrapDaemon(options: DaemonBootstrapOptions): Promise<
   // Try child process mode
   try {
     const childClient = await spawnDaemonProcess();
-    console.log('[DaemonBootstrap] Running in child-process mode');
+    getLogCollector().logEnv('INFO', '[DaemonBootstrap] Running in child-process mode');
     client = childClient;
     mode = 'child-process';
     return childClient;
   } catch (err) {
-    console.warn('[DaemonBootstrap] Child process failed, falling back to in-process:', err);
+    getLogCollector().logEnv(
+      'WARN',
+      '[DaemonBootstrap] Child process failed, falling back to in-process',
+      { error: String(err) },
+    );
   }
 
   // Fallback: in-process mode (Step 2 behavior)
@@ -78,7 +83,7 @@ export function bootstrapInProcess(taskManager: TaskManagerAPI, storage: Storage
 
   client = new DaemonClient({ transport: clientTransport });
   mode = 'in-process';
-  console.log('[DaemonBootstrap] Running in in-process mode');
+  getLogCollector().logEnv('INFO', '[DaemonBootstrap] Running in in-process mode');
   return client;
 }
 
@@ -122,8 +127,14 @@ async function spawnDaemonProcess(): Promise<DaemonClient> {
       });
 
       daemonProcess.on('exit', (code) => {
-        console.log(`[DaemonBootstrap] Daemon process exited with code ${code}`);
+        getLogCollector().logEnv(
+          'INFO',
+          `[DaemonBootstrap] Daemon process exited with code ${code}`,
+        );
         daemonProcess = null;
+        // Reject immediately if promise hasn't resolved yet (pre-ready exit)
+        clearTimeout(timer);
+        reject(new Error(`Daemon process exited before becoming ready (code ${code})`));
       });
 
       // Wait for "ready" signal
@@ -140,7 +151,9 @@ async function spawnDaemonProcess(): Promise<DaemonClient> {
           const transport = createChildProcessTransport(daemonProcess!);
           const daemonClient = new DaemonClient({ transport });
 
-          console.log('[DaemonBootstrap] Daemon process ready, pid:', (msg as { pid: number }).pid);
+          getLogCollector().logEnv('INFO', '[DaemonBootstrap] Daemon process ready', {
+            pid: (msg as { pid: number }).pid,
+          });
           resolve(daemonClient);
         }
       };
@@ -203,7 +216,9 @@ function buildInProcessCallbacks(
     },
     onError: (error: Error) => {
       storage.updateTaskStatus(taskId, 'failed', new Date().toISOString());
-      console.error(`[DaemonBootstrap] Task ${taskId} error:`, error.message);
+      getLogCollector().logEnv('ERROR', `[DaemonBootstrap] Task ${taskId} error`, {
+        error: error.message,
+      });
     },
     onStatusChange: (status: TaskStatus) => {
       storage.updateTaskStatus(taskId, status, new Date().toISOString());
@@ -331,26 +346,54 @@ function registerInProcessHandlers(
     const { taskId: providedTaskId, config } = params;
     const taskId = providedTaskId ?? createTaskId();
 
+    // Persist a placeholder first so the task exists in storage before work begins
+    const placeholder = {
+      taskId,
+      status: 'pending' as const,
+      config,
+      createdAt: new Date().toISOString(),
+    };
+    storage.saveTask(placeholder as Parameters<StorageAPI['saveTask']>[0]);
+
     const callbacks = buildInProcessCallbacks(taskId, srv, storage);
-    const task = await taskManager.startTask(taskId, config, callbacks);
-    storage.saveTask(task);
-    return task;
+    try {
+      const task = await taskManager.startTask(taskId, config, callbacks);
+      storage.saveTask(task);
+      return task;
+    } catch (err) {
+      storage.updateTaskStatus(taskId, 'failed', new Date().toISOString());
+      throw err;
+    }
   });
 
   srv.registerMethod('session.resume', async (params) => {
     const { sessionId, prompt, existingTaskId } = params;
     const taskId = existingTaskId ?? createTaskId();
 
-    const callbacks = buildInProcessCallbacks(taskId, srv, storage);
-    const task = await taskManager.startTask(taskId, { prompt, sessionId }, callbacks);
-
-    if (existingTaskId) {
-      storage.updateTaskStatus(existingTaskId, task.status, new Date().toISOString());
-    } else {
-      storage.saveTask(task);
+    // Persist before starting so the task exists in storage if startTask fails
+    if (!existingTaskId) {
+      const placeholder = {
+        taskId,
+        status: 'pending' as const,
+        config: { prompt, sessionId },
+        createdAt: new Date().toISOString(),
+      };
+      storage.saveTask(placeholder as Parameters<StorageAPI['saveTask']>[0]);
     }
 
-    return task;
+    const callbacks = buildInProcessCallbacks(taskId, srv, storage);
+    try {
+      const task = await taskManager.startTask(taskId, { prompt, sessionId }, callbacks);
+      if (existingTaskId) {
+        storage.updateTaskStatus(existingTaskId, task.status, new Date().toISOString());
+      } else {
+        storage.saveTask(task);
+      }
+      return task;
+    } catch (err) {
+      storage.updateTaskStatus(taskId, 'failed', new Date().toISOString());
+      throw err;
+    }
   });
 
   srv.registerMethod('permission.respond', async (params) => {
@@ -358,13 +401,19 @@ function registerInProcessHandlers(
     const { taskId, decision, requestId, selectedOptions } = response as PermissionResponse;
 
     if (!taskManager.hasActiveTask(taskId)) {
-      console.warn(`[DaemonBootstrap] Permission response for inactive task ${taskId}`);
+      getLogCollector().logEnv('WARN', `[DaemonBootstrap] Permission response for inactive task`, {
+        taskId,
+      });
       return;
     }
 
     if (requestId) {
       // requestId-based responses are handled externally (permission-api); log and skip
-      console.warn(`[DaemonBootstrap] Unhandled requestId-based permission.respond: ${requestId}`);
+      getLogCollector().logEnv(
+        'WARN',
+        `[DaemonBootstrap] Unhandled requestId-based permission.respond`,
+        { requestId },
+      );
       return;
     }
 
@@ -395,7 +444,7 @@ function registerInProcessHandlers(
     }
   });
 
-  console.log('[DaemonBootstrap] In-process handlers registered');
+  getLogCollector().logEnv('INFO', '[DaemonBootstrap] In-process handlers registered');
 }
 
 /**
@@ -440,5 +489,5 @@ export function shutdownDaemon(): void {
   }
   disposeScheduler();
   mode = null;
-  console.log('[DaemonBootstrap] Daemon shut down');
+  getLogCollector().logEnv('INFO', '[DaemonBootstrap] Daemon shut down');
 }
