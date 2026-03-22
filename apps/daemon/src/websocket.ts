@@ -29,8 +29,29 @@ export function setupWebSocket(server: Server): WebSocketServer {
     console.log('[WebSocket] Client connected. Total:', wss!.clients.size);
 
     ws.on('message', (raw) => {
-      const msg = JSON.parse(raw.toString()) as ClientMessage;
-      messageHandlers.forEach((handler) => handler(msg));
+      let msg: ClientMessage;
+      try {
+        const parsed = JSON.parse(raw.toString()) as unknown;
+        if (
+          typeof parsed !== 'object' ||
+          parsed === null ||
+          typeof (parsed as Record<string, unknown>).type !== 'string'
+        ) {
+          console.warn('[WebSocket] Received message with invalid shape, ignoring');
+          return;
+        }
+        msg = parsed as ClientMessage;
+      } catch (err) {
+        console.warn('[WebSocket] Failed to parse incoming message:', err);
+        return;
+      }
+      messageHandlers.forEach((handler) => {
+        try {
+          handler(msg);
+        } catch (err) {
+          console.error('[WebSocket] Handler error:', err);
+        }
+      });
     });
 
     ws.on('close', () => {

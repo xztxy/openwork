@@ -20,8 +20,18 @@ import {
   listScheduledTasks,
   cancelScheduledTask,
   disposeScheduler,
+  mapResultToStatus,
+  createTaskId,
 } from '@accomplish_ai/agent-core';
-import type { TaskManagerAPI, StorageAPI } from '@accomplish_ai/agent-core';
+import type {
+  TaskManagerAPI,
+  StorageAPI,
+  TaskCallbacks,
+  TaskMessage,
+  TaskResult,
+  TaskStatus,
+  PermissionResponse,
+} from '@accomplish_ai/agent-core';
 import { app } from 'electron';
 
 let server: DaemonServer | null = null;
@@ -162,6 +172,48 @@ function getDaemonEntryPath(): string {
 }
 
 /**
+ * Build task lifecycle callbacks that forward events back through the in-process DaemonServer.
+ */
+function buildInProcessCallbacks(
+  taskId: string,
+  srv: DaemonServer,
+  storage: StorageAPI,
+): TaskCallbacks {
+  return {
+    onBatchedMessages: (messages: TaskMessage[]) => {
+      for (const msg of messages) {
+        storage.addTaskMessage(taskId, msg);
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      srv.notify('task.message' as any, { taskId, messages });
+    },
+    onProgress: (progress) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      srv.notify('task.progress' as any, { taskId, ...progress });
+    },
+    onPermissionRequest: (request) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      srv.notify('permission.request' as any, request);
+    },
+    onComplete: (result: TaskResult) => {
+      const taskStatus = mapResultToStatus(result);
+      storage.updateTaskStatus(taskId, taskStatus, new Date().toISOString());
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      srv.notify('task.complete' as any, { taskId, result });
+    },
+    onError: (error: Error) => {
+      storage.updateTaskStatus(taskId, 'failed', new Date().toISOString());
+      console.error(`[DaemonBootstrap] Task ${taskId} error:`, error.message);
+    },
+    onStatusChange: (status: TaskStatus) => {
+      storage.updateTaskStatus(taskId, status, new Date().toISOString());
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      srv.notify('task.statusChange' as any, { taskId, status });
+    },
+  };
+}
+
+/**
  * Register in-process daemon handlers (same as daemon/entry.ts).
  */
 function registerInProcessHandlers(
@@ -270,6 +322,57 @@ function registerInProcessHandlers(
   srv.registerMethod('storage.addTaskMessage', (params) => {
     if (params) {
       storage.addTaskMessage(params.taskId, params.message);
+    }
+  });
+
+  // ── Task execution ────────────────────────────────────────────────
+
+  srv.registerMethod('task.start', async (params) => {
+    const { taskId: providedTaskId, config } = params;
+    const taskId = providedTaskId ?? createTaskId();
+
+    const callbacks = buildInProcessCallbacks(taskId, srv, storage);
+    const task = await taskManager.startTask(taskId, config, callbacks);
+    storage.saveTask(task);
+    return task;
+  });
+
+  srv.registerMethod('session.resume', async (params) => {
+    const { sessionId, prompt, existingTaskId } = params;
+    const taskId = existingTaskId ?? createTaskId();
+
+    const callbacks = buildInProcessCallbacks(taskId, srv, storage);
+    const task = await taskManager.startTask(taskId, { prompt, sessionId }, callbacks);
+
+    if (existingTaskId) {
+      storage.updateTaskStatus(existingTaskId, task.status, new Date().toISOString());
+    } else {
+      storage.saveTask(task);
+    }
+
+    return task;
+  });
+
+  srv.registerMethod('permission.respond', async (params) => {
+    const { response } = params;
+    const { taskId, decision, requestId, selectedOptions } = response as PermissionResponse;
+
+    if (!taskManager.hasActiveTask(taskId)) {
+      console.warn(`[DaemonBootstrap] Permission response for inactive task ${taskId}`);
+      return;
+    }
+
+    if (requestId) {
+      // requestId-based responses are handled externally (permission-api); log and skip
+      console.warn(`[DaemonBootstrap] Unhandled requestId-based permission.respond: ${requestId}`);
+      return;
+    }
+
+    if (decision === 'allow') {
+      const message = selectedOptions?.join(', ') || 'yes';
+      await taskManager.sendResponse(taskId, message);
+    } else {
+      await taskManager.sendResponse(taskId, 'no');
     }
   });
 
