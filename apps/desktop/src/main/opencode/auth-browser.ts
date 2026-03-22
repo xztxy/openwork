@@ -113,13 +113,18 @@ export class OAuthBrowserFlow {
         }
 
         // Detect known CLI installation error patterns and surface a friendly message
-        const isInstallError =
-          buffer.includes('package manager failed') ||
-          buffer.includes('failed to install') ||
-          buffer.includes('opencode-darwin') ||
-          buffer.includes('opencode-linux') ||
-          buffer.includes('opencode-win32') ||
-          buffer.includes('manually installing');
+        const normalizedBuffer = buffer.toLowerCase();
+        const installErrorPatterns = [
+          'package manager failed',
+          'failed to install',
+          'opencode-darwin',
+          'opencode-linux',
+          'opencode-win32',
+          'manually installing',
+        ];
+        const isInstallError = installErrorPatterns.some((pattern) =>
+          normalizedBuffer.includes(pattern),
+        );
 
         if (isInstallError) {
           reject(

@@ -50,7 +50,10 @@ export function registerAuthHandlers(handle: IpcHandler): void {
           'OpenCode CLI installation issue detected. Please try restarting the app or reinstalling from accomplish.ai',
         );
       }
-      throw err;
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error(String(err));
     }
   });
 
