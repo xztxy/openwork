@@ -25,7 +25,9 @@ export function registerWhatsAppHandlers(handle: IpcHandler): void {
   handle('integrations:whatsapp:get-config', async (_event: IpcMainInvokeEvent) => {
     const config = storage.getMessagingConfig();
     const wa = config?.integrations?.whatsapp;
-    if (!wa) return null;
+    if (!wa) {
+      return null;
+    }
     return {
       providerId: 'whatsapp',
       enabled: wa.enabled,
@@ -93,6 +95,9 @@ export function registerWhatsAppHandlers(handle: IpcHandler): void {
     const existingBridge = getActiveWhatsAppBridge();
     if (!existingBridge) {
       const { bridge } = wireTaskBridge(service);
+      bridge.setEnabled(
+        storage.getMessagingConfig()?.integrations?.whatsapp?.enabled ?? true,
+      );
       wireStatusListeners(service, storage, bridge);
       setActiveWhatsAppBridge(bridge);
     }

@@ -34,15 +34,21 @@ export function WhatsAppCard() {
 
   // Auto-clear confirm disconnect after 3 seconds
   useEffect(() => {
-    if (!confirmDisconnect) return;
+    if (!confirmDisconnect) {
+      return;
+    }
     const timer = setTimeout(() => setConfirmDisconnect(false), 3000);
     return () => clearTimeout(timer);
   }, [confirmDisconnect]);
 
   useEffect(() => {
     return () => {
-      if (qrTimerRef.current) clearInterval(qrTimerRef.current);
-      if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
+      if (qrTimerRef.current) {
+        clearInterval(qrTimerRef.current);
+      }
+      if (connectTimeoutRef.current) {
+        clearTimeout(connectTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -122,10 +128,14 @@ export function WhatsAppCard() {
     setError(null);
     setQrCode(null);
 
-    if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
+    if (connectTimeoutRef.current) {
+      clearTimeout(connectTimeoutRef.current);
+    }
     connectTimeoutRef.current = setTimeout(() => {
       setConnecting((prev) => {
-        if (prev) setError('Connection timed out. Please try again.');
+        if (prev) {
+          setError('Connection timed out. Please try again.');
+        }
         return false;
       });
     }, 30_000);
@@ -234,11 +244,15 @@ export function WhatsAppCard() {
                 : 'border-border hover:bg-muted'
             }`}
           >
-            {disconnecting
-              ? 'Disconnecting…'
-              : confirmDisconnect
-                ? 'Confirm Disconnect?'
-                : 'Disconnect'}
+            {(() => {
+              if (disconnecting) {
+                return 'Disconnecting…';
+              }
+              if (confirmDisconnect) {
+                return 'Confirm Disconnect?';
+              }
+              return 'Disconnect';
+            })()}
           </button>
         </div>
       )}

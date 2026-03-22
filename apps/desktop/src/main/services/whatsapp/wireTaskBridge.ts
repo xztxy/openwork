@@ -172,6 +172,17 @@ export function wireTaskBridge(service: WhatsAppService): { bridge: TaskBridge }
       );
     } catch (err) {
       console.error('[WhatsApp] Task creation failed:', err);
+      storage.saveTask({
+        id: taskId,
+        prompt,
+        status: 'failed',
+        createdAt: new Date().toISOString(),
+        messages: [],
+        result: {
+          status: 'error',
+          error: err instanceof Error ? err.message : String(err),
+        },
+      });
       await service
         .sendMessage(senderId, 'Sorry, I could not process your request.')
         .catch(() => {});

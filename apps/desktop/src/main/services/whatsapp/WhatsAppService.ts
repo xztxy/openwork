@@ -57,6 +57,7 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
   private socket: any | null = null;
   private status: MessagingConnectionStatus = 'disconnected';
   private reconnectAttempts = 0;
+  private reconnectScheduled = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private authStatePath: string;
   private disposed = false;
@@ -85,8 +86,8 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
       return;
     }
 
+    this.reconnectScheduled = false;
     this.setStatus('connecting');
-    this.reconnectAttempts = 0;
 
     try {
       const baileys = await import('@whiskeysockets/baileys');
@@ -193,10 +194,14 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
       );
 
       this.socket.ev.on('messages.upsert', (upsert: { type: string; messages: unknown[] }) => {
-        if (upsert.type !== 'notify') return;
+        if (upsert.type !== 'notify') {
+          return;
+        }
 
         for (const msg of upsert.messages as Array<Record<string, unknown>>) {
-          if (!msg.message) continue;
+          if (!msg.message) {
+            continue;
+          }
 
           const message = msg.message as Record<string, unknown>;
           const extendedText = message.extendedTextMessage as Record<string, unknown> | undefined;
@@ -213,7 +218,9 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
             (docMsg?.title as string) ||
             '';
 
-          if (!text.trim()) continue;
+          if (!text.trim()) {
+            continue;
+          }
 
           const key = msg.key as Record<string, unknown>;
           const senderId = (key.remoteJid as string) || '';
@@ -295,9 +302,7 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
     }
 
     this.reconnectAttempts++;
-    // Cast to satisfy strict MessagingConnectionStatus union — "reconnecting" is an internal transient
-    (this as EventEmitter).emit('status', 'connecting');
-    this.status = 'connecting';
+    this.reconnectScheduled = true;
 
     const delay = INITIAL_RECONNECT_DELAY_MS * Math.pow(2, this.reconnectAttempts - 1);
     console.log(

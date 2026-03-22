@@ -56,18 +56,25 @@ export function QRCodeDisplay({ qrString, expiresAt, onExpired, size = 200 }: QR
   const [expired, setExpired] = useState(false);
 
   useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | null = null;
     const tick = () => {
       const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
       setTimeLeft(remaining);
       if (remaining === 0) {
         setExpired(true);
         onExpired?.();
-        clearInterval(interval);
+        if (interval) {
+          clearInterval(interval);
+        }
       }
     };
     tick(); // run immediately on mount to avoid 1s delay
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
+    interval = setInterval(tick, 1000);
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
   }, [expiresAt, onExpired]);
 
   const cells = generateQRPattern(qrString, 25);
