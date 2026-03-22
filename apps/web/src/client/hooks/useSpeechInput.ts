@@ -128,12 +128,13 @@ export function useSpeechInput(options: UseSpeechInputOptions = {}): UseSpeechIn
     }
   }, []);
 
-  // Check if speech input is configured
+  // Check if speech input is configured (run once on mount)
   useEffect(() => {
     accomplish.speechIsConfigured().then((configured) => {
       setState((prev) => ({ ...prev, isConfigured: configured }));
     });
-  }, [accomplish]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * Clean up recording resources
