@@ -95,9 +95,7 @@ export function registerWhatsAppHandlers(handle: IpcHandler): void {
     const existingBridge = getActiveWhatsAppBridge();
     if (!existingBridge) {
       const { bridge } = wireTaskBridge(service);
-      bridge.setEnabled(
-        storage.getMessagingConfig()?.integrations?.whatsapp?.enabled ?? true,
-      );
+      bridge.setEnabled(storage.getMessagingConfig()?.integrations?.whatsapp?.enabled ?? true);
       wireStatusListeners(service, storage, bridge);
       setActiveWhatsAppBridge(bridge);
     }

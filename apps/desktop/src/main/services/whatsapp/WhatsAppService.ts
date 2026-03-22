@@ -82,7 +82,7 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
       throw new Error('WhatsApp service has been disposed');
     }
 
-    if (this.status === 'connecting') {
+    if (this.status === 'connecting' && !this.reconnectScheduled) {
       return;
     }
 
@@ -179,6 +179,7 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
           if (connection === 'open') {
             this.qrCode = null;
             this.reconnectAttempts = 0;
+            this.reconnectScheduled = false;
             this.setStatus('connected');
 
             const user = this.socket?.user;
