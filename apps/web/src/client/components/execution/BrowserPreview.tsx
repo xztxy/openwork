@@ -52,6 +52,14 @@ function StatusIndicator({ status }: { status: ViewStatus }) {
       </span>
     );
   }
+  if (status === 'stopping') {
+    return (
+      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        Disconnecting…
+      </span>
+    );
+  }
   if (status === 'error') {
     return (
       <span className="flex items-center gap-1 text-xs text-destructive">
@@ -94,6 +102,40 @@ function renderStatusContent(
             </div>
           </div>
         )}
+      </motion.div>
+    );
+  }
+
+  if (status === 'starting') {
+    return (
+      <motion.div
+        key="starting"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 flex items-center justify-center"
+      >
+        <div className="flex items-center gap-2 text-white/80">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span className="text-sm">Connecting…</span>
+        </div>
+      </motion.div>
+    );
+  }
+
+  if (status === 'stopping') {
+    return (
+      <motion.div
+        key="stopping"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 flex items-center justify-center"
+      >
+        <div className="flex items-center gap-2 text-muted-foreground/80">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span className="text-sm">Disconnecting…</span>
+        </div>
       </motion.div>
     );
   }
@@ -161,8 +203,11 @@ export const BrowserPreview = memo(function BrowserPreview({
     const handleVisibility = () => {
       isPausedRef.current = document.hidden;
     };
+    handleVisibility();
     document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   // Auto-start screencast when a browser_* tool becomes active
@@ -182,14 +227,22 @@ export const BrowserPreview = memo(function BrowserPreview({
       return;
     }
 
+    let cancelled = false;
     screencastStartedRef.current = true;
     setStatus('starting');
 
     api.startBrowserPreview(taskId).catch(() => {
+      if (cancelled) {
+        return;
+      }
       // Dev-browser server may not be ready yet — reset so we can retry on next tool call
       screencastStartedRef.current = false;
       setStatus('idle');
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, [currentTool, taskId]);
 
   // Subscribe to IPC events from the main process
