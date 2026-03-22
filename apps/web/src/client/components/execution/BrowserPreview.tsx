@@ -183,6 +183,7 @@ export const BrowserPreview = memo(function BrowserPreview({
   const isPausedRef = useRef(false);
   const screencastStartedRef = useRef(false);
   const isCollapsedRef = useRef(false);
+  const statusRef = useRef<ViewStatus>('idle');
 
   const [frameData, setFrameData] = useState<string | null>(null);
   const [currentUrl, setCurrentUrl] = useState<string>('');
@@ -193,6 +194,7 @@ export const BrowserPreview = memo(function BrowserPreview({
   // Reset all preview state when taskId changes to avoid stale guard/frame bleed
   useEffect(() => {
     screencastStartedRef.current = false;
+    statusRef.current = 'idle';
     setFrameData(null);
     setCurrentUrl('');
     setStatus('idle');
@@ -236,6 +238,7 @@ export const BrowserPreview = memo(function BrowserPreview({
 
     let cancelled = false;
     screencastStartedRef.current = true;
+    statusRef.current = 'starting';
     setStatus('starting');
 
     api.startBrowserPreview(taskId).catch(() => {
@@ -244,6 +247,7 @@ export const BrowserPreview = memo(function BrowserPreview({
       }
       // Dev-browser server may not be ready yet — reset so we can retry on next tool call
       screencastStartedRef.current = false;
+      statusRef.current = 'idle';
       setFrameData(null);
       setCurrentUrl('');
       setError(undefined);
@@ -264,11 +268,19 @@ export const BrowserPreview = memo(function BrowserPreview({
       if (isPausedRef.current || isCollapsedRef.current) {
         return;
       }
-      setFrameData(event.frame);
-      if (imgRef.current) {
-        imgRef.current.src = `data:image/jpeg;base64,${event.frame}`;
+      if (statusRef.current === 'streaming') {
+        // Avoid re-render: write directly to the img element for subsequent frames
+        if (imgRef.current) {
+          imgRef.current.src = `data:image/jpeg;base64,${event.frame}`;
+        }
+      } else {
+        setFrameData(event.frame);
+        if (imgRef.current) {
+          imgRef.current.src = `data:image/jpeg;base64,${event.frame}`;
+        }
+        statusRef.current = 'streaming';
+        setStatus('streaming');
       }
-      setStatus('streaming');
     },
     [taskId],
   );
@@ -290,6 +302,7 @@ export const BrowserPreview = memo(function BrowserPreview({
       }
       if (event.status === 'stopped') {
         screencastStartedRef.current = false;
+        statusRef.current = 'idle';
         setFrameData(null);
         setCurrentUrl('');
         setError(undefined);
@@ -299,6 +312,7 @@ export const BrowserPreview = memo(function BrowserPreview({
       if (event.status === 'error') {
         screencastStartedRef.current = false;
       }
+      statusRef.current = event.status as ViewStatus;
       setStatus(event.status as ViewStatus);
       if (event.message) {
         setError(event.message);
