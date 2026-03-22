@@ -108,6 +108,23 @@ describe('classifyProcessError', () => {
     });
   });
 
+  describe('model not found patterns', () => {
+    it('matches model_not_found', () => {
+      const result = classifyProcessError(1, 'Error: model_not_found for gpt-5');
+      expect(result).toContain('Model not found');
+    });
+
+    it('matches model not found', () => {
+      const result = classifyProcessError(1, 'model not found in registry');
+      expect(result).toContain('Model not found');
+    });
+
+    it('matches no such model', () => {
+      const result = classifyProcessError(1, 'no such model: claude-4-opus');
+      expect(result).toContain('Model not found');
+    });
+  });
+
   describe('context length patterns', () => {
     it('matches context_length_exceeded', () => {
       const result = classifyProcessError(1, 'Error: context_length_exceeded for this model');

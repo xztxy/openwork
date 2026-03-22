@@ -115,6 +115,14 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   private startTaskCalled: boolean = false;
   private outputBuffer: string = '';
   private static readonly OUTPUT_BUFFER_MAX = 4096;
+
+  private appendToOutputBuffer(data: string): void {
+    if (data.length >= OpenCodeAdapter.OUTPUT_BUFFER_MAX) {
+      this.outputBuffer = data.slice(-OpenCodeAdapter.OUTPUT_BUFFER_MAX);
+    } else {
+      this.outputBuffer = (this.outputBuffer + data).slice(-OpenCodeAdapter.OUTPUT_BUFFER_MAX);
+    }
+  }
   private options: AdapterOptions;
   private sandboxProvider: SandboxProvider;
   private sandboxConfig: SandboxConfig;
@@ -330,13 +338,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
           console.log('[OpenCode CLI stdout]:', truncated);
           this.emit('debug', { type: 'stdout', message: cleanData });
 
-          if (cleanData.length >= OpenCodeAdapter.OUTPUT_BUFFER_MAX) {
-            this.outputBuffer = cleanData.slice(-OpenCodeAdapter.OUTPUT_BUFFER_MAX);
-          } else {
-            this.outputBuffer = (this.outputBuffer + cleanData).slice(
-              -OpenCodeAdapter.OUTPUT_BUFFER_MAX,
-            );
-          }
+          this.appendToOutputBuffer(cleanData);
 
           this.streamParser.feed(cleanData);
         }
@@ -780,11 +782,10 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       return;
     }
 
-    if (!this.hasCompleted) {
-      if (code !== null && code !== 0) {
-        const errorMessage = classifyProcessError(code, this.outputBuffer);
-        this.emit('error', new Error(errorMessage));
-      }
+    if (!this.hasCompleted && code !== 0) {
+      // Treat null (abnormal PTY termination) and non-zero codes both as errors
+      const errorMessage = classifyProcessError(code ?? undefined, this.outputBuffer);
+      this.emit('error', new Error(errorMessage));
     }
 
     this.currentTaskId = null;
@@ -855,13 +856,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
         console.log('[OpenCode CLI stdout]:', truncated);
         this.emit('debug', { type: 'stdout', message: cleanData });
 
-        if (cleanData.length >= OpenCodeAdapter.OUTPUT_BUFFER_MAX) {
-          this.outputBuffer = cleanData.slice(-OpenCodeAdapter.OUTPUT_BUFFER_MAX);
-        } else {
-          this.outputBuffer = (this.outputBuffer + cleanData).slice(
-            -OpenCodeAdapter.OUTPUT_BUFFER_MAX,
-          );
-        }
+        this.appendToOutputBuffer(cleanData);
 
         this.streamParser.feed(cleanData);
       }

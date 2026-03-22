@@ -80,8 +80,13 @@ function ExecutionCompleteFooter({
   const failedErrorMessage =
     currentTask?.status === 'failed' ? (currentTask.result?.error ?? null) : null;
 
+  // Only show the alert when the error contains actionable detail from the classifier.
+  // We check for the debug-panel fallback suffix rather than comparing to a localized
+  // string, making this locale-independent.
   const showFailedAlert =
-    failedErrorMessage !== null && failedErrorMessage !== tExecution('status.failed');
+    failedErrorMessage !== null &&
+    failedErrorMessage.length > 0 &&
+    !failedErrorMessage.includes('Check the debug panel for details');
 
   return (
     <div className="flex-shrink-0 border-t border-border bg-card/50 px-6 py-4 flex flex-col items-center gap-3">
