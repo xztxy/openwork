@@ -87,6 +87,8 @@ export interface TaskResult {
   error?: string;
   pauseReason?: 'auth';
   pauseAction?: TaskPauseAction;
+  /** Human-readable error message surfaced from provider quota/rate-limit/auth errors */
+  errorMessage?: string;
 }
 
 export type StartupStage =

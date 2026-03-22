@@ -77,11 +77,25 @@ function ExecutionCompleteFooter({
   const statusLabel = rawStatus ? tExecution(statusLabelKey) : '';
   const canFavorite = FAVORITABLE_STATUSES.includes(rawStatus);
 
+  const failedErrorMessage =
+    currentTask?.status === 'failed' ? currentTask.result?.error || 'Task failed' : null;
+
   return (
     <div className="flex-shrink-0 border-t border-border bg-card/50 px-6 py-4 flex flex-col items-center gap-3">
       <p className="text-sm text-muted-foreground">
         {tExecution('taskStatus', { status: statusLabel })}
       </p>
+      {failedErrorMessage && (
+        <Alert
+          variant="destructive"
+          className="py-2 px-3 flex items-center gap-2 [&>svg]:static [&>svg~*]:pl-0 max-w-md w-full"
+        >
+          <WarningCircle className="h-4 w-4 shrink-0" />
+          <AlertDescription className="text-xs leading-tight">
+            {failedErrorMessage}
+          </AlertDescription>
+        </Alert>
+      )}
       <div className="flex items-center gap-2">
         {canFavorite && (
           <StarButton
