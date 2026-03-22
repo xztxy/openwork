@@ -8,7 +8,11 @@
     "useSkills": "Utiliser des compétences",
     "connectors": "Connecteurs",
     "noConnectors": "Aucun connecteur",
-    "manage": "Gérer"
+    "manage": "Gérer",
+    "dropFilesHere": "Déposez les fichiers ici pour les joindre",
+    "dropFilesHint": "(max {max} fichiers, {size}Mo chacun)",
+    "fileTooLarge": "{name} dépasse la limite de taille {limit}",
+    "tooManyFiles": "Maximum {max} fichiers autorisés"
   },
   "examplePrompts": "Exemples de requêtes",
   "useCases": {

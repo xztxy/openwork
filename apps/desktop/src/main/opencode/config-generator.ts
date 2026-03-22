@@ -9,6 +9,7 @@ import {
   isTokenExpired,
   refreshAccessToken,
 } from '@accomplish_ai/agent-core';
+import type { BrowserConfig } from '@accomplish_ai/agent-core';
 import { getApiKey, getAllApiKeys } from '../store/secureStorage';
 import { getStorage } from '../store/storage';
 import { getBundledNodePaths } from '../utils/bundled-node';
@@ -132,6 +133,20 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
     });
   }
 
+  // Build browser config from cloud browser settings
+  const cloudBrowserConfig = storage.getCloudBrowserConfig();
+  let browserConfig: BrowserConfig | undefined;
+  if (cloudBrowserConfig?.activeProvider) {
+    const providerCfg = cloudBrowserConfig.providers[cloudBrowserConfig.activeProvider];
+    if (providerCfg?.endpoint) {
+      browserConfig = {
+        mode: 'remote',
+        cdpEndpoint: providerCfg.endpoint,
+        cdpHeaders: providerCfg.apiKey ? { 'X-CDP-Secret': providerCfg.apiKey } : undefined,
+      };
+    }
+  }
+
   const result = generateConfig({
     platform: process.platform,
     mcpToolsPath,
@@ -146,6 +161,7 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
     model: modelOverride?.model,
     smallModel: modelOverride?.smallModel,
     connectors: connectors.length > 0 ? connectors : undefined,
+    browser: browserConfig,
   });
 
   process.env.OPENCODE_CONFIG = result.configPath;

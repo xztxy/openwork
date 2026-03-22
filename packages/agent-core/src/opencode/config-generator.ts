@@ -2,6 +2,8 @@ import path from 'path';
 import fs from 'fs';
 import type { ProviderId } from '../common/types/providerSettings.js';
 import type { Skill } from '../common/types/skills.js';
+import { OPENCODE_SLACK_MCP_SERVER_URL, OPENCODE_SLACK_MCP_CLIENT_ID } from './auth.js';
+import { MCP_TOOL_TIMEOUT_MS } from '../common/constants.js';
 
 export const ACCOMPLISH_AGENT_NAME = 'accomplish';
 
@@ -81,6 +83,13 @@ interface McpServerConfig {
   enabled?: boolean;
   environment?: Record<string, string>;
   timeout?: number;
+  oauth?:
+    | false
+    | {
+        clientId?: string;
+        clientSecret?: string;
+        scope?: string;
+      };
 }
 
 interface AgentConfig {
@@ -169,6 +178,7 @@ CORRECT: Call start_task FIRST, update todos as you work, then complete_task
 <capabilities>
 When users ask about your capabilities, mention:
 {{BROWSER_CAPABILITY}}- **File Management**: Sort, rename, and move files based on content or rules you give it
+- **Slack**: Use the built-in Slack connector for Slack work. When authenticated, read Slack context and send messages to channels, threads, or direct messages
 </capabilities>
 
 <important name="filesystem-rules">
@@ -237,6 +247,19 @@ See the ask-user-question MCP tool for full documentation and examples.
 
 <behavior>
 - Use AskUserQuestion tool for clarifying questions before starting ambiguous tasks
+- For Slack-related requests, use the Slack MCP tools that are actually available at runtime instead of drafting a message and pretending it was sent
+- Typical Slack work includes sending a message, replying in a thread, checking recent Slack context before replying, and finding the right channel or conversation when the user gives enough detail
+- Never invent Slack tool names or assume Slack authentication already exists
+- For Slack-related requests, the built-in Slack connector is the default path. Prefer it over manual Slack instructions whenever possible
+- Never answer a Slack access request with generic advice like "open Slack directly" or "check Slack manually" unless the user explicitly asks for a manual workaround
+- If the user asks you to connect or authenticate Slack, use request-connector-auth_request_connector_auth instead of ask-user-question_AskUserQuestion
+- If Slack authentication is required or Slack tools are unavailable, stop and call request-connector-auth_request_connector_auth before you continue
+- For Slack auth pauses, use providerId: "slack", label: "Authenticate Slack", pendingLabel: "Authenticating Slack...", and successText: "Slack is connected."
+- In the message you pass to request-connector-auth_request_connector_auth, briefly explain why you need Slack and tell the user they can also authenticate manually via Settings -> Connectors -> Slack by clicking the Authenticate button on the Slack card
+- After calling request-connector-auth_request_connector_auth, stop and wait for the task to resume. Do not continue working until the user authenticates Slack
+- If the user wants you to send a Slack message but they did not specify the destination clearly enough, ask a clarifying question before sending anything
+- Do not claim a Slack message was sent unless the Slack MCP tool confirms success
+- After a successful Slack send, briefly confirm where you sent it and summarize what you sent
 {{BROWSER_BEHAVIOR}}- Don't announce server checks or startup - proceed directly to the task
 - Only use AskUserQuestion when you genuinely need user input or decisions
 
@@ -362,6 +385,13 @@ Use empty array [] if no skills apply to your task.
   }
 
   const mcpServers: Record<string, McpServerConfig> = {
+    slack: {
+      type: 'remote',
+      url: OPENCODE_SLACK_MCP_SERVER_URL,
+      oauth: {
+        clientId: OPENCODE_SLACK_MCP_CLIENT_ID,
+      },
+    },
     'file-permission': {
       type: 'local',
       command: resolveMcpCommand(mcpToolsPath, 'file-permission', 'dist/index.mjs', nodeExe),
@@ -379,6 +409,12 @@ Use empty array [] if no skills apply to your task.
         QUESTION_API_PORT: String(questionApiPort),
       },
       timeout: 600000, // 10 minutes — user needs time to read and respond
+    },
+    'request-connector-auth': {
+      type: 'local',
+      command: resolveMcpCommand(mcpToolsPath, 'request-connector-auth', 'dist/index.mjs', nodeExe),
+      enabled: true,
+      timeout: MCP_TOOL_TIMEOUT_MS,
     },
     'complete-task': {
       type: 'local',
@@ -612,6 +648,9 @@ export function buildCliArgs(options: BuildCliArgsOptions): string[] {
       // Model IDs stored as "vertex/{publisher}/{model}" — strip publisher for @ai-sdk/google-vertex
       const modelId = selectedModel.model.replace(/^vertex\/[^/]+\//, '');
       args.push('--model', `vertex/${modelId}`);
+    } else if (selectedModel.provider === 'custom') {
+      const modelId = selectedModel.model.replace(/^custom\//, '');
+      args.push('--model', `custom/${modelId}`);
     } else {
       args.push('--model', selectedModel.model);
     }

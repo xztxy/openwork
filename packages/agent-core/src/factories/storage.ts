@@ -43,6 +43,8 @@ import {
   setOpenAiBaseUrl,
   getTheme,
   setTheme,
+  getCloudBrowserConfig,
+  setCloudBrowserConfig,
   getAppSettings,
   clearAppSettings,
   getSandboxConfig,
@@ -97,9 +99,9 @@ export function createStorage(options: StorageOptions = {}): StorageAPI {
 
   return {
     // Task History
-    getTasks: () => getTasks(),
+    getTasks: (workspaceId) => getTasks(workspaceId),
     getTask: (taskId) => getTask(taskId),
-    saveTask: (task) => saveTask(task),
+    saveTask: (task, workspaceId) => saveTask(task, workspaceId),
     updateTaskStatus: (taskId, status, completedAt) =>
       updateTaskStatus(taskId, status, completedAt),
     addTaskMessage: (taskId, message) => addTaskMessage(taskId, message),
@@ -134,6 +136,8 @@ export function createStorage(options: StorageOptions = {}): StorageAPI {
     setOpenAiBaseUrl: (baseUrl) => setOpenAiBaseUrl(baseUrl),
     getTheme: () => getTheme(),
     setTheme: (theme) => setTheme(theme),
+    getCloudBrowserConfig: () => getCloudBrowserConfig(),
+    setCloudBrowserConfig: (config) => setCloudBrowserConfig(config),
     getAppSettings: () => getAppSettings(),
     clearAppSettings: () => clearAppSettings(),
     getSandboxConfig: () => getSandboxConfig(),

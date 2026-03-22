@@ -7,6 +7,7 @@ import type {
 } from '../../common/types/provider.js';
 import type { ThemePreference } from '../../types/storage.js';
 import type { SandboxConfig } from '../../common/types/sandbox.js';
+import type { CloudBrowserConfig } from '../../common/types/cloud-browser.js';
 import { DEFAULT_SANDBOX_CONFIG } from '../../common/types/sandbox.js';
 import { getDatabase } from '../database.js';
 import { safeParseJsonWithFallback } from '../../utils/json.js';
@@ -23,6 +24,7 @@ interface AppSettingsRow {
   openai_base_url: string | null;
   theme: string;
   sandbox_config: string;
+  cloud_browser_config: string | null;
 }
 
 export interface AppSettings {
@@ -194,6 +196,23 @@ export function setSandboxConfig(config: SandboxConfig): void {
   db.prepare('UPDATE app_settings SET sandbox_config = ? WHERE id = 1').run(JSON.stringify(config));
 }
 
+export function getCloudBrowserConfig(): CloudBrowserConfig | null {
+  const row = getRow();
+  if (!row.cloud_browser_config) return null;
+  try {
+    return JSON.parse(row.cloud_browser_config) as CloudBrowserConfig;
+  } catch {
+    return null;
+  }
+}
+
+export function setCloudBrowserConfig(config: CloudBrowserConfig | null): void {
+  const db = getDatabase();
+  db.prepare('UPDATE app_settings SET cloud_browser_config = ? WHERE id = 1').run(
+    config ? JSON.stringify(config) : null,
+  );
+}
+
 export function getAppSettings(): AppSettings {
   const row = getRow();
   return {
@@ -224,7 +243,8 @@ export function clearAppSettings(): void {
       lmstudio_config = NULL,
       openai_base_url = '',
       theme = 'system',
-      sandbox_config = '${JSON.stringify(DEFAULT_SANDBOX_CONFIG)}'
+      sandbox_config = '${JSON.stringify(DEFAULT_SANDBOX_CONFIG)}',
+      cloud_browser_config = NULL
     WHERE id = 1`,
   ).run();
 }

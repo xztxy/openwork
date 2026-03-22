@@ -26,6 +26,7 @@ import { initThoughtStreamApi, startThoughtStreamServer } from './thought-stream
 import type { ProviderId } from '@accomplish_ai/agent-core';
 import { disposeTaskManager, cleanupVertexServiceAccountKey } from './opencode';
 import { oauthBrowserFlow } from './opencode/auth-browser';
+import { slackMcpOAuthFlow } from './opencode/slack-auth';
 import { migrateLegacyData } from './store/legacyMigration';
 import {
   initializeStorage,
@@ -34,6 +35,7 @@ import {
   resetStorageSingleton,
 } from './store/storage';
 import { getApiKey, clearSecureStorage } from './store/secureStorage';
+import * as workspaceManager from './store/workspaceManager';
 import { initializeLogCollector, shutdownLogCollector, getLogCollector } from './logging';
 import { skillsManager } from './skills';
 
@@ -272,6 +274,13 @@ if (!gotTheLock) {
     }
 
     try {
+      workspaceManager.initialize();
+    } catch (err) {
+      console.error('[Main] Workspace initialization failed:', err);
+      throw err;
+    }
+
+    try {
       const storage = getStorage();
       const settings = storage.getProviderSettings();
       for (const [id, provider] of Object.entries(settings.connectedProviders)) {
@@ -341,6 +350,8 @@ app.on('before-quit', () => {
   disposeTaskManager(); // Also cleans up proxies internally
   cleanupVertexServiceAccountKey();
   oauthBrowserFlow.dispose();
+  slackMcpOAuthFlow.dispose();
+  workspaceManager.close();
   closeStorage();
   shutdownLogCollector();
 });

@@ -20,7 +20,13 @@ import {
 } from '../storage/repositories/index.js';
 
 /** Providers that use the @ai-sdk/openai-compatible adapter */
-const OPENAI_COMPATIBLE_PROVIDER_IDS = ['nebius', 'together', 'fireworks', 'groq'] as const;
+const OPENAI_COMPATIBLE_PROVIDER_IDS = [
+  'nebius',
+  'together',
+  'fireworks',
+  'groq',
+  'venice',
+] as const;
 
 /**
  * Paths required for config generation (Electron-specific resolution stays in desktop)
@@ -262,6 +268,44 @@ export async function buildProviderConfigs(
     console.log('[OpenCode Config Builder] Moonshot configured:', modelId);
   }
 
+  // xAI provider — register selected model so OpenCode can resolve it.
+  // OpenCode's @ai-sdk/xai only knows its built-in model list; dynamically-fetched
+  // models (e.g. "grok-4-fast-reasoning") would otherwise cause
+  // ProviderModelNotFoundError at runtime. The xAI native API expects model names
+  // without the "xai/" prefix (unlike aggregators like OpenRouter).
+  const xaiProvider = providerSettings.connectedProviders.xai;
+  const xaiApiKey = getApiKey('xai');
+  if (xaiProvider?.connectionStatus === 'connected' && xaiApiKey) {
+    const selectedXaiModelId = xaiProvider.selectedModelId;
+    if (selectedXaiModelId) {
+      const modelId = selectedXaiModelId.replace(/^xai\//, '');
+
+      // Build models map: include all available models fetched from the xAI API
+      // so the user can switch between them without a restart.
+      const xaiModels: Record<string, ProviderModelConfig> = {};
+
+      if (xaiProvider.availableModels && xaiProvider.availableModels.length > 0) {
+        for (const model of xaiProvider.availableModels) {
+          const mId = model.id.replace(/^xai\//, '');
+          xaiModels[mId] = { name: model.name, tools: true };
+        }
+      }
+
+      // Final guard: always ensure the selected model is registered,
+      // even if availableModels is stale/partial and doesn't include it.
+      if (!xaiModels[modelId]) {
+        xaiModels[modelId] = { name: modelId, tools: true };
+      }
+
+      providerConfigs.push({
+        id: 'xai',
+        options: { apiKey: xaiApiKey },
+        models: xaiModels,
+      });
+      console.log('[OpenCode Config Builder] xAI configured, selected model:', modelId);
+    }
+  }
+
   // Google AI provider — register selected model so OpenCode can resolve it.
   // OpenCode's @ai-sdk/google only knows its built-in model list; dynamically-fetched
   // models (e.g. "gemini-3.1-flash-lite-preview") would otherwise cause
@@ -487,6 +531,41 @@ export async function buildProviderConfigs(
       });
       console.log('[OpenCode Config Builder] LM Studio (legacy) configured:', Object.keys(models));
     }
+  }
+
+  // Custom OpenAI-compatible provider
+  const customProvider = providerSettings.connectedProviders.custom;
+  if (
+    customProvider?.connectionStatus === 'connected' &&
+    customProvider.credentials.type === 'custom' &&
+    customProvider.selectedModelId
+  ) {
+    const customApiKey = getApiKey('custom');
+    const creds = customProvider.credentials;
+    // Normalize base URL - remove trailing slash, use as-is (user should provide correct base URL)
+    const baseURL = creds.baseUrl.replace(/\/+$/, '');
+    const modelId = customProvider.selectedModelId.replace(/^custom\//, '');
+    providerConfigs.push({
+      id: 'custom',
+      npm: '@ai-sdk/openai-compatible',
+      name: 'Custom Endpoint',
+      options: {
+        baseURL,
+        ...(customApiKey ? { apiKey: customApiKey } : {}),
+      },
+      models: {
+        [modelId]: { name: modelId, tools: true },
+      },
+    });
+    if (!enabledProviders.includes('custom')) {
+      enabledProviders.push('custom');
+    }
+    console.log(
+      '[OpenCode Config Builder] Custom endpoint configured:',
+      modelId,
+      'baseURL:',
+      baseURL,
+    );
   }
 
   // Azure Foundry provider

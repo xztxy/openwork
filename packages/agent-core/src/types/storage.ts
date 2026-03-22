@@ -14,6 +14,7 @@ import type {
 } from '../common/types/providerSettings.js';
 import type { McpConnector, ConnectorStatus, OAuthTokens } from '../common/types/connector.js';
 import type { SandboxConfig } from '../common/types/sandbox.js';
+import type { CloudBrowserConfig } from '../common/types/cloud-browser.js';
 
 /** Options for creating a Storage instance */
 export interface StorageOptions {
@@ -70,12 +71,12 @@ export interface AppSettings {
 
 /** API for task CRUD operations and todo management */
 export interface TaskStorageAPI {
-  /** Get all stored tasks */
-  getTasks(): StoredTask[];
+  /** Get all stored tasks, optionally filtered by workspace */
+  getTasks(workspaceId?: string | null): StoredTask[];
   /** Get a task by ID, returns undefined if not found */
   getTask(taskId: string): StoredTask | undefined;
   /** Persist a new task or update an existing one */
-  saveTask(task: Task): void;
+  saveTask(task: Task, workspaceId?: string | null): void;
   /** Update a task's status and optional completion timestamp */
   updateTaskStatus(taskId: string, status: TaskStatus, completedAt?: string): void;
   /** Append a message to a task's message history */
@@ -142,6 +143,10 @@ export interface AppSettingsAPI {
   getTheme(): ThemePreference;
   /** Set the theme preference */
   setTheme(theme: ThemePreference): void;
+  /** Get cloud browser configuration */
+  getCloudBrowserConfig(): CloudBrowserConfig | null;
+  /** Set cloud browser configuration */
+  setCloudBrowserConfig(config: CloudBrowserConfig | null): void;
   /** Get all application settings as a snapshot */
   getAppSettings(): AppSettings;
   /** Reset all application settings to defaults */
@@ -272,4 +277,5 @@ export type {
   McpConnector,
   ConnectorStatus,
   OAuthTokens,
+  CloudBrowserConfig,
 };

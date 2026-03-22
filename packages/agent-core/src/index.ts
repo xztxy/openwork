@@ -103,13 +103,11 @@ export type {
 
 // Error classes (still exported - these are safe)
 export { OpenCodeCliNotFoundError } from './internal/classes/OpenCodeAdapter.js';
-
 // Adapter types - AdapterOptions/OpenCodeAdapterEvents are internal (use TaskAdapterOptions)
 // createLogWatcher/OpenCodeLogError are internal (used by OpenCodeAdapter internally)
 
 // Low-level OpenCode utilities for advanced integrations
 export { resolveCliPath, isCliAvailable } from './opencode/cli-resolver.js';
-
 export {
   generateConfig,
   buildCliArgs,
@@ -119,27 +117,62 @@ export {
 export type { BrowserConfig } from './opencode/config-generator.js';
 
 export { buildOpenCodeEnvironment } from './opencode/environment.js';
-
 export type { EnvironmentConfig } from './opencode/environment.js';
 
 export { buildProviderConfigs, syncApiKeysToOpenCodeAuth } from './opencode/config-builder.js';
 
-export { getOpenCodeAuthPath, getOpenAiOauthStatus } from './opencode/auth.js';
+export {
+  getOpenCodeAuthPath,
+  getOpenCodeAuthJsonPath,
+  getOpenCodeMcpAuthJsonPath,
+  getOpenAiOauthStatus,
+  getOpenAiOauthAccessToken,
+  getSlackMcpOauthStatus,
+  getSlackMcpCallbackUrl,
+  setSlackMcpPendingAuth,
+  setSlackMcpTokens,
+  clearSlackMcpAuth,
+  OPENCODE_SLACK_MCP_SERVER_URL,
+  OPENCODE_SLACK_MCP_CLIENT_ID,
+  OPENCODE_SLACK_MCP_CALLBACK_HOST,
+  OPENCODE_SLACK_MCP_CALLBACK_PORT,
+  OPENCODE_SLACK_MCP_CALLBACK_PATH,
+} from './opencode/auth.js';
+export type { OpenCodeMcpOauthStatus } from './opencode/auth.js';
 
 export { sanitizeAssistantTextForDisplay } from './opencode/message-processor.js';
-
 // Message processing is now internal to TaskManager (use onBatchedMessages callback)
 // CompletionEnforcerCallbacks is internal (wiring between adapter and enforcer)
 // Proxy lifecycle is now internal to TaskManager.dispose()
 
 export { getAzureEntraToken } from './opencode/proxies/index.js';
-
 // -----------------------------------------------------------------------------
 // Storage Module (from ./storage/)
 // -----------------------------------------------------------------------------
 
 // Errors
 export { FutureSchemaError } from './storage/migrations/errors.js';
+
+// Workspace meta database
+export {
+  initializeMetaDatabase,
+  getMetaDatabase,
+  closeMetaDatabase,
+  isMetaDatabaseInitialized,
+} from './storage/workspace-meta-db.js';
+
+// Workspace repository
+export {
+  listWorkspaces,
+  getWorkspace,
+  getDefaultWorkspace,
+  createWorkspace as createWorkspaceRecord,
+  createDefaultWorkspace,
+  updateWorkspace as updateWorkspaceRecord,
+  deleteWorkspace as deleteWorkspaceRecord,
+  getActiveWorkspaceId,
+  setActiveWorkspaceId,
+} from './storage/repositories/workspaces.js';
 
 // -----------------------------------------------------------------------------
 // Providers Module (from ./providers/)
@@ -153,7 +186,6 @@ export { validateBedrockCredentials, fetchBedrockModels } from './providers/bedr
 export { validateVertexCredentials, fetchVertexModels, VertexClient } from './providers/vertex.js';
 
 export { validateAzureFoundry, testAzureFoundryConnection } from './providers/azure-foundry.js';
-
 export { fetchOpenRouterModels } from './providers/openrouter.js';
 
 export { testLiteLLMConnection, fetchLiteLLMModels } from './providers/litellm.js';
@@ -170,6 +202,8 @@ export {
 
 export { fetchProviderModels } from './providers/fetch-models.js';
 export type { FetchProviderModelsResult } from './providers/fetch-models.js';
+
+export { testCustomConnection } from './providers/custom.js';
 
 // -----------------------------------------------------------------------------
 // Utils Module (from ./utils/)
@@ -192,7 +226,6 @@ export { getExtendedNodePath, findCommandInPath } from './utils/system-path.js';
 
 // Sanitization functions
 export { sanitizeString, PROMPT_DEFAULT_MAX_LENGTH } from './utils/sanitize.js';
-
 // URL validation functions
 export { validateHttpUrl } from './utils/url.js';
 
@@ -208,7 +241,6 @@ export type { SafeParseResult } from './utils/json.js';
 export { redact } from './utils/redact.js';
 
 export { mapResultToStatus } from './utils/task-status.js';
-
 // Logging - use createLogWriter factory from ./factories/log-writer.js instead
 
 // -----------------------------------------------------------------------------
@@ -217,7 +249,6 @@ export { mapResultToStatus } from './utils/task-status.js';
 
 // Browser server for dev-browser MCP tool
 export { ensureDevBrowserServer } from './browser/server.js';
-
 export type { BrowserServerConfig } from './browser/server.js';
 
 // -----------------------------------------------------------------------------
@@ -252,7 +283,6 @@ export type {
   FileAttachmentInfo,
 } from './common/types/task.js';
 export { STARTUP_STAGES } from './common/types/task.js';
-
 // Permission types
 export type {
   FileOperation,
@@ -305,6 +335,7 @@ export type {
   LMStudioCredentials,
   AzureFoundryCredentials,
   OAuthCredentials,
+  CustomCredentials,
   ProviderCredentials,
   ToolSupportStatus,
   ConnectedProvider,
@@ -331,7 +362,6 @@ export type {
   VertexServiceAccountCredentials,
   VertexAdcCredentials,
 } from './common/types/auth.js';
-
 // OpenCode message types
 export type {
   OpenCodeMessage,
@@ -348,7 +378,19 @@ export type {
 // Skills types
 export type { SkillSource, Skill, SkillFrontmatter } from './common/types/skills.js';
 
+// Workspace types
+export type {
+  Workspace,
+  WorkspaceCreateInput,
+  WorkspaceUpdateInput,
+} from './common/types/workspace.js';
+
 // Connector types
+export {
+  OAuthProviderId,
+  getOAuthProviderDisplayName,
+  isOAuthProviderId,
+} from './common/types/connector.js';
 export type {
   ConnectorStatus,
   OAuthTokens,
@@ -360,6 +402,7 @@ export type {
 // MCP OAuth
 export {
   discoverOAuthMetadata,
+  discoverOAuthProtectedResourceMetadata,
   registerOAuthClient,
   generatePkceChallenge,
   buildAuthorizationUrl,
@@ -396,6 +439,7 @@ export {
   PERMISSION_API_PORT,
   QUESTION_API_PORT,
   PERMISSION_REQUEST_TIMEOUT_MS,
+  CONNECTOR_AUTH_REQUIRED_MARKER,
   LOG_MAX_FILE_SIZE_BYTES,
   LOG_RETENTION_DAYS,
   LOG_BUFFER_FLUSH_INTERVAL_MS,
@@ -423,7 +467,6 @@ export { stripAnsi, quoteForShell, getPlatformShell, getShellArgs } from './util
 export { isPortInUse, waitForPortRelease } from './utils/network.js';
 export { isWaitingForUser } from './common/utils/waiting-detection.js';
 export { detectLogSource, LOG_SOURCE_PATTERNS } from './common/utils/log-source-detector.js';
-
 // Schemas
 export {
   taskConfigSchema,

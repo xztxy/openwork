@@ -8,7 +8,11 @@
     "useSkills": "Использовать навыки",
     "connectors": "Коннекторы",
     "noConnectors": "Нет коннекторов",
-    "manage": "Управление"
+    "manage": "Управление",
+    "dropFilesHere": "Перетащите файлы для прикрепления",
+    "dropFilesHint": "(макс. {max} файлов, по {size}МБ)",
+    "fileTooLarge": "{name} превышает ограничение {limit}",
+    "tooManyFiles": "Максимум {max} файлов"
   },
   "examplePrompts": "Примеры запросов",
   "useCases": {
@@ -64,6 +68,7 @@
     "showAll_one": "Показать {{count}} избранное",
     "showAll_few": "Показать {{count}} избранных",
     "showAll_many": "Показать все {{count}} избранных",
-    "showAll_other": "Показать {{count}} избранных"
+    "showAll_other": "Показать {{count}} избранных",
+    "showAll": "Показать все {{count}} избранных"
   }
 }
