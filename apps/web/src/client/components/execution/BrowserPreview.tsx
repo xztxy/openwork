@@ -182,6 +182,7 @@ export const BrowserPreview = memo(function BrowserPreview({
   const imgRef = useRef<HTMLImageElement>(null);
   const isPausedRef = useRef(false);
   const screencastStartedRef = useRef(false);
+  const isCollapsedRef = useRef(false);
 
   const [frameData, setFrameData] = useState<string | null>(null);
   const [currentUrl, setCurrentUrl] = useState<string>('');
@@ -198,6 +199,11 @@ export const BrowserPreview = memo(function BrowserPreview({
     setError(undefined);
     setIsCollapsed(false);
   }, [taskId]);
+
+  // Sync isCollapsedRef with isCollapsed state so handleFrame can skip updates when collapsed
+  useEffect(() => {
+    isCollapsedRef.current = isCollapsed;
+  }, [isCollapsed]);
 
   // Pause frame updates when the tab is hidden
   useEffect(() => {
@@ -255,7 +261,7 @@ export const BrowserPreview = memo(function BrowserPreview({
       if (event.taskId !== taskId) {
         return;
       }
-      if (isPausedRef.current) {
+      if (isPausedRef.current || isCollapsedRef.current) {
         return;
       }
       setFrameData(event.frame);
