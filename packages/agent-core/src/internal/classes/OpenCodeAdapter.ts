@@ -145,19 +145,28 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
    * Lines may be split across PTY data chunks, so we maintain a rolling buffer to reassemble them.
    * On match, emits the `'browser-frame'` event consumed by TaskManager → task-callbacks → renderer.
    *
+   * Returns only the non-browser-frame lines so callers can safely feed the result into
+   * `appendToOutputBuffer` / `StreamParser` without polluting them with large base64 payloads.
+   *
    * Contributed by samarthsinh2660 (PR #414) for ENG-695.
    */
-  private checkForBrowserFrame(data: string): void {
+  private checkForBrowserFrame(data: string): string {
     try {
       const combined = `${this.browserFrameBuffer}${data}`;
       const lines = combined.split('\n');
       // Keep the incomplete trailing chunk for the next call
       this.browserFrameBuffer = lines.pop() ?? '';
 
+      const passthrough: string[] = [];
+
       for (const line of lines) {
         const trimmed = line.trim();
-        if (!trimmed) { continue; }
+        if (!trimmed) {
+          passthrough.push(line);
+          continue;
+        }
 
+        let isBrowserFrame = false;
         try {
           const parsed = JSON.parse(trimmed) as {
             type?: string;
@@ -171,13 +180,22 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
               frame: parsed.frame,
               timestamp: parsed.timestamp ?? Date.now(),
             });
+            isBrowserFrame = true;
           }
         } catch {
-          // Not JSON or not a browser-frame — ignore
+          // Not JSON or not a browser-frame — pass through as-is
+        }
+
+        if (!isBrowserFrame) {
+          passthrough.push(line);
         }
       }
+
+      // Re-join lines; trailing incomplete chunk stays in browserFrameBuffer
+      return passthrough.join('\n');
     } catch {
       // Ignore errors in frame detection to avoid breaking the main data path
+      return data;
     }
   }
 
@@ -389,19 +407,21 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
           .replace(/\x1B\][^\x07]*\x07/g, '')
           .replace(/\x1B\][^\x1B]*\x1B\\/g, '');
         /* eslint-enable no-control-regex */
-        // Check for embedded browser-frame JSON lines (even for split PTY chunks)
-        this.checkForBrowserFrame(cleanData);
+        // Check for embedded browser-frame JSON lines (even for split PTY chunks).
+        // Use the returned value — browser-frame lines are stripped so they don't
+        // pollute outputBuffer or StreamParser with large base64 payloads.
+        const passthroughData = this.checkForBrowserFrame(cleanData);
 
-        if (cleanData.trim()) {
+        if (passthroughData.trim()) {
           const truncated =
-            cleanData.substring(0, LOG_TRUNCATION_LIMIT) +
-            (cleanData.length > LOG_TRUNCATION_LIMIT ? '...' : '');
+            passthroughData.substring(0, LOG_TRUNCATION_LIMIT) +
+            (passthroughData.length > LOG_TRUNCATION_LIMIT ? '...' : '');
           console.log('[OpenCode CLI stdout]:', truncated);
-          this.emit('debug', { type: 'stdout', message: cleanData });
+          this.emit('debug', { type: 'stdout', message: passthroughData });
 
-          this.appendToOutputBuffer(cleanData);
+          this.appendToOutputBuffer(passthroughData);
 
-          this.streamParser.feed(cleanData);
+          this.streamParser.feed(passthroughData);
         }
       });
 

@@ -63,6 +63,74 @@ function StatusIndicator({ status }: { status: ViewStatus }) {
   return null;
 }
 
+/** Render the appropriate content for each `ViewStatus`. */
+function renderStatusContent(
+  status: ViewStatus,
+  frameData: string | null,
+  imgRef: React.RefObject<HTMLImageElement>,
+  error: string | undefined,
+): React.ReactNode {
+  if (status === 'streaming' || (status === 'starting' && frameData)) {
+    return (
+      <motion.div
+        key="frame"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="w-full h-full"
+      >
+        <img
+          ref={imgRef}
+          alt="Browser preview"
+          className="w-full h-full object-contain"
+          draggable={false}
+          src={frameData ? `data:image/jpeg;base64,${frameData}` : undefined}
+        />
+        {status === 'starting' && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+            <div className="flex items-center gap-2 text-white/80">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              <span className="text-sm">Connecting…</span>
+            </div>
+          </div>
+        )}
+      </motion.div>
+    );
+  }
+
+  if (status === 'error') {
+    return (
+      <motion.div
+        key="error"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 flex items-center justify-center"
+      >
+        <div className="flex flex-col items-center gap-2 text-destructive/80">
+          <AlertCircle className="h-8 w-8" />
+          <span className="text-sm">{error ?? 'Stream error'}</span>
+        </div>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      key="idle"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="absolute inset-0 flex items-center justify-center"
+    >
+      <div className="flex flex-col items-center gap-2 text-muted-foreground/50">
+        <Monitor className="h-8 w-8" />
+        <span className="text-sm">Waiting for browser…</span>
+      </div>
+    </motion.div>
+  );
+}
+
 export const BrowserPreview = memo(function BrowserPreview({
   taskId,
   currentTool,
@@ -90,13 +158,19 @@ export const BrowserPreview = memo(function BrowserPreview({
   // Auto-start screencast when a browser_* tool becomes active
   // Contributed by dhruvawani17 (PR #489)
   useEffect(() => {
-    if (!currentTool) return;
+    if (!currentTool) {
+      return;
+    }
     const isBrowserTool =
       currentTool.startsWith('browser_') && currentTool !== 'browser_screencast';
-    if (!isBrowserTool || screencastStartedRef.current) return;
+    if (!isBrowserTool || screencastStartedRef.current) {
+      return;
+    }
 
     const api = window.accomplish;
-    if (!api?.startBrowserPreview) return;
+    if (!api?.startBrowserPreview) {
+      return;
+    }
 
     screencastStartedRef.current = true;
     setStatus('starting');
@@ -111,8 +185,12 @@ export const BrowserPreview = memo(function BrowserPreview({
   // Subscribe to IPC events from the main process
   const handleFrame = useCallback(
     (event: { taskId: string; pageName: string; frame: string; timestamp: number }) => {
-      if (event.taskId !== taskId) return;
-      if (isPausedRef.current) return;
+      if (event.taskId !== taskId) {
+        return;
+      }
+      if (isPausedRef.current) {
+        return;
+      }
       setFrameData(event.frame);
       if (imgRef.current) {
         imgRef.current.src = `data:image/jpeg;base64,${event.frame}`;
@@ -124,7 +202,9 @@ export const BrowserPreview = memo(function BrowserPreview({
 
   const handleNavigate = useCallback(
     (event: { taskId: string; pageName: string; url: string }) => {
-      if (event.taskId !== taskId) return;
+      if (event.taskId !== taskId) {
+        return;
+      }
       setCurrentUrl(event.url);
     },
     [taskId],
@@ -132,7 +212,9 @@ export const BrowserPreview = memo(function BrowserPreview({
 
   const handleStatus = useCallback(
     (event: { taskId: string; pageName: string; status: string; message?: string }) => {
-      if (event.taskId !== taskId) return;
+      if (event.taskId !== taskId) {
+        return;
+      }
       if (event.status === 'stopped') {
         screencastStartedRef.current = false;
         setStatus('idle');
@@ -153,23 +235,35 @@ export const BrowserPreview = memo(function BrowserPreview({
 
   useEffect(() => {
     const api = window.accomplish;
-    if (!api) return;
+    if (!api) {
+      return;
+    }
 
     const cleanups: (() => void)[] = [];
 
-    if (api.onBrowserFrame) cleanups.push(api.onBrowserFrame(handleFrame));
-    if (api.onBrowserNavigate) cleanups.push(api.onBrowserNavigate(handleNavigate));
-    if (api.onBrowserStatus) cleanups.push(api.onBrowserStatus(handleStatus));
+    if (api.onBrowserFrame) {
+      cleanups.push(api.onBrowserFrame(handleFrame));
+    }
+    if (api.onBrowserNavigate) {
+      cleanups.push(api.onBrowserNavigate(handleNavigate));
+    }
+    if (api.onBrowserStatus) {
+      cleanups.push(api.onBrowserStatus(handleStatus));
+    }
 
     return () => {
-      for (const cleanup of cleanups) cleanup();
+      for (const cleanup of cleanups) {
+        cleanup();
+      }
       // Stop preview when component unmounts
       api.stopBrowserPreview?.(taskId).catch(() => {});
     };
   }, [taskId, handleFrame, handleNavigate, handleStatus]);
 
   // Don't render until we have at least a starting state or a frame
-  if (status === 'idle' && !frameData) return null;
+  if (status === 'idle' && !frameData) {
+    return null;
+  }
 
   return (
     <motion.div
@@ -189,9 +283,12 @@ export const BrowserPreview = memo(function BrowserPreview({
         </span>
         <StatusIndicator status={status} />
         <button
+          type="button"
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="text-muted-foreground hover:text-foreground transition-colors ml-1"
           aria-label={isCollapsed ? 'Expand' : 'Collapse'}
+          aria-expanded={!isCollapsed}
+          aria-controls="browser-preview-content"
         >
           {isCollapsed ? (
             <ChevronDown className="h-4 w-4" />
@@ -205,6 +302,7 @@ export const BrowserPreview = memo(function BrowserPreview({
       <AnimatePresence>
         {!isCollapsed && (
           <motion.div
+            id="browser-preview-content"
             initial={{ height: 0 }}
             animate={{ height: 'auto' }}
             exit={{ height: 0 }}
@@ -212,57 +310,7 @@ export const BrowserPreview = memo(function BrowserPreview({
           >
             <div className="relative aspect-video bg-black">
               <AnimatePresence mode="wait">
-                {status === 'streaming' || (status === 'starting' && frameData) ? (
-                  <motion.div
-                    key="frame"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="w-full h-full"
-                  >
-                    <img
-                      ref={imgRef}
-                      alt="Browser preview"
-                      className="w-full h-full object-contain"
-                      draggable={false}
-                      src={frameData ? `data:image/jpeg;base64,${frameData}` : undefined}
-                    />
-                    {status === 'starting' && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                        <div className="flex items-center gap-2 text-white/80">
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                          <span className="text-sm">Connecting…</span>
-                        </div>
-                      </div>
-                    )}
-                  </motion.div>
-                ) : status === 'error' ? (
-                  <motion.div
-                    key="error"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="absolute inset-0 flex items-center justify-center"
-                  >
-                    <div className="flex flex-col items-center gap-2 text-destructive/80">
-                      <AlertCircle className="h-8 w-8" />
-                      <span className="text-sm">{error ?? 'Stream error'}</span>
-                    </div>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="idle"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="absolute inset-0 flex items-center justify-center"
-                  >
-                    <div className="flex flex-col items-center gap-2 text-muted-foreground/50">
-                      <Monitor className="h-8 w-8" />
-                      <span className="text-sm">Waiting for browser…</span>
-                    </div>
-                  </motion.div>
-                )}
+                {renderStatusContent(status, frameData, imgRef, error)}
               </AnimatePresence>
             </div>
           </motion.div>
