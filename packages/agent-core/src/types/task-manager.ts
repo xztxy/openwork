@@ -49,6 +49,9 @@ export interface TaskCallbacks {
   onTodoUpdate?: (todos: TodoItem[]) => void;
   /** Called when an auth error occurs */
   onAuthError?: (error: { providerId: string; message: string }) => void;
+  /** Called when a browser frame is captured for live preview (ENG-695).
+   *  Contributed by samarthsinh2660 (PR #414). */
+  onBrowserFrame?: (data: { pageName: string; frame: string; timestamp: number }) => void;
   /** Called when the agent emits reasoning text */
   onReasoning?: (text: string) => void;
   /** Called when a tool is about to be used (before execution) */

@@ -25,6 +25,8 @@ import {
   listPages,
   closePage,
   getConnectionMode,
+  getCDPSession,
+  getFullPageName,
 } from './connection.js';
 
 console.error('[dev-browser-mcp] All imports completed successfully');
@@ -406,6 +408,81 @@ async function captureBoundedScreenshot(
     byteLength: lastByteLength,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Screencast helpers (ENG-695)
+// Contributed by samarthsinh2660 (PR #414): startScreencast / stopScreencast
+// emit JSON frames to stdout; OpenCodeAdapter parses them and emits
+// 'browser-frame' events consumed by the renderer.
+// ---------------------------------------------------------------------------
+
+/** Target ~10 FPS — enough for live preview without flooding stdout */
+const FRAME_INTERVAL_MS = 100;
+
+async function startScreencast(pageName?: string): Promise<void> {
+  const fullPageName = getFullPageName(pageName);
+
+  try {
+    const session = await getCDPSession(pageName);
+
+    await session.send('Page.startScreencast', {
+      format: 'jpeg',
+      quality: 50,
+      maxWidth: 800,
+      everyNthFrame: 1,
+    } as Parameters<typeof session.send>[1]);
+
+    let lastFrameTime = 0;
+
+    const frameHandler = async (event: { data: string; sessionId: number }) => {
+      try {
+        const now = Date.now();
+
+        // Throttle to avoid flooding stdout
+        if (now - lastFrameTime < FRAME_INTERVAL_MS) {
+          await session.send('Page.screencastFrameAck', { sessionId: event.sessionId } as Parameters<typeof session.send>[1]).catch(() => {});
+          return;
+        }
+
+        lastFrameTime = now;
+
+        const taskId = process.env.ACCOMPLISH_TASK_ID || 'default';
+        console.log(
+          JSON.stringify({
+            type: 'browser-frame',
+            taskId,
+            pageName: pageName || 'main',
+            frame: event.data,
+            timestamp: now,
+          }),
+        );
+
+        await session.send('Page.screencastFrameAck', { sessionId: event.sessionId } as Parameters<typeof session.send>[1]).catch(() => {});
+      } catch (err) {
+        console.error('[dev-browser-mcp] Error handling screencast frame:', err);
+      }
+    };
+
+    session.on('Page.screencastFrame', frameHandler);
+    console.error(`[dev-browser-mcp] Screencast started for page: ${fullPageName}`);
+  } catch (err) {
+    console.error(`[dev-browser-mcp] Failed to start screencast for ${fullPageName}:`, err);
+  }
+}
+
+async function stopScreencast(pageName?: string): Promise<void> {
+  const fullPageName = getFullPageName(pageName);
+
+  try {
+    const session = await getCDPSession(pageName);
+    await session.send('Page.stopScreencast');
+    console.error(`[dev-browser-mcp] Screencast stopped for page: ${fullPageName}`);
+  } catch (err) {
+    console.error(`[dev-browser-mcp] Failed to stop screencast for ${fullPageName}:`, err);
+  }
+}
+
+// ---------------------------------------------------------------------------
 
 const SNAPSHOT_SCRIPT = `
 (function() {
@@ -2567,6 +2644,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToo
           await page.goto(fullUrl);
           await waitForPageLoad(page);
           await injectActiveTabGlow(page);
+
+          // Auto-start screencast so the UI always has a live preview available.
+          // Fire-and-forget — failure here should never break navigation.
+          // Contributed by samarthsinh2660 (PR #414) for ENG-695.
+          void startScreencast(page_name);
 
           const title = await page.title();
           const currentUrl = page.url();

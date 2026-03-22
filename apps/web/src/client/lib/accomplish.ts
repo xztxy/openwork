@@ -358,6 +358,29 @@ interface AccomplishAPI {
   onTodoUpdate?(callback: (data: { taskId: string; todos: TodoItem[] }) => void): () => void;
   onAuthError?(callback: (data: { providerId: string; message: string }) => void): () => void;
 
+  // Browser Preview (ENG-695)
+  // Contributed by dhruvawani17 (PR #489), samarthsinh2660 (PR #414), david-mamani (PR #553)
+  onBrowserFrame?(callback: (event: {
+    taskId: string;
+    pageName: string;
+    frame: string;
+    timestamp: number;
+  }) => void): () => void;
+  onBrowserNavigate?(callback: (event: {
+    taskId: string;
+    pageName: string;
+    url: string;
+  }) => void): () => void;
+  onBrowserStatus?(callback: (event: {
+    taskId: string;
+    pageName: string;
+    status: string;
+    message?: string;
+  }) => void): () => void;
+  startBrowserPreview?(taskId: string, pageName?: string): Promise<{ success: boolean }>;
+  stopBrowserPreview?(taskId: string): Promise<{ stopped: boolean }>;
+  getBrowserPreviewStatus?(): Promise<{ active: boolean }>;
+
   // Speech-to-Text
   speechIsConfigured(): Promise<boolean>;
   speechGetConfig(): Promise<{ enabled: boolean; hasApiKey: boolean; apiKeyPrefix?: string }>;

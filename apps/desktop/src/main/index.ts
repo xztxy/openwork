@@ -25,6 +25,7 @@ import { FutureSchemaError } from '@accomplish_ai/agent-core';
 import { initThoughtStreamApi, startThoughtStreamServer } from './thought-stream-api';
 import type { ProviderId } from '@accomplish_ai/agent-core';
 import { disposeTaskManager, cleanupVertexServiceAccountKey } from './opencode';
+import { stopAllBrowserPreviewStreams } from './services/browserPreview';
 import { oauthBrowserFlow } from './opencode/auth-browser';
 import { slackMcpOAuthFlow } from './opencode/slack-auth';
 import { migrateLegacyData } from './store/legacyMigration';
@@ -347,6 +348,10 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  // Stop all browser preview streams before quitting (Dev0907, PR #480, ENG-695)
+  void stopAllBrowserPreviewStreams().catch((error: unknown) => {
+    console.warn('[Main] Failed to stop browser preview streams:', error);
+  });
   disposeTaskManager(); // Also cleans up proxies internally
   cleanupVertexServiceAccountKey();
   oauthBrowserFlow.dispose();

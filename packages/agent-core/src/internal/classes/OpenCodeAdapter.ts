@@ -81,6 +81,9 @@ export interface OpenCodeAdapterEvents {
   debug: [{ type: string; message: string; data?: unknown }];
   'todo:update': [TodoItem[]];
   'auth-error': [{ providerId: string; message: string }];
+  /** Live browser preview frame — emitted when the dev-browser-mcp tool writes a JSON frame to stdout.
+   *  Contributed by samarthsinh2660 (PR #414) for ENG-695. */
+  'browser-frame': [{ pageName: string; frame: string; timestamp: number }];
   reasoning: [string];
   'tool-call-complete': [
     {
@@ -122,6 +125,9 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   private hasReceivedFirstTool: boolean = false;
   private startTaskCalled: boolean = false;
   private outputBuffer: string = '';
+  /** Rolling buffer for reassembling split JSON lines from dev-browser-mcp stdout.
+   *  Contributed by samarthsinh2660 (PR #414) for ENG-695. */
+  private browserFrameBuffer: string = '';
   private static readonly OUTPUT_BUFFER_MAX = 4096;
 
   private appendToOutputBuffer(data: string): void {
@@ -131,6 +137,50 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       this.outputBuffer = (this.outputBuffer + data).slice(-OpenCodeAdapter.OUTPUT_BUFFER_MAX);
     }
   }
+
+  /**
+   * Scan stdout data for JSON-encoded browser frame messages written by dev-browser-mcp.
+   * Each frame line has the shape: `{"type":"browser-frame","taskId":...,"pageName":...,"frame":...,"timestamp":...}`.
+   *
+   * Lines may be split across PTY data chunks, so we maintain a rolling buffer to reassemble them.
+   * On match, emits the `'browser-frame'` event consumed by TaskManager → task-callbacks → renderer.
+   *
+   * Contributed by samarthsinh2660 (PR #414) for ENG-695.
+   */
+  private checkForBrowserFrame(data: string): void {
+    try {
+      const combined = `${this.browserFrameBuffer}${data}`;
+      const lines = combined.split('\n');
+      // Keep the incomplete trailing chunk for the next call
+      this.browserFrameBuffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        try {
+          const parsed = JSON.parse(trimmed) as {
+            type?: string;
+            frame?: string;
+            pageName?: string;
+            timestamp?: number;
+          };
+          if (parsed.type === 'browser-frame' && parsed.frame && parsed.pageName) {
+            this.emit('browser-frame', {
+              pageName: parsed.pageName,
+              frame: parsed.frame,
+              timestamp: parsed.timestamp ?? Date.now(),
+            });
+          }
+        } catch {
+          // Not JSON or not a browser-frame — ignore
+        }
+      }
+    } catch {
+      // Ignore errors in frame detection to avoid breaking the main data path
+    }
+  }
+
   private options: AdapterOptions;
   private sandboxProvider: SandboxProvider;
   private sandboxConfig: SandboxConfig;
@@ -340,6 +390,9 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
           .replace(/\x1B\][^\x1B]*\x1B\\/g, '');
         /* eslint-enable no-control-regex */
         if (cleanData.trim()) {
+          // Check for embedded browser-frame JSON lines before logging/parsing
+          this.checkForBrowserFrame(cleanData);
+
           const truncated =
             cleanData.substring(0, LOG_TRUNCATION_LIMIT) +
             (cleanData.length > LOG_TRUNCATION_LIMIT ? '...' : '');
@@ -437,6 +490,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
     console.log(`[OpenCode Adapter] Disposing adapter for task ${this.currentTaskId}`);
     this.isDisposed = true;
+    this.browserFrameBuffer = '';
 
     if (this.logWatcher) {
       this.logWatcher.stop().catch((err) => {
