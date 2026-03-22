@@ -32,10 +32,12 @@ function createPermissionApiInitializer(): (
     }
     // Set flag synchronously to prevent concurrent initialization on overlapping calls.
     initialized = true;
-    // Pass a getter so the current (non-destroyed) window is resolved at request time,
-    // rather than capturing a potentially stale reference from initialization.
+    // Pass a getter so the current (non-destroyed) window is resolved at request time.
+    // Prefer the explicitly-passed trusted window when it is still alive, falling back
+    // to the focused window or any non-destroyed window for robustness after reloads.
     initPermissionApi(
       () =>
+        (window && !window.isDestroyed() ? window : null) ??
         BrowserWindow.getFocusedWindow() ??
         BrowserWindow.getAllWindows().find((w) => !w.isDestroyed()) ??
         null,

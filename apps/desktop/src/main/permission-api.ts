@@ -145,16 +145,20 @@ export function startPermissionApiServer(): http.Server {
   });
 
   server.listen(PERMISSION_API_PORT, '127.0.0.1', () => {
-    console.log(`[Permission API] Server listening on port ${PERMISSION_API_PORT}`);
+    getLogCollector().logEnv(
+      'INFO',
+      `[Permission API] Server listening on port ${PERMISSION_API_PORT}`,
+    );
   });
 
   server.on('error', (error: NodeJS.ErrnoException) => {
     if (error.code === 'EADDRINUSE') {
-      console.warn(
+      getLogCollector().logEnv(
+        'WARN',
         `[Permission API] Port ${PERMISSION_API_PORT} already in use, skipping server start`,
       );
     } else {
-      console.error('[Permission API] Server error:', error);
+      getLogCollector().logEnv('ERROR', '[Permission API] Server error:', { error: String(error) });
     }
   });
 
