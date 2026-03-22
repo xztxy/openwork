@@ -259,11 +259,12 @@ export function startQuestionApiServer(): http.Server {
 
   server.on('error', (error: NodeJS.ErrnoException) => {
     if (error.code === 'EADDRINUSE') {
-      console.warn(
+      getLogCollector().logEnv(
+        'WARN',
         `[Question API] Port ${QUESTION_API_PORT} already in use, skipping server start`,
       );
     } else {
-      console.error('[Question API] Server error:', error);
+      getLogCollector().logEnv('ERROR', '[Question API] Server error:', { error: String(error) });
     }
   });
 

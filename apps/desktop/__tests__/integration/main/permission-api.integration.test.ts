@@ -97,7 +97,7 @@ describe('Permission API Integration', () => {
       } as unknown as import('electron').BrowserWindow;
       const mockTaskGetter = () => 'task_123';
 
-      expect(() => initPermissionApi(mockWindow, mockTaskGetter)).not.toThrow();
+      expect(() => initPermissionApi(() => mockWindow, mockTaskGetter)).not.toThrow();
     });
 
     it('should be a function', () => {
