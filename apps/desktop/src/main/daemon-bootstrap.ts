@@ -360,7 +360,7 @@ function registerInProcessHandlers(
       config,
       createdAt: new Date().toISOString(),
     };
-    storage.saveTask(placeholder as Parameters<StorageAPI['saveTask']>[0]);
+    storage.saveTask(placeholder as unknown as Parameters<StorageAPI['saveTask']>[0]);
 
     const callbacks = buildInProcessCallbacks(taskId, srv, storage);
     try {
@@ -385,7 +385,7 @@ function registerInProcessHandlers(
         config: { prompt, sessionId },
         createdAt: new Date().toISOString(),
       };
-      storage.saveTask(placeholder as Parameters<StorageAPI['saveTask']>[0]);
+      storage.saveTask(placeholder as unknown as Parameters<StorageAPI['saveTask']>[0]);
     }
 
     const callbacks = buildInProcessCallbacks(taskId, srv, storage);
