@@ -15,6 +15,7 @@ import type { ViewStatus } from './StatusBadge';
 
 interface UseBrowserPreviewOptions {
   taskId: string;
+  pageName?: string | null;
   currentTool?: string | null;
 }
 
@@ -25,11 +26,12 @@ interface UseBrowserPreviewResult {
   error: string | undefined;
   isCollapsed: boolean;
   setIsCollapsed: (value: boolean) => void;
-  imgRef: React.RefObject<HTMLImageElement>;
+  imgRef: React.RefObject<HTMLImageElement | null>;
 }
 
 export function useBrowserPreview({
   taskId,
+  pageName,
   currentTool,
 }: UseBrowserPreviewOptions): UseBrowserPreviewResult {
   const imgRef = useRef<HTMLImageElement>(null);
@@ -118,6 +120,9 @@ export function useBrowserPreview({
       if (event.taskId !== taskId) {
         return;
       }
+      if (pageName && event.pageName !== pageName) {
+        return;
+      }
       if (isPausedRef.current || isCollapsedRef.current) {
         return;
       }
@@ -135,7 +140,7 @@ export function useBrowserPreview({
         setStatus('streaming');
       }
     },
-    [taskId],
+    [taskId, pageName],
   );
 
   const handleNavigate = useCallback(
@@ -143,14 +148,20 @@ export function useBrowserPreview({
       if (event.taskId !== taskId) {
         return;
       }
+      if (pageName && event.pageName !== pageName) {
+        return;
+      }
       setCurrentUrl(event.url);
     },
-    [taskId],
+    [taskId, pageName],
   );
 
   const handleStatus = useCallback(
     (event: { taskId: string; pageName: string; status: string; message?: string }) => {
       if (event.taskId !== taskId) {
+        return;
+      }
+      if (pageName && event.pageName !== pageName) {
         return;
       }
       if (event.status === 'stopped') {
@@ -173,7 +184,7 @@ export function useBrowserPreview({
         setError(undefined);
       }
     },
-    [taskId],
+    [taskId, pageName],
   );
 
   useEffect(() => {

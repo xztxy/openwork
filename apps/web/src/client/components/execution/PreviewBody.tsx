@@ -13,7 +13,7 @@ import type { ViewStatus } from './StatusBadge';
 interface PreviewBodyProps {
   status: ViewStatus;
   frameData: string | null;
-  imgRef: React.RefObject<HTMLImageElement>;
+  imgRef: React.RefObject<HTMLImageElement | null>;
   error: string | undefined;
   isCollapsed: boolean;
 }
@@ -21,7 +21,7 @@ interface PreviewBodyProps {
 function renderStatusContent(
   status: ViewStatus,
   frameData: string | null,
-  imgRef: React.RefObject<HTMLImageElement>,
+  imgRef: React.RefObject<HTMLImageElement | null>,
   error: string | undefined,
 ): React.ReactNode {
   if (status === 'streaming' || (status === 'starting' && frameData)) {

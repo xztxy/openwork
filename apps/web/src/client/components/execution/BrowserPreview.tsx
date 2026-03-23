@@ -46,7 +46,7 @@ export const BrowserPreview = memo(function BrowserPreview({
 }: BrowserPreviewProps) {
   const contentId = `browser-preview-content-${taskId}`;
   const { frameData, currentUrl, status, error, isCollapsed, setIsCollapsed, imgRef } =
-    useBrowserPreview({ taskId, currentTool });
+    useBrowserPreview({ taskId, pageName, currentTool });
 
   // Don't render until we have at least a starting state or a frame
   if (status === 'idle' && !frameData) {
