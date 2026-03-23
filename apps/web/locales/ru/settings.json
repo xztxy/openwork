@@ -248,7 +248,9 @@
     "skills": "Навыки",
     "voiceInput": "Голосовой ввод",
     "appearance": "Оформление",
-    "about": "О программе"
+    "workspaces": "Рабочие пространства",
+    "about": "О программе",
+    "browsers": "Облачные браузеры"
   },
   "appearance": {
     "title": "Тема",
@@ -285,7 +287,28 @@
     "enable": "Включить",
     "disable": "Выключить",
     "confirmDelete": "Нажмите ещё раз для подтверждения",
-    "delete": "Удалить"
+    "delete": "Удалить",
+    "customTitle": "Пользовательские MCP-серверы",
+    "customDescription": "Добавьте собственный URL удалённого MCP-сервера. OAuth поддерживается для серверов со стандартным потоком авторизации.",
+    "slack": {
+      "title": "Slack",
+      "description": "Подключите Slack, чтобы агент мог отправлять сообщения и использовать контекст Slack через встроенный Slack MCP.",
+      "authenticate": "Подключить Slack",
+      "authenticating": "Подключение...",
+      "restartAuth": "Перезапустить авторизацию",
+      "disconnect": "Отключить Slack",
+      "disconnecting": "Отключение...",
+      "authHint": "Accomplish откроет браузер для подтверждения доступа к Slack.",
+      "pendingHint": "Авторизация Slack была начата, но не завершена. Перезапустите её.",
+      "connectedHint": "Slack подключён и готов к использованию агентом.",
+      "authFailed": "Не удалось подключить Slack",
+      "disconnectFailed": "Не удалось отключить Slack",
+      "status": {
+        "connected": "Подключено",
+        "disconnected": "Не подключено",
+        "pending": "Авторизация начата"
+      }
+    }
   },
   "zai": {
     "region": "Регион",

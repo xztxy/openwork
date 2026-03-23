@@ -6,7 +6,16 @@
  */
 
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
-import type { ProviderType, Skill, TodoItem, McpConnector } from '@accomplish_ai/agent-core';
+import type {
+  ProviderType,
+  Skill,
+  TodoItem,
+  McpConnector,
+  Workspace,
+  WorkspaceCreateInput,
+  WorkspaceUpdateInput,
+} from '@accomplish_ai/agent-core';
+import type { CloudBrowserConfig } from '@accomplish_ai/agent-core/common';
 
 // Expose the accomplish API to the renderer
 const accomplishAPI = {
@@ -61,6 +70,10 @@ const accomplishAPI = {
   },
   getAppSettings: (): Promise<{ debugMode: boolean; onboardingComplete: boolean; theme: string }> =>
     ipcRenderer.invoke('settings:app-settings'),
+  getCloudBrowserConfig: (): Promise<CloudBrowserConfig | null> =>
+    ipcRenderer.invoke('settings:cloud-browser-config:get'),
+  setCloudBrowserConfig: (config: CloudBrowserConfig | null): Promise<void> =>
+    ipcRenderer.invoke('settings:cloud-browser-config:set', config ? JSON.stringify(config) : null),
   getOpenAiBaseUrl: (): Promise<string> => ipcRenderer.invoke('settings:openai-base-url:get'),
   setOpenAiBaseUrl: (baseUrl: string): Promise<void> =>
     ipcRenderer.invoke('settings:openai-base-url:set', baseUrl),
@@ -68,6 +81,10 @@ const accomplishAPI = {
     ipcRenderer.invoke('opencode:auth:openai:status'),
   loginOpenAiWithChatGpt: (): Promise<{ ok: boolean; openedUrl?: string }> =>
     ipcRenderer.invoke('opencode:auth:openai:login'),
+  getSlackMcpOauthStatus: (): Promise<{ connected: boolean; pendingAuthorization: boolean }> =>
+    ipcRenderer.invoke('opencode:auth:slack:status'),
+  loginSlackMcp: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('opencode:auth:slack:login'),
+  logoutSlackMcp: (): Promise<void> => ipcRenderer.invoke('opencode:auth:slack:logout'),
 
   // API Key management (new simplified handlers)
   hasApiKey: (): Promise<boolean> => ipcRenderer.invoke('api-key:exists'),
@@ -287,6 +304,15 @@ const accomplishAPI = {
     } | null,
   ): Promise<void> => ipcRenderer.invoke('lmstudio:set-config', config),
 
+  // Custom OpenAI-compatible endpoint configuration
+  testCustomConnection: (
+    baseUrl: string,
+    apiKey?: string,
+  ): Promise<{
+    success: boolean;
+    error?: string;
+  }> => ipcRenderer.invoke('custom:test-connection', baseUrl, apiKey),
+
   // Bedrock
   validateBedrockCredentials: (credentials: string) =>
     ipcRenderer.invoke('bedrock:validate', credentials),
@@ -409,6 +435,80 @@ const accomplishAPI = {
     return () => ipcRenderer.removeListener('auth:error', listener);
   },
 
+  // ─── Browser Preview API (ENG-695) ─────────────────────────────────────────
+  // Contributed by dhruvawani17 (PR #489) and samarthsinh2660 (PR #414).
+
+  /**
+   * Subscribe to live browser frame events emitted by dev-browser-mcp via CDP screencast.
+   * Returns an unsubscribe function.
+   */
+  onBrowserFrame: (
+    callback: (event: {
+      taskId: string;
+      pageName: string;
+      frame: string;
+      timestamp: number;
+    }) => void,
+  ) => {
+    const listener = (_: unknown, event: unknown) =>
+      callback(
+        event as {
+          taskId: string;
+          pageName: string;
+          frame: string;
+          timestamp: number;
+        },
+      );
+    ipcRenderer.on('browser:frame', listener);
+    return () => ipcRenderer.removeListener('browser:frame', listener);
+  },
+
+  /** Subscribe to browser navigation events (URL changes). */
+  onBrowserNavigate: (
+    callback: (event: { taskId: string; pageName: string; url: string }) => void,
+  ) => {
+    const listener = (_: unknown, event: unknown) =>
+      callback(event as { taskId: string; pageName: string; url: string });
+    ipcRenderer.on('browser:navigate', listener);
+    return () => ipcRenderer.removeListener('browser:navigate', listener);
+  },
+
+  /** Subscribe to browser status change events (starting / streaming / stopped / error). */
+  onBrowserStatus: (
+    callback: (event: {
+      taskId: string;
+      pageName: string;
+      status: string;
+      message?: string;
+    }) => void,
+  ) => {
+    const listener = (_: unknown, event: unknown) =>
+      callback(
+        event as {
+          taskId: string;
+          pageName: string;
+          status: string;
+          message?: string;
+        },
+      );
+    ipcRenderer.on('browser:status', listener);
+    return () => ipcRenderer.removeListener('browser:status', listener);
+  },
+
+  /** Start a browser preview stream for a given task and page. */
+  startBrowserPreview: (taskId: string, pageName?: string): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('browser-preview:start', taskId, pageName),
+
+  /** Stop the browser preview stream for a given task. */
+  stopBrowserPreview: (taskId: string): Promise<{ stopped: boolean }> =>
+    ipcRenderer.invoke('browser-preview:stop', taskId),
+
+  /** Check whether any browser preview stream is currently active. */
+  getBrowserPreviewStatus: (): Promise<{ active: boolean }> =>
+    ipcRenderer.invoke('browser-preview:status'),
+
+  // ───────────────────────────────────────────────────────────────────────────
+
   logEvent: (payload: { level?: string; message: string; context?: Record<string, unknown> }) =>
     ipcRenderer.invoke('log:event', payload),
 
@@ -456,12 +556,20 @@ const accomplishAPI = {
   showSkillInFolder: (filePath: string): Promise<void> =>
     ipcRenderer.invoke('skills:show-in-folder', filePath),
 
+  // Daemon / Background Mode
+  getRunInBackground: (): Promise<boolean> => ipcRenderer.invoke('daemon:get-run-in-background'),
+  setRunInBackground: (enabled: boolean): Promise<void> =>
+    ipcRenderer.invoke('daemon:set-run-in-background', enabled),
+  getDaemonSocketPath: (): Promise<string> => ipcRenderer.invoke('daemon:get-socket-path'),
+
   // Favorites
   addFavorite: (taskId: string): Promise<void> => ipcRenderer.invoke('favorites:add', taskId),
   removeFavorite: (taskId: string): Promise<void> => ipcRenderer.invoke('favorites:remove', taskId),
   listFavorites: (): Promise<unknown[]> => ipcRenderer.invoke('favorites:list'),
   isFavorite: (taskId: string): Promise<boolean> => ipcRenderer.invoke('favorites:has', taskId),
+
   // File attachments
+  pickFolder: (): Promise<string | null> => ipcRenderer.invoke('files:pick-folder'),
   pickFiles: (): Promise<import('@accomplish_ai/agent-core/common').FileAttachmentInfo[]> =>
     ipcRenderer.invoke('files:pick'),
   processDroppedFiles: (
@@ -534,6 +642,29 @@ const accomplishAPI = {
     platform?: string;
   }): Promise<{ success: boolean; path?: string; error?: string; reason?: string }> =>
     ipcRenderer.invoke('debug:generate-bug-report', data),
+
+  // Workspace management
+  listWorkspaces: (): Promise<Workspace[]> => ipcRenderer.invoke('workspace:list'),
+  getActiveWorkspaceId: (): Promise<string | null> => ipcRenderer.invoke('workspace:get-active'),
+  switchWorkspace: (workspaceId: string): Promise<{ success: boolean; reason?: string }> =>
+    ipcRenderer.invoke('workspace:switch', workspaceId),
+  createWorkspace: (input: WorkspaceCreateInput): Promise<Workspace> =>
+    ipcRenderer.invoke('workspace:create', input),
+  updateWorkspace: (id: string, input: WorkspaceUpdateInput): Promise<Workspace | null> =>
+    ipcRenderer.invoke('workspace:update', id, input),
+  deleteWorkspace: (id: string): Promise<boolean> => ipcRenderer.invoke('workspace:delete', id),
+
+  // Workspace event subscriptions
+  onWorkspaceChanged: (callback: (data: { workspaceId: string }) => void) => {
+    const listener = (_: unknown, data: { workspaceId: string }) => callback(data);
+    ipcRenderer.on('workspace:changed', listener);
+    return () => ipcRenderer.removeListener('workspace:changed', listener);
+  },
+  onWorkspaceDeleted: (callback: (data: { workspaceId: string }) => void) => {
+    const listener = (_: unknown, data: { workspaceId: string }) => callback(data);
+    ipcRenderer.on('workspace:deleted', listener);
+    return () => ipcRenderer.removeListener('workspace:deleted', listener);
+  },
 };
 
 // Expose the API to the renderer

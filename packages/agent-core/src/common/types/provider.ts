@@ -25,7 +25,8 @@ export type ProviderType =
   | 'nebius'
   | 'together'
   | 'fireworks'
-  | 'groq';
+  | 'groq'
+  | 'venice';
 
 export type ApiKeyProvider =
   | 'anthropic'
@@ -47,7 +48,11 @@ export type ApiKeyProvider =
   | 'together'
   | 'fireworks'
   | 'groq'
-  | 'elevenlabs';
+  | 'venice'
+  | 'elevenlabs'
+  | 'aws-agentcore'
+  | 'browserbase'
+  | 'steel';
 
 /**
  * Providers that accept API key storage via the setApiKey IPC handler.
@@ -74,7 +79,11 @@ export const ALLOWED_API_KEY_PROVIDERS: ReadonlySet<string> = new Set<string>([
   'together',
   'fireworks',
   'groq',
+  'venice',
   'elevenlabs',
+  'aws-agentcore',
+  'browserbase',
+  'steel',
 ]);
 
 /**
@@ -96,6 +105,7 @@ export const STANDARD_VALIDATION_PROVIDERS: ReadonlySet<string> = new Set<string
   'together',
   'fireworks',
   'groq',
+  'venice',
 ]);
 
 export interface ModelsEndpointConfig {
@@ -428,6 +438,21 @@ export const DEFAULT_PROVIDERS: ProviderConfig[] = [
     },
     models: [],
     defaultModelId: 'groq/llama3-70b-8192',
+  },
+  {
+    id: 'venice',
+    name: 'Venice AI',
+    requiresApiKey: true,
+    apiKeyEnvVar: 'VENICE_API_KEY',
+    baseUrl: 'https://api.venice.ai/api/v1',
+    defaultModelId: 'venice/llama-3.3-70b',
+    modelsEndpoint: {
+      url: 'https://api.venice.ai/api/v1/models',
+      authStyle: 'bearer',
+      responseFormat: 'openai',
+      modelIdPrefix: 'venice/',
+    },
+    models: [],
   },
 ];
 

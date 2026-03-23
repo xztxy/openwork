@@ -25,8 +25,15 @@ import type {
   Skill,
   McpConnector,
   FileAttachmentInfo,
-} from '@accomplish_ai/agent-core/common';
-import type { StoredFavorite } from '@accomplish_ai/agent-core';
+  Workspace,
+  WorkspaceCreateInput,
+  WorkspaceUpdateInput,
+  StoredFavorite,
+  BrowserFramePayload,
+  BrowserStatusPayload,
+  BrowserNavigatePayload,
+} from '@accomplish_ai/agent-core';
+import type { CloudBrowserConfig } from '@accomplish_ai/agent-core/common';
 
 // Define the API interface
 interface AccomplishAPI {
@@ -89,10 +96,15 @@ interface AccomplishAPI {
   setTheme(theme: string): Promise<void>;
   onThemeChange?(callback: (data: { theme: string; resolved: string }) => void): () => void;
   getAppSettings(): Promise<{ debugMode: boolean; onboardingComplete: boolean; theme: string }>;
+  getCloudBrowserConfig(): Promise<CloudBrowserConfig | null>;
+  setCloudBrowserConfig(config: CloudBrowserConfig | null): Promise<void>;
   getOpenAiBaseUrl(): Promise<string>;
   setOpenAiBaseUrl(baseUrl: string): Promise<void>;
   getOpenAiOauthStatus(): Promise<{ connected: boolean; expires?: number }>;
   loginOpenAiWithChatGpt(): Promise<{ ok: boolean; openedUrl?: string }>;
+  getSlackMcpOauthStatus(): Promise<{ connected: boolean; pendingAuthorization: boolean }>;
+  loginSlackMcp(): Promise<{ ok: boolean }>;
+  logoutSlackMcp(): Promise<void>;
 
   // API Key management
   hasApiKey(): Promise<boolean>;
@@ -274,6 +286,15 @@ interface AccomplishAPI {
     } | null,
   ): Promise<void>;
 
+  // Custom OpenAI-compatible endpoint configuration
+  testCustomConnection(
+    baseUrl: string,
+    apiKey?: string,
+  ): Promise<{
+    success: boolean;
+    error?: string;
+  }>;
+
   // Bedrock configuration
   validateBedrockCredentials(credentials: string): Promise<{ valid: boolean; error?: string }>;
   saveBedrockCredentials(credentials: string): Promise<ApiKeyConfig>;
@@ -322,6 +343,7 @@ interface AccomplishAPI {
   listFavorites(): Promise<StoredFavorite[]>;
 
   // File attachments
+  pickFolder(): Promise<string | null>;
   pickFiles(): Promise<FileAttachmentInfo[]>;
   getFilePath(file: File): string;
   processDroppedFiles(paths: string[]): Promise<FileAttachmentInfo[]>;
@@ -339,6 +361,21 @@ interface AccomplishAPI {
   onTaskSummary?(callback: (data: { taskId: string; summary: string }) => void): () => void;
   onTodoUpdate?(callback: (data: { taskId: string; todos: TodoItem[] }) => void): () => void;
   onAuthError?(callback: (data: { providerId: string; message: string }) => void): () => void;
+
+  // Browser Preview (ENG-695)
+  // Contributed by dhruvawani17 (PR #489), samarthsinh2660 (PR #414), david-mamani (PR #553)
+  onBrowserFrame?(callback: (event: BrowserFramePayload & { taskId: string }) => void): () => void;
+  onBrowserNavigate?(
+    callback: (event: BrowserNavigatePayload & { taskId: string; pageName: string }) => void,
+  ): () => void;
+  onBrowserStatus?(
+    callback: (
+      event: BrowserStatusPayload & { taskId: string; pageName: string; message?: string },
+    ) => void,
+  ): () => void;
+  startBrowserPreview?(taskId: string, pageName?: string): Promise<{ success: boolean }>;
+  stopBrowserPreview?(taskId: string): Promise<{ stopped: boolean }>;
+  getBrowserPreviewStatus?(): Promise<{ active: boolean }>;
 
   // Speech-to-Text
   speechIsConfigured(): Promise<boolean>;
@@ -389,6 +426,18 @@ interface AccomplishAPI {
     platform?: string;
   }): Promise<{ success: boolean; path?: string; error?: string; reason?: string }>;
 
+  // Workspace management
+  listWorkspaces(): Promise<Workspace[]>;
+  getActiveWorkspaceId(): Promise<string | null>;
+  switchWorkspace(workspaceId: string): Promise<{ success: boolean; reason?: string }>;
+  createWorkspace(input: WorkspaceCreateInput): Promise<Workspace>;
+  updateWorkspace(id: string, input: WorkspaceUpdateInput): Promise<Workspace | null>;
+  deleteWorkspace(id: string): Promise<boolean>;
+
+  // Workspace event subscriptions
+  onWorkspaceChanged?(callback: (data: { workspaceId: string }) => void): () => void;
+  onWorkspaceDeleted?(callback: (data: { workspaceId: string }) => void): () => void;
+
   // Skills management
   getSkills(): Promise<Skill[]>;
   getEnabledSkills(): Promise<Skill[]>;
@@ -402,6 +451,11 @@ interface AccomplishAPI {
   resyncSkills(): Promise<Skill[]>;
   openSkillInEditor(filePath: string): Promise<void>;
   showSkillInFolder(filePath: string): Promise<void>;
+
+  // Daemon / Background Mode
+  getRunInBackground(): Promise<boolean>;
+  setRunInBackground(enabled: boolean): Promise<void>;
+  getDaemonSocketPath(): Promise<string>;
 
   // Sandbox configuration
   getSandboxConfig(): Promise<{

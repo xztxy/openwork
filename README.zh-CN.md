@@ -14,6 +14,8 @@
   <a href="https://downloads.accomplish.ai/downloads/0.4.0/macos/Accomplish-0.4.0-mac-arm64.dmg"><img src="https://img.shields.io/badge/Download-macOS_(Apple_Silicon)-0ea5e9?style=flat-square" alt="下载 macOS 版 (Apple Silicon)" /></a>
   <a href="https://downloads.accomplish.ai/downloads/0.4.0/macos/Accomplish-0.4.0-mac-x64.dmg"><img src="https://img.shields.io/badge/Download-macOS_(Intel)-0ea5e9?style=flat-square" alt="下载 macOS 版 (Intel)" /></a>
   <a href="https://downloads.accomplish.ai/downloads/0.4.0/windows/Accomplish-0.4.0-win-x64.exe"><img src="https://img.shields.io/badge/Download-Windows_11-0ea5e9?style=flat-square" alt="下载 Windows 11 版" /></a>
+  <a href="https://downloads.accomplish.ai/downloads/0.4.0/linux/Accomplish-0.4.0-linux-arm64.AppImage"><img src="https://img.shields.io/badge/Download-Linux_(ARM64)-0ea5e9?style=flat-square" alt="Download for Linux (ARM64)" /></a>
+  <a href="https://downloads.accomplish.ai/downloads/0.4.0/linux/Accomplish-0.4.0-linux-x64.AppImage"><img src="https://img.shields.io/badge/Download-Linux_(x64)-0ea5e9?style=flat-square" alt="Download for Linux (x64)" /></a>
   <a href="https://discord.gg/YH86b2P8"><img src="https://img.shields.io/badge/Discord-Join-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
@@ -31,6 +33,10 @@ Accomplish 是一款开源 AI 桌面代理，可在您的本地机器上自动�
   <a href="https://downloads.accomplish.ai/downloads/0.4.0/macos/Accomplish-0.4.0-mac-x64.dmg"><strong>下载 Mac 版（Intel）</strong></a>
   ·
   <a href="https://downloads.accomplish.ai/downloads/0.4.0/windows/Accomplish-0.4.0-win-x64.exe"><strong>下载 Windows 11 版</strong></a>
+  ·
+  <a href="https://downloads.accomplish.ai/downloads/0.4.0/linux/Accomplish-0.4.0-linux-arm64.AppImage"><strong>Download for Linux (ARM64)</strong></a>
+  ·
+  <a href="https://downloads.accomplish.ai/downloads/0.4.0/linux/Accomplish-0.4.0-linux-x64.AppImage"><strong>Download for Linux (x64)</strong></a>
   ·
   <a href="https://www.accomplish.ai/">Accomplish 官网</a>
   ·
@@ -166,6 +172,8 @@ Accomplish 在您的机器上本地运行。您的文件保留在您的设备上
 
 - macOS（Apple Silicon）
 - Windows 11
+- Ubuntu (ARM64)
+- Ubuntu (x64)
 
 <br />
 
@@ -190,7 +198,7 @@ Accomplish 在您的机器上本地运行。您的文件保留在您的设备上
 
 <div align="center">
 
-[**下载 Mac 版（Apple Silicon）**](https://downloads.accomplish.ai/downloads/0.4.0/macos/Accomplish-0.4.0-mac-arm64.dmg) · [**下载 Mac 版（Intel）**](https://downloads.accomplish.ai/downloads/0.4.0/macos/Accomplish-0.4.0-mac-x64.dmg) · [**下载 Windows 11 版**](https://downloads.accomplish.ai/downloads/0.4.0/windows/Accomplish-0.4.0-win-x64.exe)
+[**下载 Mac 版（Apple Silicon）**](https://downloads.accomplish.ai/downloads/0.4.0/macos/Accomplish-0.4.0-mac-arm64.dmg) · [**下载 Mac 版（Intel）**](https://downloads.accomplish.ai/downloads/0.4.0/macos/Accomplish-0.4.0-mac-x64.dmg) · [**下载 Windows 11 版**](https://downloads.accomplish.ai/downloads/0.4.0/windows/Accomplish-0.4.0-win-x64.exe) · [**Download for Linux (ARM64)**](https://downloads.accomplish.ai/downloads/0.4.0/linux/Accomplish-0.4.0-linux-arm64.AppImage) · [**Download for Linux (x64)**](https://downloads.accomplish.ai/downloads/0.4.0/linux/Accomplish-0.4.0-linux-x64.AppImage)
 
 </div>
 
@@ -228,7 +236,7 @@ Accomplish 在您的机器上本地运行。您的文件保留在您的设备上
 是的。Accomplish 是开源的，采用 MIT 许可证。
 
 **支持哪些平台？**
-macOS（Apple Silicon）和 Windows 11 现已可用。
+macOS（Apple Silicon）和 Windows 11 现已可用。 Ubuntu (ARM64) 和 Ubuntu (x64) 同样支持。
 
 <br />
 

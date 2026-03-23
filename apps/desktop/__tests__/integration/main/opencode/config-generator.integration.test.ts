@@ -265,6 +265,8 @@ vi.mock('@main/store/storage', () => ({
       };
     },
     setConnectorStatus: mockSetConnectorStatus,
+    getCloudBrowserConfig: () => null,
+    setCloudBrowserConfig: vi.fn(),
   })),
 }));
 

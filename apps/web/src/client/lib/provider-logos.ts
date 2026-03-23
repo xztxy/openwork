@@ -18,6 +18,8 @@ import nebiusLogo from '/assets/ai-logos/nebius.svg';
 import togetherLogo from '/assets/ai-logos/together.svg';
 import fireworksLogo from '/assets/ai-logos/fireworks.svg';
 import groqLogo from '/assets/ai-logos/groq.svg';
+import veniceLogo from '/assets/ai-logos/venice.svg';
+import customLogo from '/assets/ai-logos/custom.svg';
 
 export const PROVIDER_LOGOS: Record<ProviderId, string> = {
   anthropic: anthropicLogo,
@@ -39,6 +41,8 @@ export const PROVIDER_LOGOS: Record<ProviderId, string> = {
   together: togetherLogo,
   fireworks: fireworksLogo,
   groq: groqLogo,
+  venice: veniceLogo,
+  custom: customLogo,
 };
 
 export const DARK_INVERT_PROVIDERS = new Set<ProviderId>([
