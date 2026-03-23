@@ -16,16 +16,23 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
+
+// ── Hoisted mock fns (must be defined before any vi.mock() calls) ─────────────
+const {
   mockStartBrowserPreviewStream,
   mockStopBrowserPreviewStream,
   mockStopAllBrowserPreviewStreams,
   mockIsScreencastActive,
   mockAutoStartScreencast,
-  mockHandlers,
-  createMockStorage,
-  invokeHandler,
-} from './helpers/browserPreview.helpers';
+} = vi.hoisted(() => ({
+  mockStartBrowserPreviewStream: vi.fn(() => Promise.resolve()),
+  mockStopBrowserPreviewStream: vi.fn(() => Promise.resolve()),
+  mockStopAllBrowserPreviewStreams: vi.fn(() => Promise.resolve()),
+  mockIsScreencastActive: vi.fn(() => false),
+  mockAutoStartScreencast: vi.fn(() => Promise.resolve()),
+}));
+
+import { mockHandlers, createMockStorage, invokeHandler } from './helpers/browserPreview.helpers';
 
 // ── Mock browserPreview service (CDP-based, not ws npm package) ──────────────
 
@@ -261,6 +268,7 @@ describe('BrowserPreview IPC Handlers (CDP implementation)', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
   // ── Handler registration ──────────────────────────────────────────────────

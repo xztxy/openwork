@@ -7,22 +7,6 @@
 
 import { vi } from 'vitest';
 
-// ── BrowserPreview service mocks ─────────────────────────────────────────────
-
-export const {
-  mockStartBrowserPreviewStream,
-  mockStopBrowserPreviewStream,
-  mockStopAllBrowserPreviewStreams,
-  mockIsScreencastActive,
-  mockAutoStartScreencast,
-} = vi.hoisted(() => ({
-  mockStartBrowserPreviewStream: vi.fn(() => Promise.resolve()),
-  mockStopBrowserPreviewStream: vi.fn(() => Promise.resolve()),
-  mockStopAllBrowserPreviewStreams: vi.fn(() => Promise.resolve()),
-  mockIsScreencastActive: vi.fn(() => false),
-  mockAutoStartScreencast: vi.fn(() => Promise.resolve()),
-}));
-
 // ── Electron mock factory ────────────────────────────────────────────────────
 
 export const mockHandlers = new Map<string, (...args: unknown[]) => unknown>();

@@ -349,48 +349,58 @@ app.on('window-all-closed', () => {
 
 let isQuitting = false;
 app.on('before-quit', (event) => {
-  if (isQuitting) { return; }
+  if (isQuitting) {
+    return;
+  }
   isQuitting = true;
   event.preventDefault();
 
-  const logger = getLogCollector();
+  let logger: ReturnType<typeof getLogCollector> | null = null;
+  try {
+    logger = getLogCollector();
+  } catch {
+    /* logger may not be initialized on early quit paths */
+  }
 
   // Await async cleanup before quitting (Dev0907, PR #480, ENG-695)
   void (async () => {
     try {
       await stopAllBrowserPreviewStreams();
     } catch (error: unknown) {
-      logger.logEnv('ERROR', `[Main] Failed to stop browser preview streams: ${String(error)}`);
+      logger?.logEnv('ERROR', `[Main] Failed to stop browser preview streams: ${String(error)}`);
     }
     try {
       disposeTaskManager(); // Also cleans up proxies internally
     } catch (error: unknown) {
-      logger.logEnv('ERROR', `[Main] Error during disposeTaskManager: ${String(error)}`);
+      logger?.logEnv('ERROR', `[Main] Error during disposeTaskManager: ${String(error)}`);
     }
     try {
       cleanupVertexServiceAccountKey();
     } catch (error: unknown) {
-      logger.logEnv('ERROR', `[Main] Error during cleanupVertexServiceAccountKey: ${String(error)}`);
+      logger?.logEnv(
+        'ERROR',
+        `[Main] Error during cleanupVertexServiceAccountKey: ${String(error)}`,
+      );
     }
     try {
       oauthBrowserFlow.dispose();
     } catch (error: unknown) {
-      logger.logEnv('ERROR', `[Main] Error during oauthBrowserFlow.dispose: ${String(error)}`);
+      logger?.logEnv('ERROR', `[Main] Error during oauthBrowserFlow.dispose: ${String(error)}`);
     }
     try {
       slackMcpOAuthFlow.dispose();
     } catch (error: unknown) {
-      logger.logEnv('ERROR', `[Main] Error during slackMcpOAuthFlow.dispose: ${String(error)}`);
+      logger?.logEnv('ERROR', `[Main] Error during slackMcpOAuthFlow.dispose: ${String(error)}`);
     }
     try {
       workspaceManager.close();
     } catch (error: unknown) {
-      logger.logEnv('ERROR', `[Main] Error during workspaceManager.close: ${String(error)}`);
+      logger?.logEnv('ERROR', `[Main] Error during workspaceManager.close: ${String(error)}`);
     }
     try {
       closeStorage();
     } catch (error: unknown) {
-      logger.logEnv('ERROR', `[Main] Error during closeStorage: ${String(error)}`);
+      logger?.logEnv('ERROR', `[Main] Error during closeStorage: ${String(error)}`);
     }
     shutdownLogCollector();
     app.quit();
