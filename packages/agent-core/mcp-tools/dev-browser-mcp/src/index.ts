@@ -419,11 +419,29 @@ async function captureBoundedScreenshot(
 /** Target ~10 FPS — enough for live preview without flooding stdout */
 const FRAME_INTERVAL_MS = 100;
 
+/**
+ * Track the active screencast frame handler per page name.
+ * This ensures we remove the old listener before attaching a new one,
+ * preventing duplicate frames after navigation (idempotent screencast).
+ */
+const activeFrameHandlers = new Map<string, (event: { data: string; sessionId: number }) => void>();
+
 async function startScreencast(pageName?: string): Promise<void> {
+  const pageKey = pageName || 'main';
   const fullPageName = getFullPageName(pageName);
 
   try {
     const session = await getCDPSession(pageName);
+
+    // Remove any existing frame handler for this page before adding a new one
+    const existingHandler = activeFrameHandlers.get(pageKey);
+    if (existingHandler) {
+      session.off('Page.screencastFrame', existingHandler);
+      activeFrameHandlers.delete(pageKey);
+    }
+
+    // Stop any running screencast before restarting (idempotent)
+    await session.send('Page.stopScreencast').catch(() => {});
 
     await session.send('Page.startScreencast', {
       format: 'jpeg',
@@ -463,6 +481,7 @@ async function startScreencast(pageName?: string): Promise<void> {
       }
     };
 
+    activeFrameHandlers.set(pageKey, frameHandler);
     session.on('Page.screencastFrame', frameHandler);
     console.error(`[dev-browser-mcp] Screencast started for page: ${fullPageName}`);
   } catch (err) {
@@ -471,10 +490,19 @@ async function startScreencast(pageName?: string): Promise<void> {
 }
 
 async function _stopScreencast(pageName?: string): Promise<void> {
+  const pageKey = pageName || 'main';
   const fullPageName = getFullPageName(pageName);
 
   try {
     const session = await getCDPSession(pageName);
+
+    // Remove the tracked frame handler before stopping
+    const existingHandler = activeFrameHandlers.get(pageKey);
+    if (existingHandler) {
+      session.off('Page.screencastFrame', existingHandler);
+      activeFrameHandlers.delete(pageKey);
+    }
+
     await session.send('Page.stopScreencast');
     console.error(`[dev-browser-mcp] Screencast stopped for page: ${fullPageName}`);
   } catch (err) {

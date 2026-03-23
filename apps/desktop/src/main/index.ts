@@ -347,18 +347,34 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('before-quit', () => {
-  // Stop all browser preview streams before quitting (Dev0907, PR #480, ENG-695)
-  void stopAllBrowserPreviewStreams().catch((error: unknown) => {
-    console.warn('[Main] Failed to stop browser preview streams:', error);
-  });
-  disposeTaskManager(); // Also cleans up proxies internally
-  cleanupVertexServiceAccountKey();
-  oauthBrowserFlow.dispose();
-  slackMcpOAuthFlow.dispose();
-  workspaceManager.close();
-  closeStorage();
-  shutdownLogCollector();
+let isQuitting = false;
+app.on('before-quit', (event) => {
+  if (isQuitting) return;
+  isQuitting = true;
+  event.preventDefault();
+
+  const logger = getLogCollector();
+
+  // Await async cleanup before quitting (Dev0907, PR #480, ENG-695)
+  void (async () => {
+    try {
+      await stopAllBrowserPreviewStreams();
+    } catch (error: unknown) {
+      logger.logEnv('ERROR', `[Main] Failed to stop browser preview streams: ${String(error)}`);
+    }
+    try {
+      disposeTaskManager(); // Also cleans up proxies internally
+      cleanupVertexServiceAccountKey();
+      oauthBrowserFlow.dispose();
+      slackMcpOAuthFlow.dispose();
+      workspaceManager.close();
+      closeStorage();
+    } catch (error: unknown) {
+      logger.logEnv('ERROR', `[Main] Error during cleanup: ${String(error)}`);
+    }
+    shutdownLogCollector();
+    app.quit();
+  })();
 });
 
 if (process.platform === 'win32' && !app.isPackaged) {

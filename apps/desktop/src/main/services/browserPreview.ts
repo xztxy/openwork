@@ -23,6 +23,7 @@
 
 import { BrowserWindow } from 'electron';
 import { DEV_BROWSER_CDP_PORT, DEV_BROWSER_PORT } from '@accomplish_ai/agent-core';
+import { getLogCollector } from '@main/logging';
 
 const DEFAULT_PAGE_NAME = 'main';
 const DEV_BROWSER_HOST = '127.0.0.1';
@@ -364,10 +365,10 @@ export async function startBrowserPreviewStream(
     anySessionActive = true;
     emitStatus(taskId, normalizedPageName, 'streaming');
 
-    console.log(`[BrowserPreview] Stream started for task ${taskId}, page ${normalizedPageName}`);
+    getLogCollector().logBrowser('INFO', `[BrowserPreview] Stream started for task ${taskId}, page ${normalizedPageName}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[BrowserPreview] Failed to start stream for task ${taskId}:`, msg);
+    getLogCollector().logBrowser('ERROR', `[BrowserPreview] Failed to start stream for task ${taskId}: ${msg}`);
     emitStatus(taskId, normalizedPageName, 'error', msg);
     await cdp.disconnect().catch(() => {});
   }
@@ -393,9 +394,9 @@ export async function stopBrowserPreviewStream(taskId: string): Promise<void> {
       .catch(() => {});
     await session.cdp.disconnect();
     emitStatus(taskId, session.pageName, 'stopped');
-    console.log(`[BrowserPreview] Stream stopped for task ${taskId}`);
+    getLogCollector().logBrowser('INFO', `[BrowserPreview] Stream stopped for task ${taskId}`);
   } catch (err) {
-    console.warn(`[BrowserPreview] Error stopping stream for task ${taskId}:`, err);
+    getLogCollector().logBrowser('WARN', `[BrowserPreview] Error stopping stream for task ${taskId}: ${String(err)}`);
   }
 }
 

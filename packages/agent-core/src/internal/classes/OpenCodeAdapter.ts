@@ -935,16 +935,18 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
         .replace(/\x1B\][^\x07]*\x07/g, '')
         .replace(/\x1B\][^\x1B]*\x1B\\/g, '');
       /* eslint-enable no-control-regex */
-      if (cleanData.trim()) {
+      // Route through checkForBrowserFrame so continuation PTY frames are not dropped
+      const passthroughData = this.checkForBrowserFrame(cleanData);
+      if (passthroughData.trim()) {
         const truncated =
-          cleanData.substring(0, LOG_TRUNCATION_LIMIT) +
-          (cleanData.length > LOG_TRUNCATION_LIMIT ? '...' : '');
+          passthroughData.substring(0, LOG_TRUNCATION_LIMIT) +
+          (passthroughData.length > LOG_TRUNCATION_LIMIT ? '...' : '');
         console.log('[OpenCode CLI stdout]:', truncated);
-        this.emit('debug', { type: 'stdout', message: cleanData });
+        this.emit('debug', { type: 'stdout', message: passthroughData });
 
-        this.appendToOutputBuffer(cleanData);
+        this.appendToOutputBuffer(passthroughData);
 
-        this.streamParser.feed(cleanData);
+        this.streamParser.feed(passthroughData);
       }
     });
 
