@@ -66,12 +66,25 @@ export function matchesCron(cron: string, date: Date): boolean {
   const months = parseCronField(monthField, 1, 12);
   const dows = parseCronField(dowField, 0, 6);
 
+  // Standard cron OR semantics: when both dom and dow are restricted (non-wildcard),
+  // a match occurs if dom OR dow matches. When either is wildcard, AND semantics apply.
+  const domIsWildcard = domField === '*';
+  const dowIsWildcard = dowField === '*';
+
+  let domDowMatch: boolean;
+  if (!domIsWildcard && !dowIsWildcard) {
+    // OR semantics: match if dom OR dow matches
+    domDowMatch = doms.includes(date.getDate()) || dows.includes(date.getDay());
+  } else {
+    // AND semantics: both must match (wildcard fields match any value)
+    domDowMatch = doms.includes(date.getDate()) && dows.includes(date.getDay());
+  }
+
   return (
     minutes.includes(date.getMinutes()) &&
     hours.includes(date.getHours()) &&
-    doms.includes(date.getDate()) &&
     months.includes(date.getMonth() + 1) &&
-    dows.includes(date.getDay())
+    domDowMatch
   );
 }
 
