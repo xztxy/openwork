@@ -249,7 +249,32 @@
     "voiceInput": "Saisie vocale",
     "appearance": "Apparence",
     "about": "À propos",
-    "browsers": "Navigateurs cloud"
+    "browsers": "Navigateurs cloud",
+    "integrations": "Intégrations"
+  },
+  "integrations": {
+    "title": "Intégrations de messagerie",
+    "description": "Connectez des plateformes de messagerie pour déclencher des tâches Accomplish à distance. Une fois activé, vous pouvez démarrer et surveiller des tâches depuis votre téléphone ou n'importe quel appareil.",
+    "enabled": "Activé",
+    "comingSoon": "Bientôt disponible",
+    "enable": "Activer {{name}}",
+    "enableDescription": "Autoriser la réception et l'envoi de messages",
+    "disconnect": "Déconnecter {{name}}",
+    "connectedAs": "Connecté en tant que {{name}}",
+    "remoteAccess": "Activer l'accès à distance",
+    "remoteAccessDescription": "Ouvrir un tunnel sécurisé pour que les messages puissent atteindre cette machine de n'importe où",
+    "platforms": {
+      "whatsapp": "Déclencher des tâches et recevoir des mises à jour via WhatsApp",
+      "slack": "Connecter un espace de travail Slack pour la gestion des tâches",
+      "telegram": "Utiliser le bot Telegram pour interagir avec Accomplish",
+      "teams": "Intégrer avec les canaux et chats Teams"
+    },
+    "whatsapp": {
+      "connect": "Connecter WhatsApp",
+      "scanQr": "Scannez le QR code ci-dessous avec votre application WhatsApp pour connecter cet appareil. Allez dans WhatsApp > Paramètres > Appareils liés > Lier un appareil.",
+      "qrPlaceholder": "Le QR code apparaîtra ici lorsque le service WhatsApp démarrera",
+      "securityNotice": "En connectant WhatsApp, vous accordez à Accomplish l'accès à vos messages WhatsApp. Toutes les données restent sur votre appareil et ne sont pas partagées à l'extérieur."
+    }
   },
   "appearance": {
     "title": "Thème",
