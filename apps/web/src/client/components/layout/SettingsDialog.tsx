@@ -183,6 +183,14 @@ export function SettingsDialog({
     [connectProvider, setActiveProvider, onApiKeySaved],
   );
 
+  // Handle provider update (e.g. model list refresh) without triggering connect side effects
+  const handleUpdateProvider = useCallback(
+    async (provider: ConnectedProvider) => {
+      await connectProvider(provider.providerId, provider);
+    },
+    [connectProvider],
+  );
+
   // Handle provider disconnection
   const handleDisconnect = useCallback(async () => {
     if (!selectedProvider) return;
@@ -424,6 +432,7 @@ export function SettingsDialog({
                           providerId={selectedProvider}
                           connectedProvider={settings?.connectedProviders?.[selectedProvider]}
                           onConnect={handleConnect}
+                          onUpdateProvider={handleUpdateProvider}
                           onDisconnect={handleDisconnect}
                           onModelChange={handleModelChange}
                           showModelError={showModelError}
