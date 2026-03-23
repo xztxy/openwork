@@ -254,14 +254,27 @@ export class SkillsManager {
     const destSkillMdPath = this.prepareSkillDir(frontmatter);
     const destDir = path.dirname(destSkillMdPath);
 
+    const resolvedSourceDir = path.resolve(folderPath);
+    const resolvedDestDir = path.resolve(destDir);
+
+    // Skip delete+copy when re-importing an already-installed skill (same directory)
+    if (resolvedSourceDir === resolvedDestDir) {
+      return this.persistSkill(frontmatter, destSkillMdPath, 'custom');
+    }
+
     // Remove existing contents so re-imports don't leave stale files
     if (fs.existsSync(destDir)) {
       fs.rmSync(destDir, { recursive: true });
       fs.mkdirSync(destDir, { recursive: true });
     }
 
-    // Copy all contents from the source folder into the destination recursively
-    fs.cpSync(folderPath, destDir, { recursive: true });
+    // Copy only top-level files from source folder
+    const entries = fs.readdirSync(folderPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isFile()) {
+        fs.copyFileSync(path.join(folderPath, entry.name), path.join(destDir, entry.name));
+      }
+    }
 
     return this.persistSkill(frontmatter, destSkillMdPath, 'custom');
   }
@@ -375,4 +388,3 @@ export class SkillsManager {
     return skill;
   }
 }
-// skill folder import
