@@ -161,6 +161,17 @@ export interface TaskCancelScheduledParams {
 }
 
 // =============================================================================
+// Health Check Result
+// =============================================================================
+
+export interface HealthCheckResult {
+  version: string;
+  uptime: number;
+  activeTasks: number;
+  memoryUsage: number;
+}
+
+// =============================================================================
 // Method Map: maps RPC method names to { params, result } types
 // =============================================================================
 
@@ -200,6 +211,19 @@ export interface DaemonMethodMap {
 
   // Health
   'daemon.ping': { params: undefined; result: { status: 'ok'; uptime: number } };
+
+  // Extended task methods used by the standalone daemon process
+  'task.stop': { params: TaskIdParams; result: void };
+  'task.status': {
+    params: TaskIdParams;
+    result: {
+      taskId: string;
+      status: import('./task.js').TaskStatus;
+      prompt: string;
+      createdAt: string;
+    } | null;
+  };
+  'health.check': { params: undefined; result: HealthCheckResult };
 }
 
 /** All valid daemon RPC method names. */
@@ -215,10 +239,14 @@ export interface DaemonNotificationMap {
   'task.statusChange': { taskId: string; status: string; completedAt?: string };
   'task.summary': { taskId: string; summary: string };
   'task.complete': { taskId: string; result: TaskResult };
+  'task.error': { taskId: string; error?: string };
   'permission.request': { taskId: string; request: PermissionRequest };
   'todo.update': { taskId: string; todos: TodoItem[] };
   'thought.event': ThoughtEvent;
   'checkpoint.event': CheckpointEvent;
+  // Extended notifications used by the standalone daemon process
+  'task.thought': ThoughtEvent;
+  'task.checkpoint': CheckpointEvent;
 }
 
 /** All valid daemon notification names. */

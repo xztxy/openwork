@@ -22,7 +22,10 @@ import {
   disposeScheduler,
   mapResultToStatus,
   createTaskId,
+  isFilePermissionRequest,
+  isQuestionRequest,
 } from '@accomplish_ai/agent-core';
+import { resolvePermission, resolveQuestion } from './permission-api';
 import type {
   TaskManagerAPI,
   StorageAPI,
@@ -313,7 +316,11 @@ function registerInProcessHandlers(
     if (!params) {
       return false;
     }
-    return taskManager.cancelQueuedTask(params.taskId);
+    const cancelled = taskManager.cancelQueuedTask(params.taskId);
+    if (cancelled) {
+      storage.updateTaskStatus(params.taskId, 'cancelled', new Date().toISOString());
+    }
+    return cancelled;
   });
 
   srv.registerMethod('storage.saveTask', (params) => {
@@ -398,22 +405,53 @@ function registerInProcessHandlers(
 
   srv.registerMethod('permission.respond', async (params) => {
     const { response } = params;
-    const { taskId, decision, requestId, selectedOptions } = response as PermissionResponse;
+    const { taskId, decision, requestId, selectedOptions, customText } =
+      response as PermissionResponse;
+
+    if (requestId) {
+      // Resolve via the in-process permission handler (used by MCP tools)
+      if (isFilePermissionRequest(requestId)) {
+        const allowed = decision === 'allow';
+        const resolved = resolvePermission(requestId, allowed);
+        if (resolved) {
+          return;
+        }
+        getLogCollector().logEnv(
+          'WARN',
+          `[DaemonBootstrap] No pending file permission request for id: ${requestId}`,
+        );
+        return;
+      }
+
+      if (isQuestionRequest(requestId)) {
+        const denied = decision === 'deny';
+        const resolved = resolveQuestion(requestId, {
+          selectedOptions,
+          customText,
+          denied,
+        });
+        if (resolved) {
+          return;
+        }
+        getLogCollector().logEnv(
+          'WARN',
+          `[DaemonBootstrap] No pending question request for id: ${requestId}`,
+        );
+        return;
+      }
+
+      getLogCollector().logEnv(
+        'WARN',
+        `[DaemonBootstrap] Unknown requestId format in permission.respond`,
+        { requestId },
+      );
+      return;
+    }
 
     if (!taskManager.hasActiveTask(taskId)) {
       getLogCollector().logEnv('WARN', `[DaemonBootstrap] Permission response for inactive task`, {
         taskId,
       });
-      return;
-    }
-
-    if (requestId) {
-      // requestId-based responses are handled externally (permission-api); log and skip
-      getLogCollector().logEnv(
-        'WARN',
-        `[DaemonBootstrap] Unhandled requestId-based permission.respond`,
-        { requestId },
-      );
       return;
     }
 

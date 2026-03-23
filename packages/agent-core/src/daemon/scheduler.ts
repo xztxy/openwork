@@ -11,6 +11,9 @@
  */
 
 import type { ScheduledTask } from '../common/types/daemon.js';
+import { createLogger } from './logger.js';
+
+const logger = createLogger('Scheduler');
 
 type ScheduledTaskCallback = (task: ScheduledTask) => void;
 
@@ -109,7 +112,7 @@ export function addScheduledTask(cron: string, prompt: string): ScheduledTask {
   };
 
   schedules.set(id, task);
-  console.log('[Scheduler] Added schedule:', id, cron, prompt.slice(0, 50));
+  logger.info('Added schedule:', id, cron, prompt.slice(0, 50));
 
   // Start the timer if not running
   if (!timerId) {
@@ -131,7 +134,7 @@ export function listScheduledTasks(): ScheduledTask[] {
  */
 export function cancelScheduledTask(scheduleId: string): void {
   schedules.delete(scheduleId);
-  console.log('[Scheduler] Cancelled schedule:', scheduleId);
+  logger.info('Cancelled schedule:', scheduleId);
 
   if (schedules.size === 0 && timerId) {
     stopTimer();
@@ -152,7 +155,7 @@ export function disposeScheduler(): void {
   stopTimer();
   schedules.clear();
   onFireCallback = null;
-  console.log('[Scheduler] Disposed');
+  logger.info('Disposed');
 }
 
 // ── Internal timer ───────────────────────────────────────────────────
@@ -163,14 +166,14 @@ function startTimer(): void {
     tick();
   }, 60_000);
 
-  console.log('[Scheduler] Timer started');
+  logger.info('Timer started');
 }
 
 function stopTimer(): void {
   if (timerId) {
     clearInterval(timerId);
     timerId = null;
-    console.log('[Scheduler] Timer stopped');
+    logger.info('Timer stopped');
   }
 }
 
@@ -183,7 +186,7 @@ function tick(): void {
     }
 
     if (matchesCron(task.cron, now)) {
-      console.log('[Scheduler] Firing scheduled task:', task.id, task.prompt.slice(0, 50));
+      logger.info('Firing scheduled task:', task.id, task.prompt.slice(0, 50));
       task.lastRunAt = now.toISOString();
       task.nextRunAt = getNextRunTime(task.cron);
 
@@ -191,7 +194,7 @@ function tick(): void {
         try {
           onFireCallback(task);
         } catch (err) {
-          console.error('[Scheduler] Callback error for task', task.id, err);
+          logger.error('Callback error for task', task.id, err);
         }
       }
     }

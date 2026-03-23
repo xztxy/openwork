@@ -1,40 +1,63 @@
-import { type ButtonHTMLAttributes } from 'react';
+import * as React from 'react';
+import * as SwitchPrimitive from '@radix-ui/react-switch';
+import { cva, type VariantProps } from 'class-variance-authority';
 
-interface SwitchProps extends Omit<
-  ButtonHTMLAttributes<HTMLButtonElement>,
-  'onChange' | 'onClick'
-> {
-  checked: boolean;
-  onChange: () => void;
+import { cn } from '@/lib/utils';
+
+const switchVariants = cva(
+  'peer inline-flex shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-muted',
+  {
+    variants: {
+      size: {
+        default: 'h-6 w-11',
+        sm: 'h-5 w-9',
+      },
+    },
+    defaultVariants: {
+      size: 'default',
+    },
+  },
+);
+
+const thumbVariants = cva(
+  'pointer-events-none block rounded-full bg-background shadow-lg ring-0 transition-transform data-[state=unchecked]:translate-x-0',
+  {
+    variants: {
+      size: {
+        default: 'h-5 w-5 data-[state=checked]:translate-x-5',
+        sm: 'h-4 w-4 data-[state=checked]:translate-x-4',
+      },
+    },
+    defaultVariants: {
+      size: 'default',
+    },
+  },
+);
+
+export interface SwitchProps
+  extends
+    React.ComponentPropsWithoutRef<typeof SwitchPrimitive.Root>,
+    VariantProps<typeof switchVariants> {
+  checked?: boolean;
+  onChange?: () => void;
   ariaLabel?: string;
 }
 
-export function Switch({
-  checked,
-  onChange,
-  disabled,
-  ariaLabel,
-  className,
-  ...props
-}: SwitchProps) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={ariaLabel}
+const Switch = React.forwardRef<React.ElementRef<typeof SwitchPrimitive.Root>, SwitchProps>(
+  ({ className, size, checked, onChange, disabled, ariaLabel, ...props }, ref) => (
+    <SwitchPrimitive.Root
+      ref={ref}
+      checked={checked}
+      onCheckedChange={onChange}
       disabled={disabled}
+      aria-label={ariaLabel}
+      className={cn(switchVariants({ size }), className)}
       {...props}
-      onClick={onChange}
-      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 ${
-        checked ? 'bg-primary' : 'bg-muted'
-      } ${className ?? ''}`}
     >
-      <span
-        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow ring-0 transition duration-200 ease-in-out ${
-          checked ? 'translate-x-5' : 'translate-x-0'
-        }`}
-      />
-    </button>
-  );
-}
+      <SwitchPrimitive.Thumb className={cn(thumbVariants({ size }))} />
+    </SwitchPrimitive.Root>
+  ),
+);
+Switch.displayName = SwitchPrimitive.Root.displayName;
+
+export { Switch };

@@ -5,27 +5,21 @@
  * standalone daemon process. Accepts multiple client connections and dispatches
  * registered method handlers.
  *
+ * Unlike the in-process `DaemonServer`, this class is intentionally loosely
+ * typed so that it can serve any JSON-RPC method without requiring every
+ * method to be pre-declared in `DaemonMethodMap`.
+ *
  * ESM module — use .js extensions on imports.
  */
 
 import { createServer, type Server, type Socket } from 'node:net';
 import { randomUUID } from 'node:crypto';
-import type {
-  DaemonMethod,
-  DaemonMethodMap,
-  DaemonNotification,
-  DaemonNotificationMap,
-  JsonRpcMessage,
-  JsonRpcRequest,
-  JsonRpcResponse,
-  JsonRpcNotification,
-} from '../common/types/daemon.js';
+import type { JsonRpcMessage, JsonRpcRequest, JsonRpcResponse } from '../common/types/daemon.js';
 import { JSON_RPC_ERRORS } from '../common/types/daemon.js';
 import { getSocketPath } from './socket-path.js';
 
-type MethodHandler<M extends DaemonMethod> = (
-  params: DaemonMethodMap[M]['params'],
-) => Promise<DaemonMethodMap[M]['result']> | DaemonMethodMap[M]['result'];
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyMethodHandler = (params: any) => Promise<unknown> | unknown;
 
 export interface DaemonRpcServerOptions {
   /** Override the default Unix socket / named pipe path. */
@@ -47,7 +41,8 @@ export class DaemonRpcServer {
 
   private server: Server | null = null;
   private clients = new Map<string, ConnectedClient>();
-  private handlers = new Map<string, MethodHandler<DaemonMethod>>();
+  private handlers = new Map<string, AnyMethodHandler>();
+  private startTime = Date.now();
 
   constructor(options: DaemonRpcServerOptions = {}) {
     this.socketPath = options.socketPath ?? getSocketPath();
@@ -57,26 +52,23 @@ export class DaemonRpcServer {
     // Register built-in health check
     this.registerMethod('daemon.ping', () => ({
       status: 'ok' as const,
-      uptime: 0,
+      uptime: Date.now() - this.startTime,
     }));
   }
 
   /**
    * Register a handler for a JSON-RPC method.
    */
-  registerMethod<M extends DaemonMethod>(method: M, handler: MethodHandler<M>): void {
-    this.handlers.set(method, handler as unknown as MethodHandler<DaemonMethod>);
+  registerMethod(method: string, handler: AnyMethodHandler): void {
+    this.handlers.set(method, handler);
   }
 
   /**
    * Push a notification to all connected clients.
    */
-  notify<N extends DaemonNotification>(method: N, params: DaemonNotificationMap[N]): void {
-    const notification: JsonRpcNotification<DaemonNotificationMap[N]> = {
-      jsonrpc: '2.0',
-      method,
-      params,
-    };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  notify(method: string, params: any): void {
+    const notification = { jsonrpc: '2.0' as const, method, params };
     const data = JSON.stringify(notification) + '\n';
     for (const client of this.clients.values()) {
       if (!client.socket.destroyed) {
@@ -91,7 +83,7 @@ export class DaemonRpcServer {
    */
   async start(): Promise<void> {
     // Remove stale socket
-    await this.removeStalSocket();
+    await this.removeStaleSocket();
 
     return new Promise<void>((resolve, reject) => {
       this.server = createServer((socket) => {
@@ -180,7 +172,7 @@ export class DaemonRpcServer {
     }
 
     try {
-      const result = await handler(request.params as DaemonMethodMap[DaemonMethod]['params']);
+      const result = await handler(request.params);
       this.sendResult(client, request.id as string | number, result);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -210,7 +202,7 @@ export class DaemonRpcServer {
     }
   }
 
-  private async removeStalSocket(): Promise<void> {
+  private async removeStaleSocket(): Promise<void> {
     const { unlink } = await import('node:fs/promises');
     try {
       await unlink(this.socketPath);

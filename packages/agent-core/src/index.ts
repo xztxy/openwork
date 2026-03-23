@@ -520,4 +520,5 @@ export type {
   ScheduledTask,
   TaskScheduleParams,
   TaskCancelScheduledParams,
+  HealthCheckResult,
 } from './common/types/daemon.js';
