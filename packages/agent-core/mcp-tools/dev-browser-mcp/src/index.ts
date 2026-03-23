@@ -426,12 +426,29 @@ const FRAME_INTERVAL_MS = 100;
  */
 const activeFrameHandlers = new Map<string, (event: { data: string; sessionId: number }) => void>();
 
+/**
+ * Guards against concurrent startScreencast calls for the same page.
+ * If a screencast is already being initialised for a given pageKey, subsequent
+ * calls are dropped until the in-flight promise settles.
+ */
+const screencastStarting = new Set<string>();
+
 async function startScreencast(pageName?: string): Promise<void> {
   const pageKey = pageName || 'main';
   const fullPageName = getFullPageName(pageName);
 
+  // In-flight lock: skip if this page is already being started (Fix 3).
+  if (screencastStarting.has(pageKey)) {
+    return;
+  }
+  screencastStarting.add(pageKey);
+
   try {
-    const session = await getCDPSession(pageName);
+    // Use getPage() to honour activePageOverride — the same resolved page that
+    // browser_navigate() already navigated, not just the raw string name (Fix 4).
+    const resolvedPage = await getPage(pageName);
+    const context = resolvedPage.context();
+    const session = await context.newCDPSession(resolvedPage);
 
     // Remove any existing frame handler for this page before adding a new one
     const existingHandler = activeFrameHandlers.get(pageKey);
@@ -486,6 +503,9 @@ async function startScreencast(pageName?: string): Promise<void> {
     console.error(`[dev-browser-mcp] Screencast started for page: ${fullPageName}`);
   } catch (err) {
     console.error(`[dev-browser-mcp] Failed to start screencast for ${fullPageName}:`, err);
+  } finally {
+    // Release the in-flight lock regardless of success or failure (Fix 3).
+    screencastStarting.delete(pageKey);
   }
 }
 

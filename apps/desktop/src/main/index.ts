@@ -349,7 +349,7 @@ app.on('window-all-closed', () => {
 
 let isQuitting = false;
 app.on('before-quit', (event) => {
-  if (isQuitting) return;
+  if (isQuitting) { return; }
   isQuitting = true;
   event.preventDefault();
 
@@ -364,13 +364,33 @@ app.on('before-quit', (event) => {
     }
     try {
       disposeTaskManager(); // Also cleans up proxies internally
+    } catch (error: unknown) {
+      logger.logEnv('ERROR', `[Main] Error during disposeTaskManager: ${String(error)}`);
+    }
+    try {
       cleanupVertexServiceAccountKey();
+    } catch (error: unknown) {
+      logger.logEnv('ERROR', `[Main] Error during cleanupVertexServiceAccountKey: ${String(error)}`);
+    }
+    try {
       oauthBrowserFlow.dispose();
+    } catch (error: unknown) {
+      logger.logEnv('ERROR', `[Main] Error during oauthBrowserFlow.dispose: ${String(error)}`);
+    }
+    try {
       slackMcpOAuthFlow.dispose();
+    } catch (error: unknown) {
+      logger.logEnv('ERROR', `[Main] Error during slackMcpOAuthFlow.dispose: ${String(error)}`);
+    }
+    try {
       workspaceManager.close();
+    } catch (error: unknown) {
+      logger.logEnv('ERROR', `[Main] Error during workspaceManager.close: ${String(error)}`);
+    }
+    try {
       closeStorage();
     } catch (error: unknown) {
-      logger.logEnv('ERROR', `[Main] Error during cleanup: ${String(error)}`);
+      logger.logEnv('ERROR', `[Main] Error during closeStorage: ${String(error)}`);
     }
     shutdownLogCollector();
     app.quit();

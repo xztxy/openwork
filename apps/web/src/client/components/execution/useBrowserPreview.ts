@@ -7,11 +7,15 @@
  *  - Auto-start on browser_* tool detection
  *  - IPC subscription to browser:frame, browser:navigate, browser:status events
  *
+ * IPC subscription logic lives in useBrowserPreviewIpc.ts (extracted to keep
+ * this file under 200 lines — CodeRabbit suggestion).
+ *
  * Extracted from BrowserPreview as part of ENG-982 refactor.
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import type { ViewStatus } from './StatusBadge';
+import { useBrowserPreviewIpc } from './useBrowserPreviewIpc';
 
 interface UseBrowserPreviewOptions {
   taskId: string;
@@ -19,7 +23,7 @@ interface UseBrowserPreviewOptions {
   currentTool?: string | null;
 }
 
-interface UseBrowserPreviewResult {
+export interface UseBrowserPreviewResult {
   frameData: string | null;
   currentUrl: string;
   status: ViewStatus;
@@ -114,20 +118,13 @@ export function useBrowserPreview({
     };
   }, [currentTool, taskId]);
 
-  // Subscribe to IPC events from the main process
+  // IPC event handlers — defined here so they can close over state setters and refs
   const handleFrame = useCallback(
     (event: { taskId: string; pageName: string; frame: string; timestamp: number }) => {
-      if (event.taskId !== taskId) {
-        return;
-      }
-      if (pageName && event.pageName !== pageName) {
-        return;
-      }
-      if (isPausedRef.current || isCollapsedRef.current) {
-        return;
-      }
+      if (event.taskId !== taskId) { return; }
+      if (pageName && event.pageName !== pageName) { return; }
+      if (isPausedRef.current || isCollapsedRef.current) { return; }
       if (statusRef.current === 'streaming') {
-        // Avoid re-render: write directly to the img element for subsequent frames
         if (imgRef.current) {
           imgRef.current.src = `data:image/jpeg;base64,${event.frame}`;
         }
@@ -145,12 +142,8 @@ export function useBrowserPreview({
 
   const handleNavigate = useCallback(
     (event: { taskId: string; pageName: string; url: string }) => {
-      if (event.taskId !== taskId) {
-        return;
-      }
-      if (pageName && event.pageName !== pageName) {
-        return;
-      }
+      if (event.taskId !== taskId) { return; }
+      if (pageName && event.pageName !== pageName) { return; }
       setCurrentUrl(event.url);
     },
     [taskId, pageName],
@@ -158,12 +151,8 @@ export function useBrowserPreview({
 
   const handleStatus = useCallback(
     (event: { taskId: string; pageName: string; status: string; message?: string }) => {
-      if (event.taskId !== taskId) {
-        return;
-      }
-      if (pageName && event.pageName !== pageName) {
-        return;
-      }
+      if (event.taskId !== taskId) { return; }
+      if (pageName && event.pageName !== pageName) { return; }
       if (event.status === 'stopped') {
         screencastStartedRef.current = false;
         statusRef.current = 'idle';
@@ -187,32 +176,8 @@ export function useBrowserPreview({
     [taskId, pageName],
   );
 
-  useEffect(() => {
-    const api = window.accomplish;
-    if (!api) {
-      return;
-    }
-
-    const cleanups: (() => void)[] = [];
-
-    if (api.onBrowserFrame) {
-      cleanups.push(api.onBrowserFrame(handleFrame));
-    }
-    if (api.onBrowserNavigate) {
-      cleanups.push(api.onBrowserNavigate(handleNavigate));
-    }
-    if (api.onBrowserStatus) {
-      cleanups.push(api.onBrowserStatus(handleStatus));
-    }
-
-    return () => {
-      for (const cleanup of cleanups) {
-        cleanup();
-      }
-      // Stop preview when component unmounts
-      api.stopBrowserPreview?.(taskId).catch(() => {});
-    };
-  }, [taskId, handleFrame, handleNavigate, handleStatus]);
+  // Delegate IPC subscription and preview-stop-on-unmount to the dedicated sub-hook
+  useBrowserPreviewIpc({ taskId, handleFrame, handleNavigate, handleStatus });
 
   return {
     frameData,
