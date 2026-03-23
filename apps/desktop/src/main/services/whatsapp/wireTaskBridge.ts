@@ -3,6 +3,7 @@
  *
  * Contributed by aryan877 (PR #595 feat/whatsapp-integration).
  * Wraps task-manager integration and relays progress back to WhatsApp.
+ * Storage persistence helpers live in whatsappStorageSync.ts.
  */
 import type { WhatsAppService } from './WhatsAppService';
 import { TaskBridge, MAX_MESSAGE_LENGTH } from './taskBridge';
@@ -10,54 +11,7 @@ import { createTaskId, createMessageId, type TaskMessage } from '@accomplish_ai/
 import { getTaskManager } from '../../opencode/index.js';
 import { getStorage } from '../../store/storage';
 
-export function wireStatusListeners(
-  service: WhatsAppService,
-  storage: ReturnType<typeof getStorage>,
-  bridge: TaskBridge,
-): void {
-  service.on('phoneNumber', (phoneNumber: string) => {
-    const config = storage.getMessagingConfig();
-    storage.setMessagingConfig({
-      integrations: {
-        ...(config?.integrations ?? {}),
-        whatsapp: {
-          ...(config?.integrations?.whatsapp ?? {
-            platform: 'whatsapp',
-            enabled: true,
-            tunnelEnabled: false,
-          }),
-          phoneNumber,
-          lastConnectedAt: Date.now(),
-        },
-      },
-    });
-  });
-
-  service.on('ownerLid', (lid: string) => {
-    bridge.setOwnerLid(lid);
-  });
-
-  // When status changes to connected, set ownerJid from service user
-  service.on('status', (status: string) => {
-    if (status === 'connected') {
-      const config = storage.getMessagingConfig();
-      storage.setMessagingConfig({
-        integrations: {
-          ...(config?.integrations ?? {}),
-          whatsapp: {
-            ...(config?.integrations?.whatsapp ?? {
-              platform: 'whatsapp',
-              enabled: true,
-              tunnelEnabled: false,
-            }),
-            connectionStatus: 'connected',
-            lastConnectedAt: Date.now(),
-          },
-        },
-      });
-    }
-  });
-}
+export { wireStatusListeners } from './whatsappStorageSync';
 
 export function wireTaskBridge(service: WhatsAppService): { bridge: TaskBridge } {
   const storage = getStorage();
