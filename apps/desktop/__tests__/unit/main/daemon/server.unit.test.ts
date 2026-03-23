@@ -15,6 +15,8 @@ import {
   getSocketPath,
 } from '@main/daemon/server';
 
+const SERVER_READY_WAIT = process.platform === 'win32' ? 800 : 200;
+
 function sendJsonRpc(
   socketPath: string,
   payload: Record<string, unknown>,
@@ -54,9 +56,13 @@ describe('daemon/server', () => {
     stopDaemonServer();
   });
 
-  it('getSocketPath returns unix socket path on non-windows', () => {
+  it('getSocketPath returns a valid socket path', () => {
     const socketPath = getSocketPath();
-    expect(socketPath).toContain('daemon.sock');
+    if (process.platform === 'win32') {
+      expect(socketPath).toContain('pipe');
+    } else {
+      expect(socketPath).toContain('daemon.sock');
+    }
   });
 
   it('registerMethod stores and dispatches handlers', async () => {
@@ -67,7 +73,7 @@ describe('daemon/server', () => {
     const socketPath = getSocketPath();
 
     // Wait for server to be ready
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, SERVER_READY_WAIT));
 
     const response = await sendJsonRpc(socketPath, {
       jsonrpc: '2.0',
@@ -87,7 +93,7 @@ describe('daemon/server', () => {
   it('returns method-not-found for unknown methods', async () => {
     startDaemonServer();
     const socketPath = getSocketPath();
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, SERVER_READY_WAIT));
 
     const response = await sendJsonRpc(socketPath, {
       jsonrpc: '2.0',
@@ -109,7 +115,7 @@ describe('daemon/server', () => {
   it('returns parse error for invalid JSON', async () => {
     startDaemonServer();
     const socketPath = getSocketPath();
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, SERVER_READY_WAIT));
 
     const response = await new Promise<Record<string, unknown>>((resolve, reject) => {
       const client = net.createConnection(socketPath, () => {
@@ -149,7 +155,7 @@ describe('daemon/server', () => {
 
     startDaemonServer();
     const socketPath = getSocketPath();
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, SERVER_READY_WAIT));
 
     // Send a notification (no id field) - should get no response
     const gotResponse = await new Promise<boolean>((resolve) => {
@@ -186,7 +192,7 @@ describe('daemon/server', () => {
 
     startDaemonServer();
     const socketPath = getSocketPath();
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, SERVER_READY_WAIT));
 
     const response = await sendJsonRpc(socketPath, {
       jsonrpc: '2.0',
@@ -209,7 +215,7 @@ describe('daemon/server', () => {
 
     startDaemonServer();
     const socketPath = getSocketPath();
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, SERVER_READY_WAIT));
 
     const response = await sendJsonRpc(socketPath, {
       jsonrpc: '2.0',
