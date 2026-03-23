@@ -40,7 +40,9 @@ function getCliCommand(): { command: string; args: string[] } {
 
 function getMcpToolsPath(): string {
   const mono = path.resolve(DAEMON_ROOT, '../../packages/agent-core/mcp-tools');
-  return fs.existsSync(mono) ? mono : path.join(DAEMON_ROOT, 'node_modules', '@accomplish_ai', 'agent-core', 'mcp-tools');
+  return fs.existsSync(mono)
+    ? mono
+    : path.join(DAEMON_ROOT, 'node_modules', '@accomplish_ai', 'agent-core', 'mcp-tools');
 }
 
 async function buildEnvironment(taskId: string): Promise<NodeJS.ProcessEnv> {
@@ -50,7 +52,9 @@ async function buildEnvironment(taskId: string): Promise<NodeJS.ProcessEnv> {
 
   const envConfig: EnvironmentConfig = {
     apiKeys,
-    bedrockCredentials: (storage.getBedrockCredentials() as unknown as EnvironmentConfig['bedrockCredentials']) ?? undefined,
+    bedrockCredentials:
+      (storage.getBedrockCredentials() as unknown as EnvironmentConfig['bedrockCredentials']) ??
+      undefined,
     taskId,
     openAiBaseUrl: apiKeys.openai ? storage.getOpenAiBaseUrl().trim() || undefined : undefined,
     ollamaHost:

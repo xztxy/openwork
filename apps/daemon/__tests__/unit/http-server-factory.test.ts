@@ -16,18 +16,15 @@ function makeRequest(
       headers.Authorization = `Bearer ${authToken}`;
     }
 
-    const req = http.request(
-      { hostname: '127.0.0.1', port, path, method, headers },
-      (res) => {
-        let data = '';
-        res.on('data', (chunk) => {
-          data += chunk;
-        });
-        res.on('end', () => {
-          resolve({ statusCode: res.statusCode || 0, body: data });
-        });
-      },
-    );
+    const req = http.request({ hostname: '127.0.0.1', port, path, method, headers }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      res.on('end', () => {
+        resolve({ statusCode: res.statusCode || 0, body: data });
+      });
+    });
 
     req.on('error', reject);
     if (body) {
@@ -79,10 +76,16 @@ describe('createHttpServer', () => {
   });
 
   it('should return 429 when rate limit is exceeded before hitting route handler', async () => {
-    const routeHandler = vi.fn(async (_data: Record<string, unknown>, _req: http.IncomingMessage, res: http.ServerResponse) => {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: true }));
-    });
+    const routeHandler = vi.fn(
+      async (
+        _data: Record<string, unknown>,
+        _req: http.IncomingMessage,
+        res: http.ServerResponse,
+      ) => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      },
+    );
     const rateLimiter = new RateLimiter(60_000, 1);
     const { server, port } = await createHttpServer({
       authToken: 'secret-token',

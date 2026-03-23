@@ -64,7 +64,9 @@ export class PermissionService {
         method: 'POST',
         path: '/permission',
         handler: async (data, _req, res) => {
-          const validation = this.permissionHandler.validateFilePermissionRequest(data as PermissionFileRequestData);
+          const validation = this.permissionHandler.validateFilePermissionRequest(
+            data as PermissionFileRequestData,
+          );
           if (!validation.valid) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: validation.error }));
@@ -85,7 +87,11 @@ export class PermissionService {
           }
 
           const { requestId, promise } = this.permissionHandler.createPermissionRequest();
-          const permissionRequest = this.permissionHandler.buildFilePermissionRequest(requestId, taskId, data as PermissionFileRequestData);
+          const permissionRequest = this.permissionHandler.buildFilePermissionRequest(
+            requestId,
+            taskId,
+            data as PermissionFileRequestData,
+          );
 
           this.onPermissionRequest?.(permissionRequest);
 
@@ -119,7 +125,9 @@ export class PermissionService {
         method: 'POST',
         path: '/question',
         handler: async (data, _req, res) => {
-          const validation = this.permissionHandler.validateQuestionRequest(data as PermissionQuestionRequestData);
+          const validation = this.permissionHandler.validateQuestionRequest(
+            data as PermissionQuestionRequestData,
+          );
           if (!validation.valid) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: validation.error }));
@@ -140,7 +148,11 @@ export class PermissionService {
           }
 
           const { requestId, promise } = this.permissionHandler.createQuestionRequest();
-          const questionRequest = this.permissionHandler.buildQuestionRequest(requestId, taskId, data as PermissionQuestionRequestData);
+          const questionRequest = this.permissionHandler.buildQuestionRequest(
+            requestId,
+            taskId,
+            data as PermissionQuestionRequestData,
+          );
 
           this.onPermissionRequest?.(questionRequest);
 

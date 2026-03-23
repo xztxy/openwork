@@ -1,4 +1,8 @@
-export function parseArgs(argv: string[] = process.argv.slice(2)): { socketPath?: string; dataDir?: string; version?: boolean } {
+export function parseArgs(argv: string[] = process.argv.slice(2)): {
+  socketPath?: string;
+  dataDir?: string;
+  version?: boolean;
+} {
   const result: { socketPath?: string; dataDir?: string; version?: boolean } = {};
 
   for (let i = 0; i < argv.length; i++) {

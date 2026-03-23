@@ -34,10 +34,15 @@ function sanitizeErrorMessage(err: unknown): string {
     return msg;
   }
   const home = homedir();
-  return msg.replace(new RegExp(home.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '/[^\\s:]*', 'g'), '~/...');
+  return msg.replace(
+    new RegExp(home.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '/[^\\s:]*', 'g'),
+    '~/...',
+  );
 }
 
-function safeHandler(fn: (params: unknown) => Promise<unknown>): (params: unknown) => Promise<unknown> {
+function safeHandler(
+  fn: (params: unknown) => Promise<unknown>,
+): (params: unknown) => Promise<unknown> {
   return async (params) => {
     try {
       return await fn(params);
@@ -86,8 +91,9 @@ async function main(): Promise<void> {
 
   // 5. Create services
   const userDataPath = args.dataDir || path.join(homedir(), '.accomplish');
-  const mcpToolsPath = process.env.MCP_TOOLS_PATH
-    || path.resolve(__dirname, '..', '..', '..', 'packages', 'agent-core', 'mcp-tools');
+  const mcpToolsPath =
+    process.env.MCP_TOOLS_PATH ||
+    path.resolve(__dirname, '..', '..', '..', 'packages', 'agent-core', 'mcp-tools');
   const isPackaged = process.env.ACCOMPLISH_IS_PACKAGED === '1';
   const taskService = new TaskService(storage, {
     userDataPath,
@@ -120,88 +126,120 @@ async function main(): Promise<void> {
   );
 
   // 9. Register RPC methods with Zod validation and error sanitization
-  rpc.registerMethod('task.start', safeHandler((params) => {
-    const validated = validate(taskStartSchema, params);
-    return taskService.startTask(validated);
-  }));
-  rpc.registerMethod('task.stop', safeHandler((params) => {
-    const validated = validate(taskIdSchema, params);
-    return taskService.stopTask(validated);
-  }));
-  rpc.registerMethod('task.list', safeHandler(() =>
-    Promise.resolve(taskService.listTasks()),
-  ));
-  rpc.registerMethod('task.status', safeHandler((params) => {
-    const validated = validate(taskIdSchema, params);
-    return Promise.resolve(taskService.getTaskStatus(validated));
-  }));
-  rpc.registerMethod('task.interrupt', safeHandler((params) => {
-    const validated = validate(taskIdSchema, params);
-    return taskService.interruptTask(validated);
-  }));
-  rpc.registerMethod('task.get', safeHandler((params) => {
-    const validated = validate(taskIdSchema, params);
-    return Promise.resolve(storage.getTask(validated.taskId) || null);
-  }));
-  rpc.registerMethod('task.delete', safeHandler((params) => {
-    const validated = validate(taskIdSchema, params);
-    storage.deleteTask(validated.taskId);
-    return Promise.resolve();
-  }));
-  rpc.registerMethod('task.clearHistory', safeHandler(() => {
-    storage.clearHistory();
-    return Promise.resolve();
-  }));
-  rpc.registerMethod('task.getTodos', safeHandler((params) => {
-    const validated = validate(taskIdSchema, params);
-    return Promise.resolve(storage.getTodosForTask(validated.taskId));
-  }));
-  rpc.registerMethod('permission.respond', safeHandler((params) => {
-    const validated = validate(permissionResponseSchema, params);
-    const { requestId, taskId, decision, selectedOptions, customText } = validated;
-
-    if (requestId && permissionService.isFilePermissionRequest(requestId)) {
-      const allowed = decision === 'allow';
-      const resolved = permissionService.resolvePermission(requestId, allowed);
-      if (resolved) {
-        return Promise.resolve();
-      }
-    }
-
-    if (requestId && permissionService.isQuestionRequest(requestId)) {
-      const denied = decision === 'deny';
-      const resolved = permissionService.resolveQuestion(requestId, {
-        selectedOptions,
-        customText,
-        denied,
-      });
-      if (resolved) {
-        return Promise.resolve();
-      }
-    }
-
-    if (requestId) {
-      console.warn(`[Daemon] Permission response for unmatched requestId: ${requestId}`);
-      return Promise.reject(new Error(`No pending permission request with id: ${requestId}`));
-    }
-
-    if (!taskService.hasActiveTask(taskId)) {
+  rpc.registerMethod(
+    'task.start',
+    safeHandler((params) => {
+      const validated = validate(taskStartSchema, params);
+      return taskService.startTask(validated);
+    }),
+  );
+  rpc.registerMethod(
+    'task.stop',
+    safeHandler((params) => {
+      const validated = validate(taskIdSchema, params);
+      return taskService.stopTask(validated);
+    }),
+  );
+  rpc.registerMethod(
+    'task.list',
+    safeHandler(() => Promise.resolve(taskService.listTasks())),
+  );
+  rpc.registerMethod(
+    'task.status',
+    safeHandler((params) => {
+      const validated = validate(taskIdSchema, params);
+      return Promise.resolve(taskService.getTaskStatus(validated));
+    }),
+  );
+  rpc.registerMethod(
+    'task.interrupt',
+    safeHandler((params) => {
+      const validated = validate(taskIdSchema, params);
+      return taskService.interruptTask(validated);
+    }),
+  );
+  rpc.registerMethod(
+    'task.get',
+    safeHandler((params) => {
+      const validated = validate(taskIdSchema, params);
+      return Promise.resolve(storage.getTask(validated.taskId) || null);
+    }),
+  );
+  rpc.registerMethod(
+    'task.delete',
+    safeHandler((params) => {
+      const validated = validate(taskIdSchema, params);
+      storage.deleteTask(validated.taskId);
       return Promise.resolve();
-    }
+    }),
+  );
+  rpc.registerMethod(
+    'task.clearHistory',
+    safeHandler(() => {
+      storage.clearHistory();
+      return Promise.resolve();
+    }),
+  );
+  rpc.registerMethod(
+    'task.getTodos',
+    safeHandler((params) => {
+      const validated = validate(taskIdSchema, params);
+      return Promise.resolve(storage.getTodosForTask(validated.taskId));
+    }),
+  );
+  rpc.registerMethod(
+    'permission.respond',
+    safeHandler((params) => {
+      const validated = validate(permissionResponseSchema, params);
+      const { requestId, taskId, decision, selectedOptions, customText } = validated;
 
-    if (decision === 'allow') {
-      const message = selectedOptions?.join(', ') || 'yes';
-      return taskService.sendResponse(taskId, message);
-    }
-    return taskService.sendResponse(taskId, 'no');
-  }));
-  rpc.registerMethod('session.resume', safeHandler((params) => {
-    const validated = validate(resumeSessionSchema, params);
-    return taskService.resumeSession(validated);
-  }));
-  rpc.registerMethod('health.check', safeHandler(() =>
-    Promise.resolve(healthService.getStatus()),
-  ));
+      if (requestId && permissionService.isFilePermissionRequest(requestId)) {
+        const allowed = decision === 'allow';
+        const resolved = permissionService.resolvePermission(requestId, allowed);
+        if (resolved) {
+          return Promise.resolve();
+        }
+      }
+
+      if (requestId && permissionService.isQuestionRequest(requestId)) {
+        const denied = decision === 'deny';
+        const resolved = permissionService.resolveQuestion(requestId, {
+          selectedOptions,
+          customText,
+          denied,
+        });
+        if (resolved) {
+          return Promise.resolve();
+        }
+      }
+
+      if (requestId) {
+        console.warn(`[Daemon] Permission response for unmatched requestId: ${requestId}`);
+        return Promise.reject(new Error(`No pending permission request with id: ${requestId}`));
+      }
+
+      if (!taskService.hasActiveTask(taskId)) {
+        return Promise.resolve();
+      }
+
+      if (decision === 'allow') {
+        const message = selectedOptions?.join(', ') || 'yes';
+        return taskService.sendResponse(taskId, message);
+      }
+      return taskService.sendResponse(taskId, 'no');
+    }),
+  );
+  rpc.registerMethod(
+    'session.resume',
+    safeHandler((params) => {
+      const validated = validate(resumeSessionSchema, params);
+      return taskService.resumeSession(validated);
+    }),
+  );
+  rpc.registerMethod(
+    'health.check',
+    safeHandler(() => Promise.resolve(healthService.getStatus())),
+  );
 
   // 10. Forward task events as RPC notifications
   taskService.on('progress', (data) => {

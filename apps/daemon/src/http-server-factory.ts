@@ -7,7 +7,11 @@ const MAX_BODY_SIZE = 1024 * 1024; // 1 MB
 export interface Route {
   method: string;
   path: string;
-  handler: (data: Record<string, unknown>, req: http.IncomingMessage, res: http.ServerResponse) => Promise<void>;
+  handler: (
+    data: Record<string, unknown>,
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+  ) => Promise<void>;
 }
 
 export interface HttpServerOptions {
@@ -17,11 +21,18 @@ export interface HttpServerOptions {
   serviceName: string;
 }
 
-function validateAuthToken(authToken: string, req: http.IncomingMessage, res: http.ServerResponse): boolean {
+function validateAuthToken(
+  authToken: string,
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+): boolean {
   const authHeader = req.headers['authorization'];
   const expected = `Bearer ${authToken}`;
-  if (!authHeader || authHeader.length !== expected.length ||
-      !crypto.timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected))) {
+  if (
+    !authHeader ||
+    authHeader.length !== expected.length ||
+    !crypto.timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected))
+  ) {
     res.writeHead(401, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Unauthorized' }));
     return false;
@@ -29,7 +40,10 @@ function validateAuthToken(authToken: string, req: http.IncomingMessage, res: ht
   return true;
 }
 
-async function readBody(req: http.IncomingMessage, res: http.ServerResponse): Promise<string | null> {
+async function readBody(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+): Promise<string | null> {
   let body = '';
   for await (const chunk of req) {
     body += chunk;
@@ -52,7 +66,9 @@ function parseJsonBody(body: string, res: http.ServerResponse): Record<string, u
   }
 }
 
-export function createHttpServer(options: HttpServerOptions): Promise<{ server: http.Server; port: number }> {
+export function createHttpServer(
+  options: HttpServerOptions,
+): Promise<{ server: http.Server; port: number }> {
   const { authToken, rateLimiter, routes, serviceName } = options;
 
   return new Promise((resolve, reject) => {

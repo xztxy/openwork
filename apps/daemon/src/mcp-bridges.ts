@@ -6,10 +6,7 @@ import {
   createPermissionHandler,
   createThoughtStreamHandler,
 } from '@accomplish_ai/agent-core';
-import type {
-  PermissionHandlerAPI,
-  ThoughtStreamAPI,
-} from '@accomplish_ai/agent-core';
+import type { PermissionHandlerAPI, ThoughtStreamAPI } from '@accomplish_ai/agent-core';
 import { broadcast, onClientMessage } from './websocket.js';
 import type { ClientMessage } from './websocket.js';
 
@@ -65,11 +62,15 @@ function json(res: http.ServerResponse, status: number, data: unknown): void {
 function createMcpServer(
   port: number,
   label: string,
-  handler: (req: http.IncomingMessage, res: http.ServerResponse) => void
+  handler: (req: http.IncomingMessage, res: http.ServerResponse) => void,
 ): http.Server {
   const server = http.createServer((req, res) => {
     setCors(res);
-    if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
+    if (req.method === 'OPTIONS') {
+      res.writeHead(200);
+      res.end();
+      return;
+    }
     handler(req, res);
   });
 
@@ -90,17 +91,24 @@ function createMcpServer(
 
 export function startPermissionServer(): http.Server {
   return createMcpServer(PERMISSION_API_PORT, 'Permission API', async (req, res) => {
-    if (req.method !== 'POST' || req.url !== '/permission') return json(res, 404, { error: 'Not found' });
+    if (req.method !== 'POST' || req.url !== '/permission')
+      return json(res, 404, { error: 'Not found' });
 
     const data = await parseBody(req);
-    const validation = permissionHandler.validateFilePermissionRequest(data as Record<string, unknown>);
+    const validation = permissionHandler.validateFilePermissionRequest(
+      data as Record<string, unknown>,
+    );
     if (!validation.valid) return json(res, 400, { error: validation.error });
 
     const taskId = getActiveTaskId?.();
     if (!taskId) return json(res, 400, { error: 'No active task' });
 
     const { requestId, promise } = permissionHandler.createPermissionRequest();
-    const permReq = permissionHandler.buildFilePermissionRequest(requestId, taskId, data as Record<string, unknown>);
+    const permReq = permissionHandler.buildFilePermissionRequest(
+      requestId,
+      taskId,
+      data as Record<string, unknown>,
+    );
 
     // Forward to UI clients via WebSocket
     broadcast({ type: 'permission:request', data: permReq });
@@ -112,7 +120,8 @@ export function startPermissionServer(): http.Server {
 
 export function startQuestionServer(): http.Server {
   return createMcpServer(QUESTION_API_PORT, 'Question API', async (req, res) => {
-    if (req.method !== 'POST' || req.url !== '/question') return json(res, 404, { error: 'Not found' });
+    if (req.method !== 'POST' || req.url !== '/question')
+      return json(res, 404, { error: 'Not found' });
 
     const data = await parseBody(req);
     const validation = permissionHandler.validateQuestionRequest(data as Record<string, unknown>);
@@ -122,7 +131,11 @@ export function startQuestionServer(): http.Server {
     if (!taskId) return json(res, 400, { error: 'No active task' });
 
     const { requestId, promise } = permissionHandler.createQuestionRequest();
-    const questionReq = permissionHandler.buildQuestionRequest(requestId, taskId, data as Record<string, unknown>);
+    const questionReq = permissionHandler.buildQuestionRequest(
+      requestId,
+      taskId,
+      data as Record<string, unknown>,
+    );
 
     broadcast({ type: 'permission:request', data: questionReq });
 
@@ -139,7 +152,9 @@ export function startThoughtStreamServer(): http.Server {
     const taskId = data.taskId as string;
 
     if (!taskId || !thoughtStreamHandler.isTaskActive(taskId)) {
-      res.writeHead(200); res.end(); return;
+      res.writeHead(200);
+      res.end();
+      return;
     }
 
     if (req.url === '/thought') {

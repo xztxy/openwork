@@ -11,8 +11,12 @@ const PID_FILE = path.join(PID_DIR, 'daemon.pid');
  * or EPERM if it exists but we lack permission (still means it's running).
  */
 function isProcessRunning(pid: number): boolean {
-  try { process.kill(pid, 0); return true; }
-  catch (e) { return (e as NodeJS.ErrnoException).code === 'EPERM'; }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'EPERM';
+  }
 }
 
 /**

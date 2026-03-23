@@ -89,14 +89,24 @@ export class TaskService extends EventEmitter {
           return;
         }
         if (isFirst) {
-          callbacks.onProgress({ stage: 'browser', message: 'Preparing browser...', isFirstTask: isFirst });
+          callbacks.onProgress({
+            stage: 'browser',
+            message: 'Preparing browser...',
+            isFirstTask: isFirst,
+          });
         }
         await ensureDevBrowserServer(browserConfig, callbacks.onProgress);
       },
     });
   }
 
-  async startTask(params: { prompt: string; taskId?: string; modelId?: string; sessionId?: string; workingDirectory?: string }): Promise<Task> {
+  async startTask(params: {
+    prompt: string;
+    taskId?: string;
+    modelId?: string;
+    sessionId?: string;
+    workingDirectory?: string;
+  }): Promise<Task> {
     const taskId = params.taskId || createTaskId();
     const config: TaskConfig = {
       prompt: params.prompt,
@@ -161,7 +171,11 @@ export class TaskService extends EventEmitter {
     }
   }
 
-  async resumeSession(params: { sessionId: string; prompt: string; existingTaskId?: string }): Promise<Task> {
+  async resumeSession(params: {
+    sessionId: string;
+    prompt: string;
+    existingTaskId?: string;
+  }): Promise<Task> {
     const { sessionId, prompt, existingTaskId } = params;
     const taskId = existingTaskId || createTaskId();
 
@@ -179,12 +193,16 @@ export class TaskService extends EventEmitter {
     const selectedModel = activeModel || this.storage.getSelectedModel();
 
     const callbacks = this.createCallbacks(taskId);
-    const task = await this.taskManager.startTask(taskId, {
-      prompt,
-      sessionId,
+    const task = await this.taskManager.startTask(
       taskId,
-      modelId: selectedModel?.model,
-    }, callbacks);
+      {
+        prompt,
+        sessionId,
+        taskId,
+        modelId: selectedModel?.model,
+      },
+      callbacks,
+    );
 
     if (existingTaskId) {
       this.storage.updateTaskStatus(existingTaskId, task.status, new Date().toISOString());
@@ -197,7 +215,9 @@ export class TaskService extends EventEmitter {
     return this.storage.getTasks() as Task[];
   }
 
-  getTaskStatus(params: { taskId: string }): { taskId: string; status: TaskStatus; prompt: string; createdAt: string } | null {
+  getTaskStatus(params: {
+    taskId: string;
+  }): { taskId: string; status: TaskStatus; prompt: string; createdAt: string } | null {
     const task = this.storage.getTask(params.taskId);
     if (!task) {
       return null;
@@ -324,10 +344,12 @@ export class TaskService extends EventEmitter {
     return coreBuildCliArgs({
       prompt: config.prompt,
       sessionId: config.sessionId,
-      selectedModel: selectedModel ? {
-        provider: selectedModel.provider,
-        model: selectedModel.model,
-      } : null,
+      selectedModel: selectedModel
+        ? {
+            provider: selectedModel.provider,
+            model: selectedModel.model,
+          }
+        : null,
     });
   }
 

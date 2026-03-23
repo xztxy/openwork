@@ -483,12 +483,10 @@ const accomplishAPI = {
     ipcRenderer.invoke('skills:show-in-folder', filePath),
 
   // Daemon / Background Mode
-  getRunInBackground: (): Promise<boolean> =>
-    ipcRenderer.invoke('daemon:get-run-in-background'),
+  getRunInBackground: (): Promise<boolean> => ipcRenderer.invoke('daemon:get-run-in-background'),
   setRunInBackground: (enabled: boolean): Promise<void> =>
     ipcRenderer.invoke('daemon:set-run-in-background', enabled),
-  getDaemonSocketPath: (): Promise<string> =>
-    ipcRenderer.invoke('daemon:get-socket-path'),
+  getDaemonSocketPath: (): Promise<string> => ipcRenderer.invoke('daemon:get-socket-path'),
 
   // Favorites
   addFavorite: (taskId: string): Promise<void> => ipcRenderer.invoke('favorites:add', taskId),
