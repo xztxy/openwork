@@ -23,3 +23,13 @@ export {
   onScheduledTaskFire,
   disposeScheduler,
 } from './scheduler.js';
+
+export { DaemonRpcServer } from './rpc-server.js';
+export type { DaemonRpcServerOptions } from './rpc-server.js';
+
+export { getSocketPath, getPidFilePath, getDaemonDir } from './socket-path.js';
+
+export { acquirePidLock, PidLockError } from './pid-lock.js';
+export type { PidLockHandle, PidLockPayload } from './pid-lock.js';
+
+export { installCrashHandlers } from './crash-handlers.js';

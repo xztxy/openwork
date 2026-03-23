@@ -490,6 +490,16 @@ export {
 } from './daemon/index.js';
 export type { DaemonServerOptions, DaemonClientOptions } from './daemon/index.js';
 
+// Socket-based RPC server for the standalone daemon process
+export { DaemonRpcServer } from './daemon/index.js';
+export type { DaemonRpcServerOptions } from './daemon/index.js';
+
+// Socket path, PID lock, and crash handler utilities for the daemon process
+export { getSocketPath, getPidFilePath, getDaemonDir } from './daemon/index.js';
+export { acquirePidLock, PidLockError } from './daemon/index.js';
+export type { PidLockHandle, PidLockPayload } from './daemon/index.js';
+export { installCrashHandlers } from './daemon/index.js';
+
 // Daemon protocol types (re-exported from common/types/daemon.ts)
 export { JSON_RPC_ERRORS } from './common/types/daemon.js';
 export type {
