@@ -354,9 +354,14 @@ if (!gotTheLock) {
     }
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
+      const windows = BrowserWindow.getAllWindows();
+      if (windows.length === 0) {
         createWindow();
         console.log('[Main] Application reactivated; recreated window');
+      } else {
+        windows[0].show();
+        windows[0].focus();
+        console.log('[Main] Application reactivated; showed existing window');
       }
     });
   });
