@@ -11,6 +11,7 @@
 
 import type { BrowserContext, Page, CDPSession } from 'playwright';
 import type { ScreencastConfig, ScreencastFrame, ScreencastStatus } from './types.js';
+import { createConsoleLogger } from '../../../src/utils/logging.js';
 
 export type FrameCallback = (frame: ScreencastFrame) => void;
 export type StatusCallback = (status: ScreencastStatus, error?: string) => void;
@@ -24,6 +25,7 @@ const DEFAULT_CONFIG: ScreencastConfig = {
 };
 
 export class ScreencastController {
+  private readonly logger = createConsoleLogger({ prefix: 'Screencast' });
   private cdpSession: CDPSession | null = null;
   private status: ScreencastStatus = 'idle';
   private onFrame: FrameCallback | null = null;
@@ -76,7 +78,7 @@ export class ScreencastController {
               sessionId: params.sessionId,
             })
             .catch((err) => {
-              console.error('[Screencast] Failed to ack frame:', err);
+              this.logger.error('Failed to ack frame:', { err: String(err) });
             });
         }
       });
@@ -95,7 +97,7 @@ export class ScreencastController {
       page.on('close', this.onPageClose);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error('[Screencast] Failed to start:', message);
+      this.logger.error('Failed to start:', { message });
       this.setStatus('error', message);
       await this.cleanup();
     }
@@ -121,9 +123,9 @@ export class ScreencastController {
   }
 
   private handlePageClosed(): void {
-    console.warn('[Screencast] Page closed, stopping screencast');
+    this.logger.warn('Page closed, stopping screencast');
     this.cleanup().catch((err) => {
-      console.error('[Screencast] Cleanup error after page close:', err);
+      this.logger.error('Cleanup error after page close:', { err: String(err) });
     });
     this.setStatus('idle');
   }
