@@ -22,6 +22,8 @@ export {
   cancelScheduledTask,
   onScheduledTaskFire,
   disposeScheduler,
+  parseCronField,
+  matchesCron,
 } from './scheduler.js';
 
 export { DaemonRpcServer } from './rpc-server.js';

@@ -487,6 +487,8 @@ export {
   cancelScheduledTask,
   onScheduledTaskFire,
   disposeScheduler,
+  parseCronField,
+  matchesCron,
 } from './daemon/index.js';
 export type { DaemonServerOptions, DaemonClientOptions } from './daemon/index.js';
 

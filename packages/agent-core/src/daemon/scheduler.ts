@@ -26,7 +26,7 @@ let onFireCallback: ScheduledTaskCallback | null = null;
  * Supports: minute hour day-of-month month day-of-week
  * Supports: * (any), numbers, ranges (1-5), commas (1,3,5)
  */
-function parseCronField(field: string, min: number, max: number): number[] {
+export function parseCronField(field: string, min: number, max: number): number[] {
   if (field === '*') {
     const result: number[] = [];
     for (let i = min; i <= max; i++) {
@@ -52,7 +52,7 @@ function parseCronField(field: string, min: number, max: number): number[] {
   return values.filter((v) => v >= min && v <= max);
 }
 
-function matchesCron(cron: string, date: Date): boolean {
+export function matchesCron(cron: string, date: Date): boolean {
   const parts = cron.trim().split(/\s+/);
   if (parts.length !== 5) {
     return false;
@@ -101,6 +101,28 @@ function getNextRunTime(cron: string): string | undefined {
  * Add a scheduled task. Returns the created ScheduledTask.
  */
 export function addScheduledTask(cron: string, prompt: string): ScheduledTask {
+  const parts = cron.trim().split(/\s+/);
+  if (parts.length !== 5) {
+    throw new Error(`Invalid cron expression: "${cron}" — must have exactly 5 fields`);
+  }
+  const ranges: [number, number][] = [
+    [0, 59], // minute
+    [0, 23], // hour
+    [1, 31], // day of month
+    [1, 12], // month
+    [0, 6], // day of week
+  ];
+  for (let i = 0; i < 5; i++) {
+    const field = parts[i];
+    if (field === '*') continue;
+    const values = parseCronField(field, ranges[i][0], ranges[i][1]);
+    if (values.length === 0) {
+      throw new Error(
+        `Invalid cron expression: "${cron}" — field ${i + 1} ("${field}") has no valid values`,
+      );
+    }
+  }
+
   const id = `sched-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
   const task: ScheduledTask = {
     id,
@@ -132,13 +154,15 @@ export function listScheduledTasks(): ScheduledTask[] {
 /**
  * Cancel (remove) a scheduled task.
  */
-export function cancelScheduledTask(scheduleId: string): void {
+export function cancelScheduledTask(scheduleId: string): boolean {
+  const existed = schedules.has(scheduleId);
   schedules.delete(scheduleId);
   logger.info('Cancelled schedule:', scheduleId);
 
   if (schedules.size === 0 && timerId) {
     stopTimer();
   }
+  return existed;
 }
 
 /**
