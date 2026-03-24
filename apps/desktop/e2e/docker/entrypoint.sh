@@ -3,7 +3,10 @@ set -e
 
 # Copy source from mounted workspace into /app (where node_modules already exists from image build)
 echo "Copying source into container..."
-cp -a /workspace/. /app/
+tar -C /workspace \
+  --exclude=node_modules \
+  --exclude=.git \
+  -cf - . | tar -C /app -x
 
 cd /app
 

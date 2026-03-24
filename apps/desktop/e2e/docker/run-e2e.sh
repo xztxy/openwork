@@ -8,17 +8,22 @@ LOCKFILE="$REPO_ROOT/pnpm-lock.yaml"
 
 # Compute cache key from all files COPYed into the image at build time
 # Must match the inputs used for hashFiles() in CI (ci.yml)
-CACHE_INPUT=$(cat \
-  "$DOCKERFILE" \
-  "$LOCKFILE" \
-  "$REPO_ROOT/pnpm-workspace.yaml" \
-  "$REPO_ROOT"/package.json \
-  "$REPO_ROOT"/packages/agent-core/package.json \
-  "$REPO_ROOT"/apps/desktop/package.json \
-  "$REPO_ROOT"/scripts/*.* \
-  "$REPO_ROOT"/apps/desktop/scripts/*.* \
-  "$REPO_ROOT"/packages/agent-core/mcp-tools/**/* \
-  2>/dev/null | sha256sum | cut -c1-12)
+CACHE_INPUT=$(
+  {
+    cat \
+      "$DOCKERFILE" \
+      "$LOCKFILE" \
+      "$REPO_ROOT/pnpm-workspace.yaml" \
+      "$REPO_ROOT/package.json" \
+      "$REPO_ROOT/packages/agent-core/package.json" \
+      "$REPO_ROOT/apps/desktop/package.json"
+    find \
+      "$REPO_ROOT/scripts" \
+      "$REPO_ROOT/apps/desktop/scripts" \
+      "$REPO_ROOT/packages/agent-core/mcp-tools" \
+      -type f -print0 | sort -z | xargs -0 cat
+  } | sha256sum | cut -c1-12
+)
 IMAGE_NAME="accomplish-e2e:${CACHE_INPUT}"
 
 # Build image only if it doesn't exist locally

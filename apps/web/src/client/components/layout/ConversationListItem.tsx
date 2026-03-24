@@ -1,10 +1,12 @@
 import { useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import type { Task } from '@accomplish_ai/agent-core/common';
 import { cn } from '@/lib/utils';
-import { X, Loader2 } from 'lucide-react';
+import { X, Star, SpinnerGap } from '@phosphor-icons/react';
 import { useTaskStore } from '@/stores/taskStore';
-import { STATUS_COLORS, extractDomains } from '@/lib/task-utils';
+import { STATUS_COLORS, FAVORITABLE_STATUSES, extractDomains } from '@/lib/task-utils';
+import { getFaviconUrl } from '@/components/landing/IntegrationIcons';
 
 interface ConversationListItemProps {
   task: Task;
@@ -13,9 +15,16 @@ interface ConversationListItemProps {
 export function ConversationListItem({ task }: ConversationListItemProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation('sidebar');
   const isActive = location.pathname === `/execution/${task.id}`;
   const deleteTask = useTaskStore((state) => state.deleteTask);
   const domains = useMemo(() => extractDomains(task), [task]);
+  const { favorites, addFavorite, removeFavorite } = useTaskStore();
+  const favoritesList = Array.isArray(favorites) ? favorites : [];
+  const isFavorited = favoritesList.some((f) => f.taskId === task.id);
+  const canFavorite = FAVORITABLE_STATUSES.includes(task.status);
+  // Note: loadFavorites is intentionally not called here — the parent page
+  // (Home/Execution) is responsible for loading favorites once on mount.
 
   const handleClick = () => {
     navigate(`/execution/${task.id}`);
@@ -24,7 +33,7 @@ export function ConversationListItem({ task }: ConversationListItemProps) {
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    if (!window.confirm('Are you sure you want to delete this task?')) {
+    if (!window.confirm(t('confirmDelete'))) {
       return;
     }
 
@@ -51,14 +60,14 @@ export function ConversationListItem({ task }: ConversationListItemProps) {
       title={task.summary || task.prompt}
       className={cn(
         'w-full text-left p-2 rounded-lg text-xs font-medium transition-colors duration-200',
-        'text-foreground hover:bg-[#E8E8E8] hover:text-foreground',
+        'text-foreground hover:bg-accent hover:text-foreground',
         'flex items-center gap-3 group relative cursor-pointer',
-        isActive && 'bg-[#EDEBE7] text-foreground',
+        isActive && 'bg-accent text-foreground',
       )}
     >
       <span className="flex items-center justify-center shrink-0 w-3 h-3">
         {task.status === 'running' || task.status === 'waiting_permission' ? (
-          <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
+          <SpinnerGap className="w-3 h-3 animate-spin text-muted-foreground" />
         ) : (
           <span className={cn('w-2 h-2 rounded-full', statusColor)} />
         )}
@@ -71,7 +80,7 @@ export function ConversationListItem({ task }: ConversationListItemProps) {
               <span
                 key={domain}
                 className={cn(
-                  'flex items-center p-0.5 rounded-full bg-white shrink-0 relative',
+                  'flex items-center p-0.5 rounded-full bg-card shrink-0 relative',
                   i > 0 && '-ml-1',
                   i === 0 && 'z-30',
                   i === 1 && 'z-20',
@@ -79,18 +88,44 @@ export function ConversationListItem({ task }: ConversationListItemProps) {
                 )}
               >
                 <img
-                  src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`}
+                  src={getFaviconUrl(domain, 16)}
                   alt={domain}
                   className="w-3 h-3 rounded-full"
                   loading="lazy"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
                 />
               </span>
             ))}
           </span>
         )}
+        {canFavorite && (
+          <button
+            onClick={async (e) => {
+              e.stopPropagation();
+              if (isFavorited) {
+                await removeFavorite(task.id);
+              } else {
+                await addFavorite(task.id);
+              }
+            }}
+            title={isFavorited ? t('favorite.remove') : t('favorite.add')}
+            aria-label={isFavorited ? t('favorite.remove') : t('favorite.add')}
+            className={cn(
+              'absolute right-6 top-1/2 -translate-y-1/2',
+              'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto',
+              'transition-opacity duration-200',
+              'p-1 rounded hover:bg-accent shrink-0',
+              isFavorited && 'opacity-100 text-amber-500',
+            )}
+          >
+            <Star className={cn('h-3 w-3', isFavorited && 'fill-current')} />
+          </button>
+        )}
         <button
           onClick={handleDelete}
-          title="Remove task"
+          title={t('deleteTask')}
           className={cn(
             'absolute right-0 top-1/2 -translate-y-1/2',
             'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto',
@@ -98,7 +133,7 @@ export function ConversationListItem({ task }: ConversationListItemProps) {
             'p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/20',
             'text-zinc-400 hover:text-red-600 dark:hover:text-red-400',
           )}
-          aria-label="Remove task"
+          aria-label={t('deleteTask')}
         >
           <X className="h-3 w-3" />
         </button>

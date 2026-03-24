@@ -1,7 +1,18 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { Bug, ChevronUp, ChevronDown, Download, Trash2, Check, Search } from 'lucide-react';
+import {
+  Bug,
+  CaretUp,
+  CaretDown,
+  Download,
+  Trash,
+  Check,
+  MagnifyingGlass,
+  File,
+  ArrowClockwise,
+  SpinnerGap,
+} from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
 export interface DebugLogEntry {
@@ -16,9 +27,25 @@ interface DebugPanelProps {
   debugLogs: DebugLogEntry[];
   taskId: string | undefined;
   onClearLogs: () => void;
+  onBugReport?: () => void;
+  bugReporting?: boolean;
+  bugReportSaved?: boolean;
+  onRepeatTask?: () => void;
+  repeatingTask?: boolean;
+  isRunning?: boolean;
 }
 
-export function DebugPanel({ debugLogs, taskId, onClearLogs }: DebugPanelProps) {
+export function DebugPanel({
+  debugLogs,
+  taskId,
+  onClearLogs,
+  onBugReport,
+  bugReporting = false,
+  bugReportSaved = false,
+  onRepeatTask,
+  repeatingTask = false,
+  isRunning = false,
+}: DebugPanelProps) {
   const [debugPanelOpen, setDebugPanelOpen] = useState(false);
   const [debugExported, setDebugExported] = useState(false);
   const [debugSearchQuery, setDebugSearchQuery] = useState('');
@@ -171,15 +198,59 @@ export function DebugPanel({ debugLogs, taskId, onClearLogs }: DebugPanelProps) 
                   onClearLogs();
                 }}
               >
-                <Trash2 className="h-3 w-3 mr-1" />
+                <Trash className="h-3 w-3 mr-1" />
                 Clear
               </Button>
             </>
           )}
+          {onBugReport && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={bugReporting}
+              className="h-6 px-2 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
+              onClick={(e) => {
+                e.stopPropagation();
+                onBugReport();
+              }}
+              title="Save bug report with screenshot, accessibility tree, and debug logs"
+              data-testid="debug-bug-report-button"
+            >
+              {bugReporting ? (
+                <SpinnerGap className="h-3 w-3 mr-1 animate-spin" />
+              ) : bugReportSaved ? (
+                <Check className="h-3 w-3 mr-1 text-green-400" />
+              ) : (
+                <File className="h-3 w-3 mr-1" />
+              )}
+              {bugReportSaved ? 'Saved' : 'Bug Report'}
+            </Button>
+          )}
+          {onRepeatTask && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={repeatingTask || isRunning}
+              className="h-6 px-2 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRepeatTask();
+              }}
+              title="Repeat this task with the same prompt"
+              data-testid="debug-repeat-task-button"
+            >
+              {repeatingTask ? (
+                <SpinnerGap className="h-3 w-3 mr-1 animate-spin" />
+              ) : (
+                <ArrowClockwise className="h-3 w-3 mr-1" />
+              )}
+              Repeat Task
+            </Button>
+          )}
           {debugPanelOpen ? (
-            <ChevronDown className="h-4 w-4 text-zinc-500" />
+            <CaretDown className="h-4 w-4 text-zinc-500" />
           ) : (
-            <ChevronUp className="h-4 w-4 text-zinc-500" />
+            <CaretUp className="h-4 w-4 text-zinc-500" />
           )}
         </div>
       </div>
@@ -207,19 +278,19 @@ export function DebugPanel({ debugLogs, taskId, onClearLogs }: DebugPanelProps) 
                       className="p-1 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 rounded-l border border-zinc-700 border-r-0"
                       title="Previous match (Shift+Enter)"
                     >
-                      <ChevronUp className="h-3.5 w-3.5" />
+                      <CaretUp className="h-3.5 w-3.5" />
                     </button>
                     <button
                       onClick={goToNextMatch}
                       className="p-1 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 rounded-r border border-zinc-700"
                       title="Next match (Enter)"
                     >
-                      <ChevronDown className="h-3.5 w-3.5" />
+                      <CaretDown className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 )}
                 <div className="relative">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-500" />
+                  <MagnifyingGlass className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-500" />
                   <input
                     ref={debugSearchInputRef}
                     type="text"

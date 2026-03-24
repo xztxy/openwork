@@ -32,6 +32,9 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/agent-core/package.json ./packages/agent-core/
 COPY apps/web/package.json ./apps/web/
 COPY apps/desktop/package.json ./apps/desktop/
+COPY apps/daemon/package.json ./apps/daemon/
+
+# Copy scripts directory (needed by root postinstall script)
 COPY scripts/ ./scripts/
 COPY packages/agent-core/mcp-tools ./packages/agent-core/mcp-tools
 COPY apps/desktop/scripts ./apps/desktop/scripts

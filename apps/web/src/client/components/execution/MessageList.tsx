@@ -4,23 +4,53 @@ import { springs } from '../../lib/animations';
 import type { TaskMessage } from '@accomplish_ai/agent-core/common';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Wrench, Terminal, Check, Copy, Play } from 'lucide-react';
+import { Wrench, Terminal, Check, Copy, Play } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import type { Components } from 'react-markdown';
 import { StreamingText } from '../ui/streaming-text';
+import { CodeBlock } from '@/components/ui/CodeBlock';
 import { BrowserScriptCard } from '../BrowserScriptCard';
 import { getToolDisplayInfo } from '../../constants/tool-mappings';
 import { SpinningIcon } from './SpinningIcon';
+
+// Hoisted to module scope — stable reference avoids ReactMarkdown reconciliation on every render.
+// Custom renderer: fenced code blocks get syntax highlighting + copy button;
+// inline backtick code keeps simple prose styling.
+const markdownComponents: Components = {
+  code({ className, children, node, ...props }) {
+    const code = String(children).replace(/\n$/, '');
+    // Use node.properties.className array to correctly parse languages like c++, c#, etc.
+    const classes: string[] =
+      (node?.properties?.className as string[] | undefined) ??
+      (className ? className.split(' ') : []);
+    const langClass = classes.find((c) => c.startsWith('language-'));
+    const language = langClass ? langClass.slice('language-'.length) : undefined;
+    // Guard against single-line fenced blocks without a language identifier:
+    // they also have no className but should NOT be treated as inline code.
+    const hasLanguageClass = classes.some((c) => c.startsWith('language-'));
+    const inline = typeof className === 'undefined' && !hasLanguageClass && !code.includes('\n');
+
+    return (
+      <CodeBlock language={language} inline={inline} {...props}>
+        {code}
+      </CodeBlock>
+    );
+  },
+};
 
 export interface MessageBubbleProps {
   message: TaskMessage;
   shouldStream?: boolean;
   isLastMessage?: boolean;
   isRunning?: boolean;
-  showContinueButton?: boolean;
-  continueLabel?: string;
-  onContinue?: () => void;
+  showTaskActionButton?: boolean;
+  taskActionLabel?: string;
+  taskActionPendingLabel?: string;
+  onTaskAction?: () => void;
+  isTaskActionRunning?: boolean;
+  taskActionError?: string | null;
   isLoading?: boolean;
 }
 
@@ -32,9 +62,12 @@ export const MessageBubble = memo(
     shouldStream = false,
     isLastMessage = false,
     isRunning = false,
-    showContinueButton = false,
-    continueLabel,
-    onContinue,
+    showTaskActionButton = false,
+    taskActionLabel,
+    taskActionPendingLabel,
+    onTaskAction,
+    isTaskActionRunning = false,
+    taskActionError,
     isLoading = false,
   }: MessageBubbleProps) {
     const [streamComplete, setStreamComplete] = useState(!shouldStream);
@@ -85,6 +118,10 @@ export const MessageBubble = memo(
       return null;
     }
 
+    if (isTool && message.toolName?.endsWith('complete_task')) {
+      return null;
+    }
+
     const showCopyButton = !isTool && !!message.content?.trim();
 
     const proseClasses = cn(
@@ -93,8 +130,9 @@ export const MessageBubble = memo(
       'prose-p:text-foreground prose-p:my-2',
       'prose-strong:text-foreground prose-strong:font-semibold',
       'prose-em:text-foreground',
+      // prose-code is overridden by CodeBlock for fenced blocks; inline code keeps default
       'prose-code:text-foreground prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs',
-      'prose-pre:bg-muted prose-pre:text-foreground prose-pre:p-3 prose-pre:rounded-lg',
+      'prose-pre:bg-transparent prose-pre:p-0 prose-pre:m-0',
       'prose-ul:text-foreground prose-ol:text-foreground',
       'prose-li:text-foreground prose-li:my-1',
       'prose-a:text-primary prose-a:underline',
@@ -146,11 +184,7 @@ export const MessageBubble = memo(
           >
             {isTool ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
-                {ToolIcon ? (
-                  <ToolIcon className="h-4 w-4 fill-none" />
-                ) : (
-                  <Wrench className="h-4 w-4" />
-                )}
+                {ToolIcon ? <ToolIcon className="h-4 w-4" /> : <Wrench className="h-4 w-4" />}
                 <span>{toolDisplayInfo?.label || toolName || 'Processing'}</span>
                 {isLastMessage && isRunning && <SpinningIcon className="h-3.5 w-3.5 ml-1" />}
               </div>
@@ -180,13 +214,17 @@ export const MessageBubble = memo(
                   >
                     {(streamedText) => (
                       <div className={proseClasses}>
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamedText}</ReactMarkdown>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                          {streamedText}
+                        </ReactMarkdown>
                       </div>
                     )}
                   </StreamingText>
                 ) : (
                   <div className={proseClasses}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                      {message.content}
+                    </ReactMarkdown>
                   </div>
                 )}
                 <p
@@ -197,16 +235,21 @@ export const MessageBubble = memo(
                 >
                   {new Date(message.timestamp).toLocaleTimeString()}
                 </p>
-                {isAssistant && showContinueButton && onContinue && (
+                {isAssistant && showTaskActionButton && onTaskAction && (
                   <Button
                     size="sm"
-                    onClick={onContinue}
-                    disabled={isLoading}
+                    onClick={onTaskAction}
+                    disabled={isLoading || isTaskActionRunning}
                     className="mt-3 gap-1.5"
                   >
                     <Play className="h-3 w-3" />
-                    {continueLabel || 'Continue'}
+                    {isTaskActionRunning
+                      ? (taskActionPendingLabel ?? taskActionLabel ?? 'Continue')
+                      : (taskActionLabel ?? 'Continue')}
                   </Button>
+                )}
+                {isAssistant && taskActionError && (
+                  <p className="mt-3 text-sm text-destructive">{taskActionError}</p>
                 )}
               </>
             )}
@@ -252,6 +295,10 @@ export const MessageBubble = memo(
     prev.shouldStream === next.shouldStream &&
     prev.isLastMessage === next.isLastMessage &&
     prev.isRunning === next.isRunning &&
-    prev.showContinueButton === next.showContinueButton &&
+    prev.showTaskActionButton === next.showTaskActionButton &&
+    prev.taskActionLabel === next.taskActionLabel &&
+    prev.taskActionPendingLabel === next.taskActionPendingLabel &&
+    prev.isTaskActionRunning === next.isTaskActionRunning &&
+    prev.taskActionError === next.taskActionError &&
     prev.isLoading === next.isLoading,
 );
