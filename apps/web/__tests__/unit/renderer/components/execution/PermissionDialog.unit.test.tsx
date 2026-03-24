@@ -170,6 +170,7 @@ describe('PermissionDialog', () => {
       );
 
       expect(screen.getByTestId('execution-permission-modal')).toBeInTheDocument();
+      expect(screen.queryByText(/undefined/i)).toBeNull();
     });
   });
 });

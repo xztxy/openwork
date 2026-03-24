@@ -357,11 +357,25 @@ if (!gotTheLock) {
       const windows = BrowserWindow.getAllWindows();
       if (windows.length === 0) {
         createWindow();
-        console.log('[Main] Application reactivated; recreated window');
+        try {
+          const l = getLogCollector();
+          if (l?.logEnv) {
+            l.logEnv('INFO', '[Main] Application reactivated; recreated window');
+          }
+        } catch (_e) {
+          /* ignore */
+        }
       } else {
         windows[0].show();
         windows[0].focus();
-        console.log('[Main] Application reactivated; showed existing window');
+        try {
+          const l = getLogCollector();
+          if (l?.logEnv) {
+            l.logEnv('INFO', '[Main] Application reactivated; showed existing window');
+          }
+        } catch (_e) {
+          /* ignore */
+        }
       }
     });
   });
