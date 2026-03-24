@@ -25,7 +25,7 @@ export class ExecutionPage {
   }
 
   get permissionCard() {
-    return this.page.getByTestId('execution-permission-card');
+    return this.page.getByTestId('execution-permission-modal');
   }
 
   get allowButton() {

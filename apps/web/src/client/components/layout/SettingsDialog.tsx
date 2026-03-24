@@ -13,7 +13,6 @@ import { SpeechSettingsForm } from '@/components/settings/SpeechSettingsForm';
 import { SkillsPanel, AddSkillDropdown } from '@/components/settings/skills';
 import { WorkspacesPanel } from '@/components/settings/WorkspacesPanel';
 import { AboutTab } from '@/components/settings/AboutTab';
-import { DebugSection } from '@/components/settings/DebugSection';
 import { GeneralTab } from '@/components/settings/GeneralTab';
 import { SandboxSection } from '@/components/settings/SandboxSection';
 import { ConnectorsPanel } from '@/components/settings/connectors';
@@ -458,20 +457,6 @@ export function SettingsDialog({
                           onModelChange={handleModelChange}
                           showModelError={showModelError}
                         />
-                      </motion.section>
-                    )}
-                  </AnimatePresence>
-
-                  <AnimatePresence>
-                    {selectedProvider && (
-                      <motion.section
-                        variants={settingsVariants.slideDown}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                        transition={{ ...settingsTransitions.enter, delay: 0.05 }}
-                      >
-                        <DebugSection debugMode={debugMode} onDebugToggle={handleDebugToggle} />
                       </motion.section>
                     )}
                   </AnimatePresence>

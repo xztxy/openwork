@@ -20,9 +20,6 @@ export function GeneralTab({
   return (
     <div className="space-y-6">
       <section>
-        <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-3">
-          {t('notifications.toggle.label')}
-        </h4>
         <NotificationsSection enabled={notificationsEnabled} onToggle={onNotificationsToggle} />
       </section>
 
