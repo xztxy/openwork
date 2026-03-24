@@ -526,6 +526,34 @@ export async function buildProviderConfigs(
     }
   }
 
+  // NVIDIA NIM provider
+  const nimProvider = providerSettings.connectedProviders.nim;
+  if (
+    nimProvider?.connectionStatus === 'connected' &&
+    nimProvider.credentials.type === 'nim' &&
+    nimProvider.selectedModelId
+  ) {
+    const nimApiKey = getApiKey('nim');
+    const serverUrl = nimProvider.credentials.serverUrl;
+    const modelId = nimProvider.selectedModelId.replace(/^nim\//, '');
+    providerConfigs.push({
+      id: 'nim',
+      npm: '@ai-sdk/openai-compatible',
+      name: 'NVIDIA NIM',
+      options: {
+        baseURL: serverUrl,
+        ...(nimApiKey ? { apiKey: nimApiKey } : {}),
+      },
+      models: {
+        [modelId]: { name: modelId, tools: true },
+      },
+    });
+    if (!enabledProviders.includes('nim')) {
+      enabledProviders.push('nim');
+    }
+    log.info(`[OpenCode Config Builder] NVIDIA NIM configured: ${modelId} baseURL: ${serverUrl}`);
+  }
+
   // Custom OpenAI-compatible provider
   const customProvider = providerSettings.connectedProviders.custom;
   if (

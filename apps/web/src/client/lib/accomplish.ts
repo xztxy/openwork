@@ -288,6 +288,21 @@ interface AccomplishAPI {
     } | null,
   ): Promise<void>;
 
+  // NVIDIA NIM configuration
+  testNimConnection(
+    url: string,
+    apiKey: string,
+  ): Promise<{
+    success: boolean;
+    models?: Array<{ id: string; name: string; provider: string; contextLength: number }>;
+    error?: string;
+  }>;
+  fetchNimModels(): Promise<{
+    success: boolean;
+    models?: Array<{ id: string; name: string; provider: string; contextLength: number }>;
+    error?: string;
+  }>;
+
   // Custom OpenAI-compatible endpoint configuration
   testCustomConnection(
     baseUrl: string,
