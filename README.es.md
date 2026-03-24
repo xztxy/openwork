@@ -165,6 +165,7 @@ Accomplish se ejecuta localmente en tu máquina. Tus archivos permanecen en tu d
 
 - macOS (Apple Silicon)
 - Windows 11
+- Linux x64 (AppImage)
 
 <br />
 
@@ -227,7 +228,7 @@ Puedes usar tus propias claves API (OpenAI, Anthropic, Google, xAI, etc.) o ejec
 Sí. Accomplish es de código abierto y tiene licencia MIT.
 
 **¿Qué plataformas son compatibles?**
-macOS (Apple Silicon) y Windows 11 están disponibles ahora.
+macOS (Apple Silicon), Windows 11 y Linux x64 (AppImage) están disponibles ahora.
 
 <br />
 

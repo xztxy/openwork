@@ -165,6 +165,7 @@ Accomplish هو وكيل سطح مكتب ذكاء اصطناعي مفتوح ال
 
 - macOS (Apple Silicon)
 - Windows 11
+- Linux x64 (AppImage)
 
 <br />
 
@@ -227,7 +228,7 @@ Accomplish هو وكيل سطح مكتب ذكاء اصطناعي مفتوح ال
 نعم. Accomplish مفتوح المصدر ومرخص بـ MIT.
 
 **ما هي المنصات المدعومة؟**
-macOS (Apple Silicon) و Windows 11 متاحان الآن.
+macOS (Apple Silicon) و Windows 11 و Linux x64 (AppImage) متاحة الآن.
 
 <br />
 
