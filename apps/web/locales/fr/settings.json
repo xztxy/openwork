@@ -122,7 +122,8 @@
   },
   "lmstudio": {
     "serverUrl": "URL du serveur LM Studio",
-    "serverHint": "Démarrez LM Studio et activez le serveur local dans les paramètres Développeur"
+    "serverHint": "Démarrez LM Studio et activez le serveur local dans les paramètres Développeur",
+    "refreshModels": "Actualiser la liste des modèles"
   },
   "vertex": {
     "serviceAccountTab": "Compte de service",
@@ -175,7 +176,8 @@
     "selectModel": "Sélectionner le modèle",
     "useThisModel": "Utiliser ce modèle",
     "helpText": "Assurez-vous qu'<link>Ollama</link> est installé et en cours d'exécution, puis cliquez sur Tester pour vous connecter.",
-    "currentlyUsing": "Actuellement utilisé"
+    "currentlyUsing": "Actuellement utilisé",
+    "refreshModels": "Actualiser la liste des modèles"
   },
   "azure": {
     "apiKey": "Clé API",
@@ -247,10 +249,19 @@
     "connectors": "Connecteurs",
     "skills": "Compétences",
     "voiceInput": "Saisie vocale",
+    "workspaces": "Espaces de travail",
     "appearance": "Apparence",
     "about": "À propos",
     "browsers": "Navigateurs cloud",
+    "general": "Général",
+    "daemon": "Démon",
     "integrations": "Intégrations"
+  },
+  "notifications": {
+    "toggle": {
+      "label": "Notifications de bureau",
+      "description": "Afficher les notifications du système lorsque les tâches se terminent en arrière-plan."
+    }
   },
   "integrations": {
     "title": "Intégrations de messagerie",
@@ -379,16 +390,16 @@
     "buildWithAccomplish": "Créer avec Accomplish",
     "buildDescription": "Créez des compétences par conversation",
     "uploadSkill": "Importer une compétence",
-    "uploadDescription": "Importez un fichier SKILL.md",
+    "uploadDescription": "Sélectionnez un dossier de compétences à importer",
     "importFromGitHub": "Importer depuis GitHub",
     "importDescription": "Collez un lien de dépôt",
     "importDialogDescription": "Saisissez l'URL d'un dépôt GitHub contenant un fichier SKILL.md.",
     "importing": "Importation...",
     "import": "Importer",
     "uploadFailedTitle": "Échec de l'importation",
-    "uploadFailedDescription": "Le fichier de compétence n'a pas pu être importé.",
+    "uploadFailedDescription": "Le dossier de compétence n'a pas pu être importé.",
     "uploadErrorHelp": "Assurez-vous que votre fichier SKILL.md contient un frontmatter YAML valide avec au moins un champ",
-    "selectFile": "Sélectionnez un fichier SKILL.md",
+    "selectFile": "Sélectionnez un dossier de compétences",
     "uploadErrorField": "name",
     "uploadErrorFieldSuffix": " :",
     "ok": "OK",
@@ -456,5 +467,9 @@
     "tooltipError": "Erreur lors de la transcription - Cliquez pour réessayer",
     "tooltipDefault": "Cliquez pour enregistrer ou maintenez Alt pour enregistrer la saisie vocale",
     "processing": "Traitement..."
+  },
+  "baseUrl": {
+    "title": "URL de base",
+    "description": "Laissez vide pour utiliser l'URL par défaut."
   }
 }

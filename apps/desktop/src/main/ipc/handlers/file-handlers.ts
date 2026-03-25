@@ -5,6 +5,7 @@ import { BrowserWindow, dialog, shell, app } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import type { FileAttachmentInfo } from '@accomplish_ai/agent-core';
 import { handle, assertTrustedWindow, MAX_ATTACHMENT_FILE_SIZE } from './utils';
+import { getLogCollector } from '../../logging';
 
 const MAX_DROPPED_FILES = 5;
 
@@ -95,6 +96,17 @@ function buildFileAttachmentInfo(filePath: string): FileAttachmentInfo {
 }
 
 export function registerFileHandlers(): void {
+  handle('files:pick-folder', async (event: IpcMainInvokeEvent) => {
+    const window = assertTrustedWindow(BrowserWindow.fromWebContents(event.sender));
+    const result = await dialog.showOpenDialog(window, {
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+    return result.filePaths[0];
+  });
+
   handle('files:pick', async (event: IpcMainInvokeEvent) => {
     const window = assertTrustedWindow(BrowserWindow.fromWebContents(event.sender));
     const result = await dialog.showOpenDialog(window, {
@@ -136,7 +148,14 @@ export function registerFileHandlers(): void {
       validateHttpUrl(url, 'External URL');
       await shell.openExternal(url);
     } catch (error) {
-      console.error('Failed to open external URL:', error);
+      try {
+        const l = getLogCollector();
+        if (l?.log) {
+          l.log('ERROR', 'ipc', 'Failed to open external URL', { error: String(error) });
+        }
+      } catch (_e) {
+        /* best-effort logging */
+      }
       throw error;
     }
   });

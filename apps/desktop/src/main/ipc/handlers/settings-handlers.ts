@@ -13,6 +13,20 @@ import { registerWhatsAppHandlers } from './whatsapp-handlers';
 export function registerSettingsHandlers(): void {
   const storage = getStorage();
 
+  handle('settings:notifications-enabled', async (_event: IpcMainInvokeEvent) => {
+    return storage.getNotificationsEnabled();
+  });
+
+  handle(
+    'settings:set-notifications-enabled',
+    async (_event: IpcMainInvokeEvent, enabled: boolean) => {
+      if (typeof enabled !== 'boolean') {
+        throw new Error('Invalid notifications-enabled flag');
+      }
+      storage.setNotificationsEnabled(enabled);
+    },
+  );
+
   handle('settings:debug-mode', async (_event: IpcMainInvokeEvent) => {
     return storage.getDebugMode();
   });
@@ -48,6 +62,24 @@ export function registerSettingsHandlers(): void {
 
   handle('settings:app-settings', async (_event: IpcMainInvokeEvent) => {
     return storage.getAppSettings();
+  });
+
+  // ── Daemon / Background Mode ────────────────────────────────────────
+
+  handle('daemon:get-run-in-background', async () => {
+    return storage.getRunInBackground();
+  });
+
+  handle('daemon:set-run-in-background', async (_event: IpcMainInvokeEvent, enabled: boolean) => {
+    if (typeof enabled !== 'boolean') {
+      throw new Error('Invalid value: enabled must be a boolean');
+    }
+    storage.setRunInBackground(enabled);
+  });
+
+  handle('daemon:get-socket-path', async () => {
+    const { getSocketPath } = await import('../../daemon/server');
+    return getSocketPath();
   });
 
   registerCloudBrowserHandlers(handle);

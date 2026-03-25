@@ -1,5 +1,4 @@
 // =============================================================================
-console.log('[agent-core] u2d sync test');
 // @accomplish/core - Public API (v0.4.0)
 // =============================================================================
 // This file explicitly exports the public API for the @accomplish/core package.
@@ -474,3 +473,61 @@ export {
   resumeSessionSchema,
   validate,
 } from './common/schemas/validation.js';
+
+// -----------------------------------------------------------------------------
+// Daemon Module (from ./daemon/)
+// -----------------------------------------------------------------------------
+
+export { DaemonServer, DaemonClient, createInProcessTransportPair } from './daemon/index.js';
+export { createChildProcessTransport, createParentProcessTransport } from './daemon/index.js';
+export {
+  addScheduledTask,
+  listScheduledTasks,
+  cancelScheduledTask,
+  onScheduledTaskFire,
+  disposeScheduler,
+  parseCronField,
+  matchesCron,
+} from './daemon/index.js';
+export type { DaemonServerOptions, DaemonClientOptions } from './daemon/index.js';
+
+// Socket-based RPC server for the standalone daemon process
+export { DaemonRpcServer } from './daemon/index.js';
+export type { DaemonRpcServerOptions } from './daemon/index.js';
+
+// Socket path, PID lock, and crash handler utilities for the daemon process
+export { getSocketPath, getPidFilePath, getDaemonDir } from './daemon/index.js';
+export { acquirePidLock, PidLockError } from './daemon/index.js';
+export type { PidLockHandle, PidLockPayload } from './daemon/index.js';
+export { installCrashHandlers } from './daemon/index.js';
+
+// Daemon protocol types (re-exported from common/types/daemon.ts)
+export { JSON_RPC_ERRORS } from './common/types/daemon.js';
+export type {
+  JsonRpcRequest,
+  JsonRpcResponse,
+  JsonRpcNotification,
+  JsonRpcError,
+  JsonRpcMessage,
+  DaemonMethodMap,
+  DaemonMethod,
+  DaemonNotificationMap,
+  DaemonNotification,
+  DaemonTransport,
+  DaemonConnectionState,
+  TypedJsonRpcRequest,
+  TypedJsonRpcResponse,
+  TypedJsonRpcNotification,
+  ScheduledTask,
+  TaskScheduleParams,
+  TaskCancelScheduledParams,
+  HealthCheckResult,
+} from './common/types/daemon.js';
+
+// Browser live-view types (ENG-695)
+export type {
+  BrowserFramePayload,
+  BrowserStatusPayload,
+  BrowserNavigatePayload,
+} from './common/types/browser-view.js';
+

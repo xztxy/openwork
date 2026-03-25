@@ -71,6 +71,8 @@ const mockAccomplish = {
   getSelectedModel: vi.fn().mockResolvedValue({ provider: 'anthropic', id: 'claude-3-opus' }),
   getOllamaConfig: vi.fn().mockResolvedValue(null),
   getDebugMode: vi.fn().mockResolvedValue(false),
+  getNotificationsEnabled: vi.fn().mockResolvedValue(true),
+  setNotificationsEnabled: vi.fn().mockResolvedValue(undefined),
   isE2EMode: vi.fn().mockResolvedValue(false),
   getProviderSettings: vi.fn().mockResolvedValue({
     activeProviderId: 'anthropic',
@@ -120,7 +122,7 @@ let mockStoreState: {
   addTaskUpdateBatch: typeof mockAddTaskUpdateBatch;
   updateTaskStatus: typeof mockUpdateTaskStatus;
   setPermissionRequest: typeof mockSetPermissionRequest;
-  permissionRequest: PermissionRequest | null;
+  permissionRequests: Record<string, PermissionRequest>;
   respondToPermission: typeof mockRespondToPermission;
   sendFollowUp: typeof mockSendFollowUp;
   cancelTask: typeof mockCancelTask;
@@ -140,7 +142,7 @@ let mockStoreState: {
   addTaskUpdateBatch: mockAddTaskUpdateBatch,
   updateTaskStatus: mockUpdateTaskStatus,
   setPermissionRequest: mockSetPermissionRequest,
-  permissionRequest: null,
+  permissionRequests: {},
   respondToPermission: mockRespondToPermission,
   sendFollowUp: mockSendFollowUp,
   cancelTask: mockCancelTask,
@@ -261,7 +263,7 @@ describe('Execution Page Integration', () => {
       addTaskUpdateBatch: mockAddTaskUpdateBatch,
       updateTaskStatus: mockUpdateTaskStatus,
       setPermissionRequest: mockSetPermissionRequest,
-      permissionRequest: null,
+      permissionRequests: {},
       respondToPermission: mockRespondToPermission,
       sendFollowUp: mockSendFollowUp,
       cancelTask: mockCancelTask,
@@ -450,13 +452,15 @@ describe('Execution Page Integration', () => {
   describe('permission dialog', () => {
     it('should display permission dialog when permission request exists', () => {
       mockStoreState.currentTask = createMockTask('task-123', 'Task', 'running');
-      mockStoreState.permissionRequest = {
-        id: 'perm-1',
-        taskId: 'task-123',
-        type: 'tool',
-        toolName: 'Bash',
-        toolInput: { command: 'rm -rf /' },
-        createdAt: new Date().toISOString(),
+      mockStoreState.permissionRequests = {
+        'task-123': {
+          id: 'perm-1',
+          taskId: 'task-123',
+          type: 'tool',
+          toolName: 'Bash',
+          toolInput: { command: 'rm -rf /' },
+          createdAt: new Date().toISOString(),
+        } as PermissionRequest,
       };
 
       renderWithRouter('task-123');
@@ -466,12 +470,14 @@ describe('Execution Page Integration', () => {
 
     it('should display tool name in permission dialog', () => {
       mockStoreState.currentTask = createMockTask('task-123', 'Task', 'running');
-      mockStoreState.permissionRequest = {
-        id: 'perm-1',
-        taskId: 'task-123',
-        type: 'tool',
-        toolName: 'Bash',
-        createdAt: new Date().toISOString(),
+      mockStoreState.permissionRequests = {
+        'task-123': {
+          id: 'perm-1',
+          taskId: 'task-123',
+          type: 'tool',
+          toolName: 'Bash',
+          createdAt: new Date().toISOString(),
+        } as PermissionRequest,
       };
 
       renderWithRouter('task-123');
@@ -479,35 +485,39 @@ describe('Execution Page Integration', () => {
       expect(screen.getByText(/tool:\s*bash/i)).toBeInTheDocument();
     });
 
-    it('should render Allow and Deny buttons in permission dialog', () => {
+    it('should render Allow and Deny buttons in permission inline card', () => {
       mockStoreState.currentTask = createMockTask('task-123', 'Task', 'running');
-      mockStoreState.permissionRequest = {
-        id: 'perm-1',
-        taskId: 'task-123',
-        type: 'tool',
-        toolName: 'Write',
-        createdAt: new Date().toISOString(),
+      mockStoreState.permissionRequests = {
+        'task-123': {
+          id: 'perm-1',
+          taskId: 'task-123',
+          type: 'tool',
+          toolName: 'Write',
+          createdAt: new Date().toISOString(),
+        } as PermissionRequest,
       };
 
       renderWithRouter('task-123');
 
-      expect(screen.getByRole('button', { name: /allow/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /deny/i })).toBeInTheDocument();
+      expect(screen.getByTestId('permission-allow-button')).toBeInTheDocument();
+      expect(screen.getByTestId('permission-deny-button')).toBeInTheDocument();
     });
 
     it('should call respondToPermission with allow when Allow is clicked', async () => {
       mockStoreState.currentTask = createMockTask('task-123', 'Task', 'running');
-      mockStoreState.permissionRequest = {
-        id: 'perm-1',
-        taskId: 'task-123',
-        type: 'tool',
-        toolName: 'Write',
-        createdAt: new Date().toISOString(),
+      mockStoreState.permissionRequests = {
+        'task-123': {
+          id: 'perm-1',
+          taskId: 'task-123',
+          type: 'tool',
+          toolName: 'Write',
+          createdAt: new Date().toISOString(),
+        } as PermissionRequest,
       };
 
       renderWithRouter('task-123');
 
-      const allowButton = screen.getByRole('button', { name: /allow/i });
+      const allowButton = screen.getByTestId('permission-allow-button');
       fireEvent.click(allowButton);
 
       await waitFor(() => {
@@ -521,12 +531,14 @@ describe('Execution Page Integration', () => {
 
     it('should call sendFollowUp with continue when Continue button is clicked', async () => {
       mockStoreState.currentTask = createMockTask('task-123', 'Task', 'waiting_permission');
-      mockStoreState.permissionRequest = {
-        id: 'perm-1',
-        taskId: 'task-123',
-        type: 'question',
-        question: 'How should I proceed?',
-        createdAt: new Date().toISOString(),
+      mockStoreState.permissionRequests = {
+        'task-123': {
+          id: 'perm-1',
+          taskId: 'task-123',
+          type: 'question',
+          question: 'How should I proceed?',
+          createdAt: new Date().toISOString(),
+        } as PermissionRequest,
       };
 
       renderWithRouter('task-123');
@@ -541,17 +553,19 @@ describe('Execution Page Integration', () => {
 
     it('should call respondToPermission with deny when Deny is clicked', async () => {
       mockStoreState.currentTask = createMockTask('task-123', 'Task', 'running');
-      mockStoreState.permissionRequest = {
-        id: 'perm-1',
-        taskId: 'task-123',
-        type: 'tool',
-        toolName: 'Write',
-        createdAt: new Date().toISOString(),
+      mockStoreState.permissionRequests = {
+        'task-123': {
+          id: 'perm-1',
+          taskId: 'task-123',
+          type: 'tool',
+          toolName: 'Write',
+          createdAt: new Date().toISOString(),
+        } as PermissionRequest,
       };
 
       renderWithRouter('task-123');
 
-      const denyButton = screen.getByRole('button', { name: /deny/i });
+      const denyButton = screen.getByTestId('permission-deny-button');
       fireEvent.click(denyButton);
 
       await waitFor(() => {
@@ -565,13 +579,15 @@ describe('Execution Page Integration', () => {
 
     it('should display file permission specific UI for file type', () => {
       mockStoreState.currentTask = createMockTask('task-123', 'Task', 'running');
-      mockStoreState.permissionRequest = {
-        id: 'perm-1',
-        taskId: 'task-123',
-        type: 'file',
-        fileOperation: 'create',
-        filePath: '/path/to/file.txt',
-        createdAt: new Date().toISOString(),
+      mockStoreState.permissionRequests = {
+        'task-123': {
+          id: 'perm-1',
+          taskId: 'task-123',
+          type: 'file',
+          fileOperation: 'create',
+          filePath: '/path/to/file.txt',
+          createdAt: new Date().toISOString(),
+        } as PermissionRequest,
       };
 
       renderWithRouter('task-123');
@@ -895,14 +911,16 @@ describe('Execution Page Integration', () => {
   describe('file permission dialog details', () => {
     it('should show target path for rename/move operations', () => {
       mockStoreState.currentTask = createMockTask('task-123', 'Task', 'running');
-      mockStoreState.permissionRequest = {
-        id: 'perm-1',
-        taskId: 'task-123',
-        type: 'file',
-        fileOperation: 'rename',
-        filePath: '/path/to/old.txt',
-        targetPath: '/path/to/new.txt',
-        createdAt: new Date().toISOString(),
+      mockStoreState.permissionRequests = {
+        'task-123': {
+          id: 'perm-1',
+          taskId: 'task-123',
+          type: 'file',
+          fileOperation: 'rename',
+          filePath: '/path/to/old.txt',
+          targetPath: '/path/to/new.txt',
+          createdAt: new Date().toISOString(),
+        } as PermissionRequest,
       };
 
       renderWithRouter('task-123');
@@ -913,14 +931,16 @@ describe('Execution Page Integration', () => {
 
     it('should show content preview for file operations', () => {
       mockStoreState.currentTask = createMockTask('task-123', 'Task', 'running');
-      mockStoreState.permissionRequest = {
-        id: 'perm-1',
-        taskId: 'task-123',
-        type: 'file',
-        fileOperation: 'create',
-        filePath: '/path/to/file.txt',
-        contentPreview: 'This is the file content preview...',
-        createdAt: new Date().toISOString(),
+      mockStoreState.permissionRequests = {
+        'task-123': {
+          id: 'perm-1',
+          taskId: 'task-123',
+          type: 'file',
+          fileOperation: 'create',
+          filePath: '/path/to/file.txt',
+          contentPreview: 'This is the file content preview...',
+          createdAt: new Date().toISOString(),
+        } as PermissionRequest,
       };
 
       renderWithRouter('task-123');
@@ -930,13 +950,15 @@ describe('Execution Page Integration', () => {
 
     it('should show delete operation warning UI', () => {
       mockStoreState.currentTask = createMockTask('task-123', 'Task', 'running');
-      mockStoreState.permissionRequest = {
-        id: 'perm-1',
-        taskId: 'task-123',
-        type: 'file',
-        fileOperation: 'delete',
-        filePath: '/path/to/file.txt',
-        createdAt: new Date().toISOString(),
+      mockStoreState.permissionRequests = {
+        'task-123': {
+          id: 'perm-1',
+          taskId: 'task-123',
+          type: 'file',
+          fileOperation: 'delete',
+          filePath: '/path/to/file.txt',
+          createdAt: new Date().toISOString(),
+        } as PermissionRequest,
       };
 
       renderWithRouter('task-123');
@@ -947,13 +969,15 @@ describe('Execution Page Integration', () => {
 
     it('should show overwrite operation badge', () => {
       mockStoreState.currentTask = createMockTask('task-123', 'Task', 'running');
-      mockStoreState.permissionRequest = {
-        id: 'perm-1',
-        taskId: 'task-123',
-        type: 'file',
-        fileOperation: 'overwrite',
-        filePath: '/path/to/file.txt',
-        createdAt: new Date().toISOString(),
+      mockStoreState.permissionRequests = {
+        'task-123': {
+          id: 'perm-1',
+          taskId: 'task-123',
+          type: 'file',
+          fileOperation: 'overwrite',
+          filePath: '/path/to/file.txt',
+          createdAt: new Date().toISOString(),
+        } as PermissionRequest,
       };
 
       renderWithRouter('task-123');
@@ -963,13 +987,15 @@ describe('Execution Page Integration', () => {
 
     it('should show modify operation badge', () => {
       mockStoreState.currentTask = createMockTask('task-123', 'Task', 'running');
-      mockStoreState.permissionRequest = {
-        id: 'perm-1',
-        taskId: 'task-123',
-        type: 'file',
-        fileOperation: 'modify',
-        filePath: '/path/to/file.txt',
-        createdAt: new Date().toISOString(),
+      mockStoreState.permissionRequests = {
+        'task-123': {
+          id: 'perm-1',
+          taskId: 'task-123',
+          type: 'file',
+          fileOperation: 'modify',
+          filePath: '/path/to/file.txt',
+          createdAt: new Date().toISOString(),
+        } as PermissionRequest,
       };
 
       renderWithRouter('task-123');
@@ -979,14 +1005,16 @@ describe('Execution Page Integration', () => {
 
     it('should show move operation badge', () => {
       mockStoreState.currentTask = createMockTask('task-123', 'Task', 'running');
-      mockStoreState.permissionRequest = {
-        id: 'perm-1',
-        taskId: 'task-123',
-        type: 'file',
-        fileOperation: 'move',
-        filePath: '/path/to/file.txt',
-        targetPath: '/new/path/file.txt',
-        createdAt: new Date().toISOString(),
+      mockStoreState.permissionRequests = {
+        'task-123': {
+          id: 'perm-1',
+          taskId: 'task-123',
+          type: 'file',
+          fileOperation: 'move',
+          filePath: '/path/to/file.txt',
+          targetPath: '/new/path/file.txt',
+          createdAt: new Date().toISOString(),
+        } as PermissionRequest,
       };
 
       renderWithRouter('task-123');
@@ -996,12 +1024,14 @@ describe('Execution Page Integration', () => {
 
     it('should show tool name in tool permission dialog', () => {
       mockStoreState.currentTask = createMockTask('task-123', 'Task', 'running');
-      mockStoreState.permissionRequest = {
-        id: 'perm-1',
-        taskId: 'task-123',
-        type: 'tool',
-        toolName: 'Bash',
-        createdAt: new Date().toISOString(),
+      mockStoreState.permissionRequests = {
+        'task-123': {
+          id: 'perm-1',
+          taskId: 'task-123',
+          type: 'tool',
+          toolName: 'Bash',
+          createdAt: new Date().toISOString(),
+        } as PermissionRequest,
       };
 
       renderWithRouter('task-123');
@@ -1491,13 +1521,15 @@ describe('Execution Page Integration', () => {
     it('should NOT call interruptTask when a permission dialog is open', () => {
       mockStoreState.currentTask = createMockTask('task-123', 'Running task', 'running');
       mockStoreState.isLoading = false;
-      mockStoreState.permissionRequest = {
-        id: 'req-1',
-        taskId: 'task-123',
-        type: 'question',
-        question: 'Allow this action?',
-        options: [{ label: 'Yes' }, { label: 'No' }],
-        createdAt: new Date().toISOString(),
+      mockStoreState.permissionRequests = {
+        'task-123': {
+          id: 'req-1',
+          taskId: 'task-123',
+          type: 'question',
+          question: 'Allow this action?',
+          options: [{ label: 'Yes' }, { label: 'No' }],
+          createdAt: new Date().toISOString(),
+        } as PermissionRequest,
       };
 
       renderWithRouter('task-123');

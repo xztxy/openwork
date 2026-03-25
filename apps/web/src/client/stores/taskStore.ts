@@ -1,4 +1,7 @@
 import { create } from 'zustand';
+import { createLogger } from '../lib/logger';
+
+const logger = createLogger('TaskStore');
 import {
   createMessageId,
   STARTUP_STAGES,
@@ -51,8 +54,8 @@ interface TaskState {
   addFavorite: (taskId: string) => Promise<void>;
   removeFavorite: (taskId: string) => Promise<void>;
 
-  // Permission handling
-  permissionRequest: PermissionRequest | null;
+  // Permission handling — keyed by taskId so concurrent tasks each retain their own request
+  permissionRequests: Record<string, PermissionRequest>;
   setupProgress: string | null;
   setupProgressTaskId: string | null;
   setupDownloadStep: number;
@@ -82,7 +85,8 @@ interface TaskState {
   ) => Promise<boolean>;
   cancelTask: () => Promise<void>;
   interruptTask: () => Promise<void>;
-  setPermissionRequest: (request: PermissionRequest | null) => void;
+  setPermissionRequest: (request: PermissionRequest) => void;
+  clearPermissionRequest: (taskId: string) => void;
   respondToPermission: (response: PermissionResponse) => Promise<void>;
   addTaskUpdate: (event: TaskUpdateEvent) => void;
   addTaskUpdateBatch: (event: TaskUpdateBatchEvent) => void;
@@ -106,7 +110,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   tasks: [],
   favorites: [],
   favoritesLoaded: false,
-  permissionRequest: null,
+  permissionRequests: {},
   setupProgress: null,
   setupProgressTaskId: null,
   setupDownloadStep: 1,
@@ -348,7 +352,16 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   },
 
   setPermissionRequest: (request) => {
-    set({ permissionRequest: request });
+    set((state) => ({
+      permissionRequests: { ...state.permissionRequests, [request.taskId]: request },
+    }));
+  },
+
+  clearPermissionRequest: (taskId) => {
+    set((state) => {
+      const { [taskId]: _, ...rest } = state.permissionRequests;
+      return { permissionRequests: rest };
+    });
   },
 
   respondToPermission: async (response: PermissionResponse) => {
@@ -359,7 +372,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       context: { ...response },
     });
     await accomplish.respondToPermission(response);
-    set({ permissionRequest: null });
+    set((state) => {
+      const { [response.taskId]: _, ...rest } = state.permissionRequests;
+      return { permissionRequests: rest };
+    });
   },
 
   addTaskUpdate: (event: TaskUpdateEvent) => {
@@ -548,7 +564,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         set({ favorites, favoritesLoaded: true });
       }
     } catch (err) {
-      console.error('[taskStore] Failed to load favorites:', err);
+      logger.error('Failed to load favorites:', err);
     }
   },
 
@@ -608,7 +624,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       currentTask: null,
       isLoading: false,
       error: null,
-      permissionRequest: null,
+      permissionRequests: {},
       setupProgress: null,
       setupProgressTaskId: null,
       setupDownloadStep: 1,
@@ -714,7 +730,7 @@ if (typeof window !== 'undefined' && window.accomplish) {
     try {
       await state.loadTasks();
     } catch (err) {
-      console.error('[taskStore] Failed to load tasks after workspace change:', err);
+      logger.error('Failed to load tasks after workspace change:', err);
       return;
     }
 

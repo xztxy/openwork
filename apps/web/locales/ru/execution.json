@@ -97,9 +97,9 @@
   },
   "startNewTask": "Начать новую задачу",
   "questionPrompt": {
-    "oauthConnecting": "Подключение к {{provider}}…",
+    "oauthConnecting": "Подключение к {{provider}}...",
     "oauthConnected": "{{provider}} подключён.",
-    "oauthFailed": "Не удалось подключить {{provider}}. Попробуйте снова.",
-    "oauthStillDisconnected": "{{provider}} всё ещё не подключён. Завершите вход и повторите попытку."
+    "oauthFailed": "Не удалось подключить {{provider}}. Попробуйте ещё раз.",
+    "oauthStillDisconnected": "{{provider}} всё ещё не подключён. Завершите вход и попробуйте ещё раз."
   }
 }

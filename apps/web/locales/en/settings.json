@@ -122,7 +122,8 @@
   },
   "lmstudio": {
     "serverUrl": "LM Studio Server URL",
-    "serverHint": "Start LM Studio and enable the local server in Developer settings"
+    "serverHint": "Start LM Studio and enable the local server in Developer settings",
+    "refreshModels": "Refresh model list"
   },
   "vertex": {
     "serviceAccountTab": "Service Account",
@@ -175,7 +176,8 @@
     "selectModel": "Select Model",
     "useThisModel": "Use This Model",
     "helpText": "Make sure <link>Ollama</link> is installed and running, then click Test to connect.",
-    "currentlyUsing": "Currently using"
+    "currentlyUsing": "Currently using",
+    "refreshModels": "Refresh model list"
   },
   "azure": {
     "apiKey": "API Key",
@@ -246,11 +248,20 @@
     "providers": "Providers",
     "connectors": "Connectors",
     "skills": "Skills",
+    "daemon": "Daemon",
     "browsers": "Cloud Browsers",
     "voiceInput": "Voice Input",
+    "workspaces": "Workspaces",
     "appearance": "Appearance",
+    "general": "General",
     "about": "About",
     "integrations": "Integrations"
+  },
+  "notifications": {
+    "toggle": {
+      "label": "Desktop Notifications",
+      "description": "Show OS notifications when tasks complete while the app is in the background."
+    }
   },
   "appearance": {
     "title": "Theme",
@@ -355,16 +366,16 @@
     "buildWithAccomplish": "Build with Accomplish",
     "buildDescription": "Create skills through conversation",
     "uploadSkill": "Upload a skill",
-    "uploadDescription": "Upload a SKILL.md file",
+    "uploadDescription": "Select a skill folder to import",
     "importFromGitHub": "Import from GitHub",
     "importDescription": "Paste a repository link",
     "importDialogDescription": "Enter the URL of a GitHub repository containing a SKILL.md file.",
     "importing": "Importing...",
     "import": "Import",
     "uploadFailedTitle": "Upload Failed",
-    "uploadFailedDescription": "The skill file could not be uploaded.",
+    "uploadFailedDescription": "The skill could not be uploaded.",
     "uploadErrorHelp": "Make sure your SKILL.md file has valid YAML frontmatter with at least a",
-    "selectFile": "Select a SKILL.md file",
+    "selectFile": "Select a skill folder",
     "uploadErrorField": "name",
     "uploadErrorFieldSuffix": "field:",
     "ok": "OK",
@@ -456,5 +467,9 @@
       "qrPlaceholder": "QR code will appear here when the WhatsApp service starts",
       "securityNotice": "By connecting WhatsApp, you grant Accomplish access to your WhatsApp messages. All data remains on your device and is not shared externally."
     }
+  },
+  "baseUrl": {
+    "title": "Base URL",
+    "description": "Leave empty to use the default URL."
   }
 }

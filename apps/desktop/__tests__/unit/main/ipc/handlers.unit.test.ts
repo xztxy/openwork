@@ -209,6 +209,8 @@ vi.mock('@accomplish_ai/agent-core', async (importOriginal) => {
     isFavorite: vi.fn((taskId: string) => mockFavorites.some((f) => f.taskId === taskId)),
 
     // App settings
+    getNotificationsEnabled: vi.fn(() => true),
+    setNotificationsEnabled: vi.fn(),
     getDebugMode: vi.fn(() => mockDebugMode),
     setDebugMode: vi.fn((enabled: boolean) => {
       mockDebugMode = enabled;
@@ -391,6 +393,13 @@ vi.mock('@main/store/secureStorage', () => ({
 // Mock config
 vi.mock('@main/config', () => ({
   getDesktopConfig: vi.fn(() => ({})),
+}));
+
+// Mock logging module
+const mockLogFn = vi.fn();
+const mockLogCollector = { log: mockLogFn, logEnv: vi.fn() };
+vi.mock('@main/logging', () => ({
+  getLogCollector: vi.fn(() => mockLogCollector),
 }));
 
 // Mock permission API
@@ -1720,8 +1729,7 @@ describe('IPC Handlers Integration', () => {
       // Arrange
       const taskId = 'task_notfound';
       mockTaskManager.hasActiveTask.mockReturnValue(false);
-      // File permission request that is not in pending
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      mockLogFn.mockClear();
 
       // Act
       await invokeHandler('permission:respond', {
@@ -1731,8 +1739,11 @@ describe('IPC Handlers Integration', () => {
       });
 
       // Assert
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('File permission request'));
-      consoleSpy.mockRestore();
+      expect(mockLogFn).toHaveBeenCalledWith(
+        'WARN',
+        'ipc',
+        expect.stringContaining('File permission request'),
+      );
     });
   });
 

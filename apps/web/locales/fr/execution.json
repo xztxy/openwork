@@ -97,9 +97,9 @@
   },
   "startNewTask": "Nouvelle tâche",
   "questionPrompt": {
-    "oauthConnecting": "Connexion à {{provider}}…",
+    "oauthConnecting": "Connexion à {{provider}}...",
     "oauthConnected": "{{provider}} est connecté.",
-    "oauthFailed": "Impossible de connecter {{provider}}. Réessayez.",
+    "oauthFailed": "Impossible de se connecter à {{provider}}. Réessayez.",
     "oauthStillDisconnected": "{{provider}} n'est toujours pas connecté. Terminez la connexion et réessayez."
   }
 }

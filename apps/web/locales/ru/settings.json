@@ -122,7 +122,8 @@
   },
   "lmstudio": {
     "serverUrl": "URL сервера LM Studio",
-    "serverHint": "Запустите LM Studio и включите локальный сервер в настройках разработчика"
+    "serverHint": "Запустите LM Studio и включите локальный сервер в настройках разработчика",
+    "refreshModels": "Обновить список моделей"
   },
   "vertex": {
     "serviceAccountTab": "Сервисный аккаунт",
@@ -175,7 +176,8 @@
     "selectModel": "Выберите модель",
     "useThisModel": "Использовать эту модель",
     "helpText": "Убедитесь, что <link>Ollama</link> установлен и запущен, затем нажмите Тест для подключения.",
-    "currentlyUsing": "Используется сейчас"
+    "currentlyUsing": "Используется сейчас",
+    "refreshModels": "Обновить список моделей"
   },
   "azure": {
     "apiKey": "API-ключ",
@@ -251,7 +253,15 @@
     "workspaces": "Рабочие пространства",
     "about": "О программе",
     "browsers": "Облачные браузеры",
+    "general": "Общие",
+    "daemon": "Фоновый процесс",
     "integrations": "Интеграции"
+  },
+  "notifications": {
+    "toggle": {
+      "label": "Уведомления на рабочем столе",
+      "description": "Показывать системные уведомления при завершении задач, когда приложение работает в фоне."
+    }
   },
   "integrations": {
     "title": "Интеграции мессенджеров",
@@ -380,16 +390,16 @@
     "buildWithAccomplish": "Создать с Accomplish",
     "buildDescription": "Создавайте навыки через диалог",
     "uploadSkill": "Загрузить навык",
-    "uploadDescription": "Загрузите файл SKILL.md",
+    "uploadDescription": "Выберите папку с навыком для импорта",
     "importFromGitHub": "Импорт из GitHub",
     "importDescription": "Вставьте ссылку на репозиторий",
     "importDialogDescription": "Введите URL репозитория GitHub, содержащего файл SKILL.md.",
     "importing": "Импорт...",
     "import": "Импортировать",
     "uploadFailedTitle": "Ошибка загрузки",
-    "uploadFailedDescription": "Не удалось загрузить файл навыка.",
+    "uploadFailedDescription": "Не удалось импортировать навык.",
     "uploadErrorHelp": "Убедитесь, что ваш файл SKILL.md содержит корректный YAML-заголовок с полем",
-    "selectFile": "Выберите файл SKILL.md",
+    "selectFile": "Выберите папку с навыком",
     "uploadErrorField": "name",
     "uploadErrorFieldSuffix": ":",
     "ok": "OK",
@@ -457,5 +467,9 @@
     "tooltipError": "Ошибка распознавания — нажмите для повтора",
     "tooltipDefault": "Нажмите для записи или удерживайте Alt для голосового ввода",
     "processing": "Обработка..."
+  },
+  "baseUrl": {
+    "title": "Базовый URL",
+    "description": "Оставьте пустым, чтобы использовать URL по умолчанию."
   }
 }

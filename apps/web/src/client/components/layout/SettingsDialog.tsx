@@ -13,10 +13,11 @@ import { SpeechSettingsForm } from '@/components/settings/SpeechSettingsForm';
 import { SkillsPanel, AddSkillDropdown } from '@/components/settings/skills';
 import { WorkspacesPanel } from '@/components/settings/WorkspacesPanel';
 import { AboutTab } from '@/components/settings/AboutTab';
-import { DebugSection } from '@/components/settings/DebugSection';
+import { GeneralTab } from '@/components/settings/GeneralTab';
 import { SandboxSection } from '@/components/settings/SandboxSection';
 import { ConnectorsPanel } from '@/components/settings/connectors';
 import { IntegrationsPanel } from '@/components/settings/integrations';
+import { DaemonPanel } from '@/components/settings/DaemonPanel';
 import { CloudBrowsersPanel } from '@/components/settings/CloudBrowsersPanel';
 import {
   Key,
@@ -24,9 +25,11 @@ import {
   Microphone,
   Info,
   Plugs,
+  Robot,
   FolderSimple,
   Globe,
   ChatCircle,
+  GearSix,
 } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import logoImage from '/assets/logo-1.png';
@@ -35,10 +38,12 @@ const TABS = [
   { id: 'providers' as const, labelKey: 'tabs.providers', icon: Key },
   { id: 'skills' as const, labelKey: 'tabs.skills', icon: Lightning },
   { id: 'connectors' as const, labelKey: 'tabs.connectors', icon: Plugs },
+  { id: 'daemon' as const, labelKey: 'tabs.daemon', icon: Robot },
   { id: 'browsers' as const, labelKey: 'tabs.browsers', icon: Globe },
   { id: 'workspaces' as const, labelKey: 'tabs.workspaces', icon: FolderSimple },
   { id: 'integrations' as const, labelKey: 'tabs.integrations', icon: ChatCircle },
   { id: 'voice' as const, labelKey: 'tabs.voiceInput', icon: Microphone },
+  { id: 'general' as const, labelKey: 'tabs.general', icon: GearSix },
   { id: 'about' as const, labelKey: 'tabs.about', icon: Info },
 ];
 
@@ -58,9 +63,11 @@ interface SettingsDialogProps {
     | 'voice'
     | 'skills'
     | 'connectors'
+    | 'daemon'
     | 'browsers'
     | 'workspaces'
     | 'integrations'
+    | 'general'
     | 'about';
 }
 
@@ -81,9 +88,11 @@ export function SettingsDialog({
     | 'voice'
     | 'skills'
     | 'connectors'
+    | 'daemon'
     | 'browsers'
     | 'workspaces'
     | 'integrations'
+    | 'general'
     | 'about'
   >(initialTab);
   const [appVersion, setAppVersion] = useState<string>('');
@@ -101,6 +110,7 @@ export function SettingsDialog({
 
   // Debug mode state - stored in appSettings, not providerSettings
   const [debugMode, setDebugModeState] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
   const accomplish = getAccomplish();
 
   // Refetch settings and debug mode when dialog opens
@@ -109,6 +119,7 @@ export function SettingsDialog({
     refetch();
     // Load debug mode from appSettings (correct store)
     accomplish.getDebugMode().then(setDebugModeState);
+    accomplish.getNotificationsEnabled().then(setNotificationsEnabledState);
     // Load app version
     accomplish.getVersion().then(setAppVersion);
   }, [open, refetch, accomplish]);
@@ -190,6 +201,14 @@ export function SettingsDialog({
     [connectProvider, setActiveProvider, onApiKeySaved],
   );
 
+  // Handle provider update (e.g. model list refresh) without triggering connect side effects
+  const handleUpdateProvider = useCallback(
+    async (provider: ConnectedProvider) => {
+      await connectProvider(provider.providerId, provider);
+    },
+    [connectProvider],
+  );
+
   // Handle provider disconnection
   const handleDisconnect = useCallback(async () => {
     if (!selectedProvider) return;
@@ -235,6 +254,13 @@ export function SettingsDialog({
     await accomplish.setDebugMode(newValue);
     setDebugModeState(newValue);
   }, [debugMode, accomplish]);
+
+  // Handle notifications toggle
+  const handleNotificationsToggle = useCallback(async () => {
+    const newValue = !notificationsEnabled;
+    await accomplish.setNotificationsEnabled(newValue);
+    setNotificationsEnabledState(newValue);
+  }, [notificationsEnabled, accomplish]);
 
   // Handle done button (close with validation)
   const handleDone = useCallback(() => {
@@ -431,24 +457,11 @@ export function SettingsDialog({
                           providerId={selectedProvider}
                           connectedProvider={settings?.connectedProviders?.[selectedProvider]}
                           onConnect={handleConnect}
+                          onUpdateProvider={handleUpdateProvider}
                           onDisconnect={handleDisconnect}
                           onModelChange={handleModelChange}
                           showModelError={showModelError}
                         />
-                      </motion.section>
-                    )}
-                  </AnimatePresence>
-
-                  <AnimatePresence>
-                    {selectedProvider && (
-                      <motion.section
-                        variants={settingsVariants.slideDown}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                        transition={{ ...settingsTransitions.enter, delay: 0.05 }}
-                      >
-                        <DebugSection debugMode={debugMode} onDebugToggle={handleDebugToggle} />
                       </motion.section>
                     )}
                   </AnimatePresence>
@@ -469,6 +482,13 @@ export function SettingsDialog({
               {activeTab === 'connectors' && (
                 <div className="space-y-6">
                   <ConnectorsPanel />
+                </div>
+              )}
+
+              {/* Daemon Tab */}
+              {activeTab === 'daemon' && (
+                <div className="space-y-6">
+                  <DaemonPanel />
                 </div>
               )}
 
@@ -498,6 +518,16 @@ export function SettingsDialog({
                 <div className="space-y-6">
                   <SpeechSettingsForm />
                 </div>
+              )}
+
+              {/* General Tab */}
+              {activeTab === 'general' && (
+                <GeneralTab
+                  notificationsEnabled={notificationsEnabled}
+                  onNotificationsToggle={handleNotificationsToggle}
+                  debugMode={debugMode}
+                  onDebugToggle={handleDebugToggle}
+                />
               )}
 
               {/* About Tab */}

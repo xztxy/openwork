@@ -29,6 +29,9 @@ import type {
   WorkspaceCreateInput,
   WorkspaceUpdateInput,
   StoredFavorite,
+  BrowserFramePayload,
+  BrowserStatusPayload,
+  BrowserNavigatePayload,
 } from '@accomplish_ai/agent-core';
 import type { CloudBrowserConfig } from '@accomplish_ai/agent-core/common';
 
@@ -87,6 +90,8 @@ interface AccomplishAPI {
     label?: string,
   ): Promise<ApiKeyConfig>;
   removeApiKey(id: string): Promise<void>;
+  getNotificationsEnabled(): Promise<boolean>;
+  setNotificationsEnabled(enabled: boolean): Promise<void>;
   getDebugMode(): Promise<boolean>;
   setDebugMode(enabled: boolean): Promise<void>;
   getTheme(): Promise<string>;
@@ -356,6 +361,7 @@ interface AccomplishAPI {
   listFavorites(): Promise<StoredFavorite[]>;
 
   // File attachments
+  pickFolder(): Promise<string | null>;
   pickFiles(): Promise<FileAttachmentInfo[]>;
   getFilePath(file: File): string;
   processDroppedFiles(paths: string[]): Promise<FileAttachmentInfo[]>;
@@ -373,6 +379,21 @@ interface AccomplishAPI {
   onTaskSummary?(callback: (data: { taskId: string; summary: string }) => void): () => void;
   onTodoUpdate?(callback: (data: { taskId: string; todos: TodoItem[] }) => void): () => void;
   onAuthError?(callback: (data: { providerId: string; message: string }) => void): () => void;
+
+  // Browser Preview (ENG-695)
+  // Contributed by dhruvawani17 (PR #489), samarthsinh2660 (PR #414), david-mamani (PR #553)
+  onBrowserFrame?(callback: (event: BrowserFramePayload & { taskId: string }) => void): () => void;
+  onBrowserNavigate?(
+    callback: (event: BrowserNavigatePayload & { taskId: string; pageName: string }) => void,
+  ): () => void;
+  onBrowserStatus?(
+    callback: (
+      event: BrowserStatusPayload & { taskId: string; pageName: string; message?: string },
+    ) => void,
+  ): () => void;
+  startBrowserPreview?(taskId: string, pageName?: string): Promise<{ success: boolean }>;
+  stopBrowserPreview?(taskId: string): Promise<{ stopped: boolean }>;
+  getBrowserPreviewStatus?(): Promise<{ active: boolean }>;
 
   // Speech-to-Text
   speechIsConfigured(): Promise<boolean>;
@@ -441,13 +462,18 @@ interface AccomplishAPI {
   setSkillEnabled(id: string, enabled: boolean): Promise<void>;
   getSkillContent(id: string): Promise<string | null>;
   getUserSkillsPath(): Promise<string>;
-  pickSkillFile(): Promise<string | null>;
-  addSkillFromFile(filePath: string): Promise<Skill>;
+  pickSkillFolder(): Promise<string | null>;
+  addSkillFromFolder(folderPath: string): Promise<Skill | null>;
   addSkillFromGitHub(rawUrl: string): Promise<Skill>;
   deleteSkill(id: string): Promise<void>;
   resyncSkills(): Promise<Skill[]>;
   openSkillInEditor(filePath: string): Promise<void>;
   showSkillInFolder(filePath: string): Promise<void>;
+
+  // Daemon / Background Mode
+  getRunInBackground(): Promise<boolean>;
+  setRunInBackground(enabled: boolean): Promise<void>;
+  getDaemonSocketPath(): Promise<string>;
 
   // Sandbox configuration
   getSandboxConfig(): Promise<{

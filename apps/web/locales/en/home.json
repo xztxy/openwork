@@ -4,7 +4,11 @@
   "favorites": {
     "title": "Favorites",
     "empty": "Star completed or interrupted tasks to see them here.",
-    "showAll": "Show all {{count}} favorites"
+    "showAll": "Show all {{count}} favorites",
+    "showAll_one": "Show {{count}} favorite",
+    "showAll_few": "Show all {{count}} favorites",
+    "showAll_many": "Show all {{count}} favorites",
+    "showAll_other": "Show all {{count}} favorites"
   },
   "plusMenu": {
     "addContent": "Add content",
@@ -17,7 +21,8 @@
     "dropFilesHere": "Drop files here to attach",
     "dropFilesHint": "(max {max} files, {size}MB each)",
     "fileTooLarge": "{name} exceeds {limit} size limit",
-    "tooManyFiles": "Maximum {max} files allowed"
+    "tooManyFiles": "Maximum {max} files allowed",
+    "selectFolder": "Select Folder"
   },
   "examplePrompts": "Example Prompts",
   "useCases": {
@@ -66,5 +71,11 @@
       "description": "Select top events and add them to the calendar.",
       "prompt": "Scrape event listings from Eventbrite, filter by location, and add top 5 to my calendar."
     }
+  },
+  "selectFolder": "Select Folder",
+  "selectedFolder": {
+    "badge": "📁 {folder}",
+    "clearAriaLabel": "Clear selected folder",
+    "clearButton": "✕"
   }
 }

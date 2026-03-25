@@ -24,9 +24,11 @@ interface AppSettingsRow {
   lmstudio_config: string | null;
   openai_base_url: string | null;
   theme: string;
+  run_in_background: number;
   sandbox_config: string;
   cloud_browser_config: string | null;
   messaging_config: string | null;
+  notifications_enabled: number;
 }
 
 export interface AppSettings {
@@ -39,6 +41,7 @@ export interface AppSettings {
   lmstudioConfig: LMStudioConfig | null;
   openaiBaseUrl: string;
   theme: ThemePreference;
+  runInBackground: boolean;
 }
 
 function getRow(): AppSettingsRow {
@@ -176,6 +179,15 @@ export function setTheme(theme: ThemePreference): void {
   db.prepare('UPDATE app_settings SET theme = ? WHERE id = 1').run(theme);
 }
 
+export function getRunInBackground(): boolean {
+  return getRow().run_in_background === 1;
+}
+
+export function setRunInBackground(enabled: boolean): void {
+  const db = getDatabase();
+  db.prepare('UPDATE app_settings SET run_in_background = ? WHERE id = 1').run(enabled ? 1 : 0);
+}
+
 export function getSandboxConfig(): SandboxConfig {
   const row = getRow();
   const parsed = safeParseJsonWithFallback<Partial<SandboxConfig>>(row.sandbox_config);
@@ -215,6 +227,15 @@ export function setCloudBrowserConfig(config: CloudBrowserConfig | null): void {
   );
 }
 
+export function getNotificationsEnabled(): boolean {
+  return getRow().notifications_enabled === 1;
+}
+
+export function setNotificationsEnabled(enabled: boolean): void {
+  const db = getDatabase();
+  db.prepare('UPDATE app_settings SET notifications_enabled = ? WHERE id = 1').run(enabled ? 1 : 0);
+}
+
 export function getAppSettings(): AppSettings {
   const row = getRow();
   return {
@@ -229,6 +250,7 @@ export function getAppSettings(): AppSettings {
     theme: VALID_THEMES.includes(row.theme as ThemePreference)
       ? (row.theme as ThemePreference)
       : 'system',
+    runInBackground: row.run_in_background === 1,
   };
 }
 
@@ -262,9 +284,11 @@ export function clearAppSettings(): void {
       lmstudio_config = NULL,
       openai_base_url = '',
       theme = 'system',
+      run_in_background = 0,
       sandbox_config = '${JSON.stringify(DEFAULT_SANDBOX_CONFIG)}',
       cloud_browser_config = NULL,
-      messaging_config = NULL
+      messaging_config = NULL,
+      notifications_enabled = 1
     WHERE id = 1`,
   ).run();
 }

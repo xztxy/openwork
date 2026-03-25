@@ -24,8 +24,9 @@ import { registerIPCHandlers } from './ipc/handlers';
 import { FutureSchemaError } from '@accomplish_ai/agent-core';
 import { initThoughtStreamApi, startThoughtStreamServer } from './thought-stream-api';
 import type { ProviderId } from '@accomplish_ai/agent-core';
-import { disposeTaskManager, cleanupVertexServiceAccountKey } from './opencode';
+import { getTaskManager, disposeTaskManager, cleanupVertexServiceAccountKey } from './opencode';
 import { disposeWhatsAppService } from './services/whatsapp/singleton';
+import { stopAllBrowserPreviewStreams } from './services/browserPreview';
 import { oauthBrowserFlow } from './opencode/auth-browser';
 import { slackMcpOAuthFlow } from './opencode/slack-auth';
 import { migrateLegacyData } from './store/legacyMigration';
@@ -39,6 +40,17 @@ import { getApiKey, clearSecureStorage } from './store/secureStorage';
 import * as workspaceManager from './store/workspaceManager';
 import { initializeLogCollector, shutdownLogCollector, getLogCollector } from './logging';
 import { skillsManager } from './skills';
+import { createTray, destroyTray } from './tray';
+import { bootstrapDaemon, shutdownDaemon } from './daemon-bootstrap';
+
+function logMain(level: 'INFO' | 'WARN' | 'ERROR', msg: string, data?: Record<string, unknown>) {
+  try {
+    const l = getLogCollector();
+    if (l?.log) {
+      l.log(level, 'main', msg, data);
+    }
+  } catch (_e) { /* best-effort logging */ }
+}
 
 if (process.argv.includes('--e2e-skip-auth')) {
   (global as Record<string, unknown>).E2E_SKIP_AUTH = true;
@@ -49,20 +61,20 @@ if (process.argv.includes('--e2e-mock-tasks') || process.env.E2E_MOCK_TASK_EVENT
 
 if (process.env.CLEAN_START === '1') {
   const userDataPath = app.getPath('userData');
-  console.log('[Clean Mode] Clearing userData directory:', userDataPath);
+  logMain('INFO', `[Clean Mode] Clearing userData directory: ${userDataPath}`);
   try {
     if (fs.existsSync(userDataPath)) {
       fs.rmSync(userDataPath, { recursive: true, force: true });
-      console.log('[Clean Mode] Successfully cleared userData');
+      logMain('INFO', '[Clean Mode] Successfully cleared userData');
     }
   } catch (err) {
-    console.error('[Clean Mode] Failed to clear userData:', err);
+    logMain('ERROR', '[Clean Mode] Failed to clear userData', { err: String(err) });
   }
   // Clear secure storage first (while singleton still exists), then null the reference.
   // Reversing this order would cause getStorage() to re-create the singleton.
   clearSecureStorage();
   resetStorageSingleton();
-  console.log('[Clean Mode] All singletons reset');
+  logMain('INFO', '[Clean Mode] All singletons reset');
 }
 
 app.setName('Accomplish');
@@ -86,13 +98,14 @@ const WEB_DIST = app.isPackaged
   : path.join(process.env.APP_ROOT, '../web/dist/client');
 
 let mainWindow: BrowserWindow | null = null;
+let isQuitting = false;
 
 function getPreloadPath(): string {
   return path.join(__dirname, '../preload/index.cjs');
 }
 
 function createWindow() {
-  console.log('[Main] Creating main application window');
+  logMain('INFO', '[Main] Creating main application window');
 
   const iconFile = process.platform === 'win32' ? 'icon.ico' : 'icon.png';
   const iconPath = app.isPackaged
@@ -104,7 +117,7 @@ function createWindow() {
   }
 
   const preloadPath = getPreloadPath();
-  console.log('[Main] Using preload script:', preloadPath);
+  logMain('INFO', `[Main] Using preload script: ${preloadPath}`);
 
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -172,18 +185,18 @@ function createWindow() {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          `default-src 'self' https:; script-src ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: ws: wss:; font-src 'self' https: data:`,
+          `default-src 'self' https:; script-src ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: ws: wss:; font-src 'self' https: data:; worker-src 'self' blob:`,
         ],
       },
     });
   });
 
   if (ROUTER_URL) {
-    console.log('[Main] Loading from router URL:', ROUTER_URL);
+    logMain('INFO', `[Main] Loading from router URL: ${ROUTER_URL}`);
     mainWindow.loadURL(ROUTER_URL);
   } else {
     const indexPath = path.join(WEB_DIST, 'index.html');
-    console.log('[Main] Loading from file:', indexPath);
+    logMain('INFO', `[Main] Loading from file: ${indexPath}`);
     mainWindow.loadFile(indexPath);
   }
 }
@@ -191,10 +204,12 @@ function createWindow() {
 process.on('uncaughtException', (error) => {
   try {
     const collector = getLogCollector();
-    collector.log('ERROR', 'main', `Uncaught exception: ${error.message}`, {
-      name: error.name,
-      stack: error.stack,
-    });
+    if (collector?.log) {
+      collector.log('ERROR', 'main', `Uncaught exception: ${error.message}`, {
+        name: error.name,
+        stack: error.stack,
+      });
+    }
   } catch {
     // ignore - log collector may not be initialized
   }
@@ -203,7 +218,9 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (reason) => {
   try {
     const collector = getLogCollector();
-    collector.log('ERROR', 'main', 'Unhandled promise rejection', { reason });
+    if (collector?.log) {
+      collector.log('ERROR', 'main', 'Unhandled promise rejection', { reason });
+    }
   } catch {
     // ignore - log collector may not be initialized
   }
@@ -212,7 +229,7 @@ process.on('unhandledRejection', (reason) => {
 const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
-  console.log('[Main] Second instance attempted; quitting');
+  logMain('INFO', '[Main] Second instance attempted; quitting');
   app.quit();
 } else {
   initializeLogCollector();
@@ -227,12 +244,12 @@ if (!gotTheLock) {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
-      console.log('[Main] Focused existing instance after second-instance event');
+      logMain('INFO', '[Main] Focused existing instance after second-instance event');
 
       if (process.platform === 'win32') {
         const protocolUrl = commandLine.find((arg) => arg.startsWith('accomplish://'));
         if (protocolUrl) {
-          console.log('[Main] Received protocol URL from second-instance:', protocolUrl);
+          logMain('INFO', `[Main] Received protocol URL from second-instance: ${protocolUrl}`);
           if (protocolUrl.startsWith('accomplish://callback/mcp')) {
             mainWindow.webContents.send('auth:mcp-callback', protocolUrl);
           } else if (protocolUrl.startsWith('accomplish://callback')) {
@@ -244,16 +261,16 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(async () => {
-    console.log('[Main] Electron app ready, version:', app.getVersion());
+    logMain('INFO', `[Main] Electron app ready, version: ${app.getVersion()}`);
 
     if (process.env.CLEAN_START !== '1') {
       try {
         const didMigrate = migrateLegacyData();
         if (didMigrate) {
-          console.log('[Main] Migrated data from legacy userData path');
+          logMain('INFO', '[Main] Migrated data from legacy userData path');
         }
       } catch (err) {
-        console.error('[Main] Legacy data migration failed:', err);
+        logMain('ERROR', '[Main] Legacy data migration failed', { err: String(err) });
       }
     }
 
@@ -277,7 +294,7 @@ if (!gotTheLock) {
     try {
       workspaceManager.initialize();
     } catch (err) {
-      console.error('[Main] Workspace initialization failed:', err);
+      logMain('ERROR', '[Main] Workspace initialization failed', { err: String(err) });
       throw err;
     }
 
@@ -290,16 +307,17 @@ if (!gotTheLock) {
         if (!credType || credType === 'api_key') {
           const key = getApiKey(providerId);
           if (!key) {
-            console.warn(
+            logMain(
+              'WARN',
               `[Main] Provider ${providerId} has api_key auth but key not found in secure storage`,
             );
             storage.removeConnectedProvider(providerId);
-            console.log(`[Main] Removed provider ${providerId} due to missing API key`);
+            logMain('INFO', `[Main] Removed provider ${providerId} due to missing API key`);
           }
         }
       }
     } catch (err) {
-      console.error('[Main] Provider validation failed:', err);
+      logMain('ERROR', '[Main] Provider validation failed', { err: String(err) });
     }
 
     await skillsManager.initialize();
@@ -322,45 +340,147 @@ if (!gotTheLock) {
       // First launch or corrupt DB — nativeTheme stays 'system'
     }
 
+    // Bootstrap the daemon RPC layer (child-process with in-process fallback)
+    const taskManager = getTaskManager();
+    const storage = getStorage();
+    await bootstrapDaemon({ taskManager, storage });
+    logMain('INFO', '[Main] Daemon bootstrapped');
+
     registerIPCHandlers();
-    console.log('[Main] IPC handlers registered');
+    logMain('INFO', '[Main] IPC handlers registered');
 
     createWindow();
 
     if (mainWindow) {
       initThoughtStreamApi(mainWindow);
       startThoughtStreamServer();
+
+      // Intercept window close: hide to tray instead of quitting
+      mainWindow.on('close', (event) => {
+        if (!isQuitting) {
+          event.preventDefault();
+          mainWindow?.hide();
+          logMain('INFO', '[Main] Window hidden to tray');
+        }
+      });
+
+      createTray(mainWindow);
+      logMain('INFO', '[Main] System tray created');
     }
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
+      const windows = BrowserWindow.getAllWindows();
+      if (windows.length === 0) {
         createWindow();
-        console.log('[Main] Application reactivated; recreated window');
+        try {
+          const l = getLogCollector();
+          if (l?.logEnv) {
+            l.logEnv('INFO', '[Main] Application reactivated; recreated window');
+          }
+        } catch (_e) {
+          /* ignore */
+        }
+      } else {
+        windows[0].show();
+        windows[0].focus();
+        try {
+          const l = getLogCollector();
+          if (l?.logEnv) {
+            l.logEnv('INFO', '[Main] Application reactivated; showed existing window');
+          }
+        } catch (_e) {
+          /* ignore */
+        }
       }
     });
   });
 }
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  // With system tray, the app stays alive when all windows are closed.
+  // On macOS this was already the default behavior.
+  // On Windows/Linux the tray keeps the app running.
+  logMain('INFO', '[Main] All windows closed — app continues in system tray');
 });
 
-app.on('before-quit', () => {
-  disposeTaskManager(); // Also cleans up proxies internally
-  // Dispose WhatsApp service (ENG-684) — best-effort, non-fatal
-  try {
-    disposeWhatsAppService();
-  } catch {
-    /* ignore */
+app.on('before-quit', (event) => {
+  if (isQuitting) {
+    return;
   }
-  cleanupVertexServiceAccountKey();
-  oauthBrowserFlow.dispose();
-  slackMcpOAuthFlow.dispose();
-  workspaceManager.close();
-  closeStorage();
-  shutdownLogCollector();
+  isQuitting = true;
+  event.preventDefault();
+
+  let logger: ReturnType<typeof getLogCollector> | null = null;
+  try {
+    logger = getLogCollector();
+  } catch {
+    /* logger may not be initialized on early quit paths */
+  }
+
+  // Await async cleanup before quitting (Dev0907, PR #480, ENG-695)
+  void (async () => {
+    destroyTray();
+    shutdownDaemon();
+
+    const stopBrowserPreviews = stopAllBrowserPreviewStreams();
+    try {
+      await Promise.race([
+        stopBrowserPreviews,
+        new Promise<void>((_, reject) => {
+          const timeoutId = setTimeout(() => {
+            reject(new Error('Timed out stopping browser preview streams'));
+          }, 5000);
+          void stopBrowserPreviews.finally(() => clearTimeout(timeoutId));
+        }),
+      ]);
+    } catch (error: unknown) {
+      logger?.logEnv('ERROR', `[Main] Failed to stop browser preview streams: ${String(error)}`);
+    }
+    try {
+      disposeTaskManager(); // Also cleans up proxies internally
+    } catch (error: unknown) {
+      logger?.logEnv('ERROR', `[Main] Error during disposeTaskManager: ${String(error)}`);
+    }
+    // Dispose WhatsApp service (ENG-684) — best-effort, non-fatal
+    try {
+      disposeWhatsAppService();
+    } catch (error: unknown) {
+      logger?.logEnv('ERROR', `[Main] Error during disposeWhatsAppService: ${String(error)}`);
+    }
+    try {
+      cleanupVertexServiceAccountKey();
+    } catch (error: unknown) {
+      logger?.logEnv(
+        'ERROR',
+        `[Main] Error during cleanupVertexServiceAccountKey: ${String(error)}`,
+      );
+    }
+    try {
+      oauthBrowserFlow.dispose();
+    } catch (error: unknown) {
+      logger?.logEnv('ERROR', `[Main] Error during oauthBrowserFlow.dispose: ${String(error)}`);
+    }
+    try {
+      slackMcpOAuthFlow.dispose();
+    } catch (error: unknown) {
+      logger?.logEnv('ERROR', `[Main] Error during slackMcpOAuthFlow.dispose: ${String(error)}`);
+    }
+    try {
+      workspaceManager.close();
+    } catch (error: unknown) {
+      logger?.logEnv('ERROR', `[Main] Error during workspaceManager.close: ${String(error)}`);
+    }
+    try {
+      closeStorage();
+    } catch (error: unknown) {
+      logger?.logEnv('ERROR', `[Main] Error during closeStorage: ${String(error)}`);
+    }
+    try {
+      shutdownLogCollector();
+    } finally {
+      app.quit();
+    }
+  })();
 });
 
 if (process.platform === 'win32' && !app.isPackaged) {
