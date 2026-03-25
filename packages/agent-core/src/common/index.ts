@@ -50,6 +50,7 @@ export {
   ALLOWED_API_KEY_PROVIDERS,
   STANDARD_VALIDATION_PROVIDERS,
   ZAI_ENDPOINTS,
+  MINIMAX_DEFAULT_BASE_URL,
 } from './types/provider.js';
 
 // Provider settings types
@@ -69,6 +70,7 @@ export type {
   LMStudioCredentials,
   AzureFoundryCredentials,
   OAuthCredentials,
+  CustomCredentials,
   ProviderCredentials,
   ToolSupportStatus,
   ConnectedProvider,
@@ -96,7 +98,6 @@ export type {
   VertexServiceAccountCredentials,
   VertexAdcCredentials,
 } from './types/auth.js';
-
 // OpenCode message types
 export type {
   OpenCodeMessage,
@@ -113,6 +114,17 @@ export type {
 // Skills types
 export type { SkillSource, Skill, SkillFrontmatter } from './types/skills.js';
 
+// Connector types
+export {
+  OAuthProviderId,
+  getOAuthProviderDisplayName,
+  isOAuthProviderId,
+} from './types/connector.js';
+export type { ConnectorStatus, OAuthTokens, McpConnector } from './types/connector.js';
+
+// Workspace types
+export type { Workspace, WorkspaceCreateInput, WorkspaceUpdateInput } from './types/workspace.js';
+
 // Other types
 export type { TodoItem } from './types/todo.js';
 export type { LogLevel, LogSource, LogEntry } from './types/logging.js';
@@ -126,6 +138,7 @@ export {
   PERMISSION_API_PORT,
   QUESTION_API_PORT,
   PERMISSION_REQUEST_TIMEOUT_MS,
+  CONNECTOR_AUTH_REQUIRED_MARKER,
   LOG_MAX_FILE_SIZE_BYTES,
   LOG_RETENTION_DAYS,
   LOG_BUFFER_FLUSH_INTERVAL_MS,

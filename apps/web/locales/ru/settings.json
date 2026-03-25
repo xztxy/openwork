@@ -54,7 +54,11 @@
     "moonshot": "Moonshot",
     "litellm": "LiteLLM",
     "vertex": "Vertex AI",
-    "azure-foundry": "Azure AI Foundry"
+    "azure-foundry": "Azure AI Foundry",
+    "nebius": "Nebius AI",
+    "together": "Together AI",
+    "fireworks": "Fireworks AI",
+    "groq": "Groq"
   },
   "providerLabels": {
     "anthropic": "Модели Claude",
@@ -71,7 +75,11 @@
     "moonshot": "Модели Kimi",
     "litellm": "Единый прокси",
     "vertex": "Google Cloud",
-    "azure-foundry": "Сервис Azure"
+    "azure-foundry": "Сервис Azure",
+    "nebius": "Модели Llama и DeepSeek",
+    "together": "Модели Llama и Mixtral",
+    "fireworks": "Модели быстрого вывода",
+    "groq": "Сверхбыстрые модели Llama"
   },
   "status": {
     "connected": "Подключено",
@@ -114,7 +122,8 @@
   },
   "lmstudio": {
     "serverUrl": "URL сервера LM Studio",
-    "serverHint": "Запустите LM Studio и включите локальный сервер в настройках разработчика"
+    "serverHint": "Запустите LM Studio и включите локальный сервер в настройках разработчика",
+    "refreshModels": "Обновить список моделей"
   },
   "vertex": {
     "serviceAccountTab": "Сервисный аккаунт",
@@ -167,7 +176,8 @@
     "selectModel": "Выберите модель",
     "useThisModel": "Использовать эту модель",
     "helpText": "Убедитесь, что <link>Ollama</link> установлен и запущен, затем нажмите Тест для подключения.",
-    "currentlyUsing": "Используется сейчас"
+    "currentlyUsing": "Используется сейчас",
+    "refreshModels": "Обновить список моделей"
   },
   "azure": {
     "apiKey": "API-ключ",
@@ -240,7 +250,17 @@
     "skills": "Навыки",
     "voiceInput": "Голосовой ввод",
     "appearance": "Оформление",
-    "about": "О программе"
+    "workspaces": "Рабочие пространства",
+    "about": "О программе",
+    "browsers": "Облачные браузеры",
+    "general": "Общие",
+    "daemon": "Фоновый процесс"
+  },
+  "notifications": {
+    "toggle": {
+      "label": "Уведомления на рабочем столе",
+      "description": "Показывать системные уведомления при завершении задач, когда приложение работает в фоне."
+    }
   },
   "appearance": {
     "title": "Тема",
@@ -248,7 +268,12 @@
     "ariaLabel": "Настройка темы",
     "system": "Система",
     "light": "Светлая",
-    "dark": "Тёмная"
+    "dark": "Тёмная",
+    "themeTitle": "Тема",
+    "themeDescription": "Выберите внешний вид Accomplish. Выберите «Система» для соответствия настройкам ОС.",
+    "themeSystem": "Системная",
+    "themeLight": "Светлая",
+    "themeDark": "Тёмная"
   },
   "connectors": {
     "description": "Подключайте удалённые MCP-серверы через OAuth. Сейчас поддерживаются только серверы с OAuth 2.0.",
@@ -272,7 +297,28 @@
     "enable": "Включить",
     "disable": "Выключить",
     "confirmDelete": "Нажмите ещё раз для подтверждения",
-    "delete": "Удалить"
+    "delete": "Удалить",
+    "customTitle": "Пользовательские MCP-серверы",
+    "customDescription": "Добавьте собственный URL удалённого MCP-сервера. OAuth поддерживается для серверов со стандартным потоком авторизации.",
+    "slack": {
+      "title": "Slack",
+      "description": "Подключите Slack, чтобы агент мог отправлять сообщения и использовать контекст Slack через встроенный Slack MCP.",
+      "authenticate": "Подключить Slack",
+      "authenticating": "Подключение...",
+      "restartAuth": "Перезапустить авторизацию",
+      "disconnect": "Отключить Slack",
+      "disconnecting": "Отключение...",
+      "authHint": "Accomplish откроет браузер для подтверждения доступа к Slack.",
+      "pendingHint": "Авторизация Slack была начата, но не завершена. Перезапустите её.",
+      "connectedHint": "Slack подключён и готов к использованию агентом.",
+      "authFailed": "Не удалось подключить Slack",
+      "disconnectFailed": "Не удалось отключить Slack",
+      "status": {
+        "connected": "Подключено",
+        "disconnected": "Не подключено",
+        "pending": "Авторизация начата"
+      }
+    }
   },
   "zai": {
     "region": "Регион",
@@ -319,16 +365,16 @@
     "buildWithAccomplish": "Создать с Accomplish",
     "buildDescription": "Создавайте навыки через диалог",
     "uploadSkill": "Загрузить навык",
-    "uploadDescription": "Загрузите файл SKILL.md",
+    "uploadDescription": "Выберите папку с навыком для импорта",
     "importFromGitHub": "Импорт из GitHub",
     "importDescription": "Вставьте ссылку на репозиторий",
     "importDialogDescription": "Введите URL репозитория GitHub, содержащего файл SKILL.md.",
     "importing": "Импорт...",
     "import": "Импортировать",
     "uploadFailedTitle": "Ошибка загрузки",
-    "uploadFailedDescription": "Не удалось загрузить файл навыка.",
+    "uploadFailedDescription": "Не удалось импортировать навык.",
     "uploadErrorHelp": "Убедитесь, что ваш файл SKILL.md содержит корректный YAML-заголовок с полем",
-    "selectFile": "Выберите файл SKILL.md",
+    "selectFile": "Выберите папку с навыком",
     "uploadErrorField": "name",
     "uploadErrorFieldSuffix": ":",
     "ok": "OK",
@@ -396,5 +442,9 @@
     "tooltipError": "Ошибка распознавания — нажмите для повтора",
     "tooltipDefault": "Нажмите для записи или удерживайте Alt для голосового ввода",
     "processing": "Обработка..."
+  },
+  "baseUrl": {
+    "title": "Базовый URL",
+    "description": "Оставьте пустым, чтобы использовать URL по умолчанию."
   }
 }

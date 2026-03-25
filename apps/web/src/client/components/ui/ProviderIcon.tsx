@@ -31,6 +31,10 @@ const PROVIDER_COLORS: Record<string, string> = {
   lmstudio: 'bg-[#3B82F6]', // Blue
   'azure-foundry': 'bg-[#0078D4]', // Azure blue
   'huggingface-local': 'bg-[#FF9D00]', // HuggingFace yellow-orange
+  nebius: 'bg-[#7B61FF]', // Purple
+  together: 'bg-[#0EA5E9]', // Sky blue
+  fireworks: 'bg-[#EF4444]', // Red
+  groq: 'bg-[#F55036]', // Red-orange
   custom: 'bg-[#6B7280]', // Gray
 };
 
@@ -53,6 +57,10 @@ const PROVIDER_INITIALS: Record<string, string> = {
   lmstudio: 'L',
   'azure-foundry': 'A',
   'huggingface-local': 'H',
+  nebius: 'N',
+  together: 'T',
+  fireworks: 'F',
+  groq: 'G',
   custom: 'C',
 };
 

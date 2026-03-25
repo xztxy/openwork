@@ -15,6 +15,12 @@ import litellmLogo from '/assets/ai-logos/litellm.svg';
 import minimaxLogo from '/assets/ai-logos/minimax.svg';
 import lmstudioLogo from '/assets/ai-logos/lmstudio.png';
 import huggingfaceLogo from '/assets/ai-logos/huggingface.svg';
+import nebiusLogo from '/assets/ai-logos/nebius.svg';
+import togetherLogo from '/assets/ai-logos/together.svg';
+import fireworksLogo from '/assets/ai-logos/fireworks.svg';
+import groqLogo from '/assets/ai-logos/groq.svg';
+import veniceLogo from '/assets/ai-logos/venice.svg';
+import customLogo from '/assets/ai-logos/custom.svg';
 
 export const PROVIDER_LOGOS: Record<ProviderId, string> = {
   anthropic: anthropicLogo,
@@ -33,9 +39,21 @@ export const PROVIDER_LOGOS: Record<ProviderId, string> = {
   minimax: minimaxLogo,
   lmstudio: lmstudioLogo,
   'huggingface-local': huggingfaceLogo,
+  nebius: nebiusLogo,
+  together: togetherLogo,
+  fireworks: fireworksLogo,
+  groq: groqLogo,
+  venice: veniceLogo,
+  custom: customLogo,
 };
 
-export const DARK_INVERT_PROVIDERS = new Set<ProviderId>(['openai', 'xai', 'ollama', 'openrouter']);
+export const DARK_INVERT_PROVIDERS = new Set<ProviderId>([
+  'openai',
+  'xai',
+  'ollama',
+  'openrouter',
+  'together',
+]);
 
 export function getProviderLogo(providerId: ProviderId): string | undefined {
   return PROVIDER_LOGOS[providerId];

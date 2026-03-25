@@ -54,7 +54,11 @@
     "moonshot": "Moonshot",
     "litellm": "LiteLLM",
     "vertex": "Vertex AI",
-    "azure-foundry": "Azure AI Foundry"
+    "azure-foundry": "Azure AI Foundry",
+    "nebius": "Nebius AI",
+    "together": "Together AI",
+    "fireworks": "Fireworks AI",
+    "groq": "Groq"
   },
   "providerLabels": {
     "anthropic": "Modèles Claude",
@@ -71,7 +75,11 @@
     "moonshot": "Modèles Kimi",
     "litellm": "Proxy unifié",
     "vertex": "Google Cloud",
-    "azure-foundry": "Service Azure"
+    "azure-foundry": "Service Azure",
+    "nebius": "Modèles Llama et DeepSeek",
+    "together": "Modèles Llama et Mixtral",
+    "fireworks": "Modèles d'inférence rapide",
+    "groq": "Modèles Llama ultra-rapides"
   },
   "status": {
     "connected": "Connecté",
@@ -114,7 +122,8 @@
   },
   "lmstudio": {
     "serverUrl": "URL du serveur LM Studio",
-    "serverHint": "Démarrez LM Studio et activez le serveur local dans les paramètres Développeur"
+    "serverHint": "Démarrez LM Studio et activez le serveur local dans les paramètres Développeur",
+    "refreshModels": "Actualiser la liste des modèles"
   },
   "vertex": {
     "serviceAccountTab": "Compte de service",
@@ -167,7 +176,8 @@
     "selectModel": "Sélectionner le modèle",
     "useThisModel": "Utiliser ce modèle",
     "helpText": "Assurez-vous qu'<link>Ollama</link> est installé et en cours d'exécution, puis cliquez sur Tester pour vous connecter.",
-    "currentlyUsing": "Actuellement utilisé"
+    "currentlyUsing": "Actuellement utilisé",
+    "refreshModels": "Actualiser la liste des modèles"
   },
   "azure": {
     "apiKey": "Clé API",
@@ -239,8 +249,18 @@
     "connectors": "Connecteurs",
     "skills": "Compétences",
     "voiceInput": "Saisie vocale",
+    "workspaces": "Espaces de travail",
     "appearance": "Apparence",
-    "about": "À propos"
+    "about": "À propos",
+    "browsers": "Navigateurs cloud",
+    "general": "Général",
+    "daemon": "Démon"
+  },
+  "notifications": {
+    "toggle": {
+      "label": "Notifications de bureau",
+      "description": "Afficher les notifications du système lorsque les tâches se terminent en arrière-plan."
+    }
   },
   "appearance": {
     "title": "Thème",
@@ -248,7 +268,12 @@
     "ariaLabel": "Préférence de thème",
     "system": "Système",
     "light": "Clair",
-    "dark": "Sombre"
+    "dark": "Sombre",
+    "themeTitle": "Thème",
+    "themeDescription": "Choisissez l'apparence d'Accomplish. Sélectionnez Système pour correspondre aux paramètres de votre système d'exploitation.",
+    "themeSystem": "Système",
+    "themeLight": "Clair",
+    "themeDark": "Sombre"
   },
   "connectors": {
     "description": "Connectez des serveurs MCP distants via OAuth. Seuls les serveurs prenant en charge le flux d'autorisation OAuth 2.0 sont actuellement pris en charge.",
@@ -272,7 +297,28 @@
     "enable": "Activer",
     "disable": "Désactiver",
     "confirmDelete": "Cliquez à nouveau pour confirmer",
-    "delete": "Supprimer"
+    "delete": "Supprimer",
+    "customTitle": "Serveurs MCP personnalisés",
+    "customDescription": "Ajoutez votre propre URL de serveur MCP distant. OAuth est pris en charge pour les serveurs qui exposent le flux d'autorisation standard.",
+    "slack": {
+      "title": "Slack",
+      "description": "Authentifiez Slack pour que l'agent puisse envoyer des messages et utiliser le contexte Slack via le MCP Slack intégré.",
+      "authenticate": "Authentifier Slack",
+      "authenticating": "Authentification...",
+      "restartAuth": "Relancer l'authentification",
+      "disconnect": "Déconnecter Slack",
+      "disconnecting": "Déconnexion...",
+      "authHint": "Accomplish ouvrira votre navigateur pour que vous puissiez approuver l'accès Slack.",
+      "pendingHint": "Une connexion Slack a été initiée mais non terminée. Relancez-la pour réessayer.",
+      "connectedHint": "Slack est authentifié et prêt à être utilisé par l'agent.",
+      "authFailed": "Échec de l'authentification Slack",
+      "disconnectFailed": "Échec de la déconnexion Slack",
+      "status": {
+        "connected": "Connecté",
+        "disconnected": "Non connecté",
+        "pending": "Autorisation initiée"
+      }
+    }
   },
   "zai": {
     "region": "Région",
@@ -319,16 +365,16 @@
     "buildWithAccomplish": "Créer avec Accomplish",
     "buildDescription": "Créez des compétences par conversation",
     "uploadSkill": "Importer une compétence",
-    "uploadDescription": "Importez un fichier SKILL.md",
+    "uploadDescription": "Sélectionnez un dossier de compétences à importer",
     "importFromGitHub": "Importer depuis GitHub",
     "importDescription": "Collez un lien de dépôt",
     "importDialogDescription": "Saisissez l'URL d'un dépôt GitHub contenant un fichier SKILL.md.",
     "importing": "Importation...",
     "import": "Importer",
     "uploadFailedTitle": "Échec de l'importation",
-    "uploadFailedDescription": "Le fichier de compétence n'a pas pu être importé.",
+    "uploadFailedDescription": "Le dossier de compétence n'a pas pu être importé.",
     "uploadErrorHelp": "Assurez-vous que votre fichier SKILL.md contient un frontmatter YAML valide avec au moins un champ",
-    "selectFile": "Sélectionnez un fichier SKILL.md",
+    "selectFile": "Sélectionnez un dossier de compétences",
     "uploadErrorField": "name",
     "uploadErrorFieldSuffix": " :",
     "ok": "OK",
@@ -396,5 +442,9 @@
     "tooltipError": "Erreur lors de la transcription - Cliquez pour réessayer",
     "tooltipDefault": "Cliquez pour enregistrer ou maintenez Alt pour enregistrer la saisie vocale",
     "processing": "Traitement..."
+  },
+  "baseUrl": {
+    "title": "URL de base",
+    "description": "Laissez vide pour utiliser l'URL par défaut."
   }
 }

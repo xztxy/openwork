@@ -1,4 +1,3 @@
-// apps/web/src/client/components/settings/ProviderGrid.tsx
 
 import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,6 +24,12 @@ const PROVIDER_ORDER: ProviderId[] = [
   'openrouter',
   'litellm',
   'minimax',
+  'nebius',
+  'together',
+  'fireworks',
+  'groq',
+  'venice',
+  'custom',
 ];
 
 interface ProviderGridProps {

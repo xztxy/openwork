@@ -14,6 +14,9 @@ import type {
   ConnectedProvider,
 } from '../common/types/providerSettings.js';
 import type { McpConnector, ConnectorStatus, OAuthTokens } from '../common/types/connector.js';
+import type { SandboxConfig } from '../common/types/sandbox.js';
+import type { CloudBrowserConfig } from '../common/types/cloud-browser.js';
+import type { BlocklistEntry } from '../common/types/desktop.js';
 
 /** Options for creating a Storage instance */
 export interface StorageOptions {
@@ -63,6 +66,7 @@ export interface AppSettings {
   huggingfaceLocalConfig: HuggingFaceLocalConfig | null;
   openaiBaseUrl: string;
   theme: ThemePreference;
+  runInBackground: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -71,12 +75,12 @@ export interface AppSettings {
 
 /** API for task CRUD operations and todo management */
 export interface TaskStorageAPI {
-  /** Get all stored tasks */
-  getTasks(): StoredTask[];
+  /** Get all stored tasks, optionally filtered by workspace */
+  getTasks(workspaceId?: string | null): StoredTask[];
   /** Get a task by ID, returns undefined if not found */
   getTask(taskId: string): StoredTask | undefined;
   /** Persist a new task or update an existing one */
-  saveTask(task: Task): void;
+  saveTask(task: Task, workspaceId?: string | null): void;
   /** Update a task's status and optional completion timestamp */
   updateTaskStatus(taskId: string, status: TaskStatus, completedAt?: string): void;
   /** Append a message to a task's message history */
@@ -147,10 +151,26 @@ export interface AppSettingsAPI {
   getTheme(): ThemePreference;
   /** Set the theme preference */
   setTheme(theme: ThemePreference): void;
+  /** Get whether the app runs in background (system tray) mode */
+  getRunInBackground(): boolean;
+  /** Set background run mode */
+  setRunInBackground(enabled: boolean): void;
+  /** Get cloud browser configuration */
+  getCloudBrowserConfig(): CloudBrowserConfig | null;
+  /** Set cloud browser configuration */
+  setCloudBrowserConfig(config: CloudBrowserConfig | null): void;
+  /** Get whether desktop notifications are enabled */
+  getNotificationsEnabled(): boolean;
+  /** Enable or disable desktop notifications */
+  setNotificationsEnabled(enabled: boolean): void;
   /** Get all application settings as a snapshot */
   getAppSettings(): AppSettings;
   /** Reset all application settings to defaults */
   clearAppSettings(): void;
+  /** Get the current sandbox configuration */
+  getSandboxConfig(): SandboxConfig;
+  /** Set the sandbox configuration */
+  setSandboxConfig(config: SandboxConfig): void;
 }
 
 /** API for managing AI provider configurations */
@@ -247,7 +267,19 @@ export interface DatabaseLifecycleAPI {
   getDatabasePath(): string | null;
 }
 
-/** Unified storage API combining task, settings, provider, secure storage, connector, and database lifecycle operations */
+/** API for managing the desktop-control sensitive app blocklist */
+export interface DesktopControlStorageAPI {
+  /** Get the user's custom blocklist entries */
+  getDesktopBlocklist(): BlocklistEntry[];
+  /** Set the user's custom blocklist entries */
+  setDesktopBlocklist(entries: BlocklistEntry[]): void;
+  /** Add a single entry to the blocklist (deduplicates by appName) */
+  addDesktopBlocklistEntry(entry: BlocklistEntry): void;
+  /** Remove an entry from the blocklist by appName */
+  removeDesktopBlocklistEntry(appName: string): void;
+}
+
+/** Unified storage API combining task, settings, provider, secure storage, connector, desktop control, and database lifecycle operations */
 export interface StorageAPI
   extends
     TaskStorageAPI,
@@ -255,6 +287,7 @@ export interface StorageAPI
     ProviderSettingsAPI,
     SecureStorageAPI,
     ConnectorStorageAPI,
+    DesktopControlStorageAPI,
     DatabaseLifecycleAPI {}
 
 export type {
@@ -273,4 +306,5 @@ export type {
   McpConnector,
   ConnectorStatus,
   OAuthTokens,
+  CloudBrowserConfig,
 };

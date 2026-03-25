@@ -9,3 +9,4 @@ export { LiteLLMProviderForm } from './LiteLLMProviderForm';
 export { LMStudioProviderForm } from './LMStudioProviderForm';
 export { VertexProviderForm } from './vertex';
 export { HuggingFaceProviderForm } from './HuggingFaceProviderForm';
+export { CustomProviderForm } from './CustomProviderForm';

@@ -143,7 +143,10 @@ Use AskUserQuestion tool for user interaction.`,
             'file-permission': {
               type: 'local',
               enabled: true,
-              command: [nodeCommand, actualPath.join(options.mcpToolsPath, 'file-permission', 'dist', 'index.mjs')],
+              command: [
+                nodeCommand,
+                actualPath.join(options.mcpToolsPath, 'file-permission', 'dist', 'index.mjs'),
+              ],
               environment: {
                 PERMISSION_API_PORT: String(options.permissionApiPort),
               },
@@ -262,6 +265,8 @@ vi.mock('@main/store/storage', () => ({
       };
     },
     setConnectorStatus: mockSetConnectorStatus,
+    getCloudBrowserConfig: () => null,
+    setCloudBrowserConfig: vi.fn(),
   })),
 }));
 

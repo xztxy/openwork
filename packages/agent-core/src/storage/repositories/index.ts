@@ -19,6 +19,8 @@ export {
   setOpenAiBaseUrl,
   getTheme,
   setTheme,
+  getRunInBackground,
+  setRunInBackground,
   getAppSettings,
   clearAppSettings,
   type AppSettings,

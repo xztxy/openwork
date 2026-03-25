@@ -4,7 +4,11 @@
   "favorites": {
     "title": "收藏",
     "empty": "将已完成或已中断的任务加星即可在此显示。",
-    "showAll": "显示全部 {{count}} 个收藏"
+    "showAll": "显示全部 {{count}} 个收藏",
+    "showAll_one": "显示 {{count}} 个收藏",
+    "showAll_few": "显示全部 {{count}} 个收藏",
+    "showAll_many": "显示全部 {{count}} 个收藏",
+    "showAll_other": "显示全部 {{count}} 个收藏"
   },
   "plusMenu": {
     "addContent": "添加内容",
@@ -13,7 +17,12 @@
     "useSkills": "使用技能",
     "connectors": "连接器",
     "noConnectors": "暂无连接器",
-    "manage": "管理"
+    "manage": "管理",
+    "dropFilesHere": "将文件拖放到此处以附加",
+    "dropFilesHint": "（最多 {max} 个文件，每个 {size}MB）",
+    "fileTooLarge": "{name} 超出 {limit} 大小限制",
+    "tooManyFiles": "最多允许 {max} 个文件",
+    "selectFolder": "选择文件夹"
   },
   "examplePrompts": "示例任务",
   "useCases": {
@@ -62,5 +71,11 @@
       "description": "选择热门活动并添加到日历。",
       "prompt": "从 Eventbrite 抓取活动列表，按地点筛选，并将前 5 个添加到我的日历。"
     }
+  },
+  "selectFolder": "选择文件夹",
+  "selectedFolder": {
+    "badge": "📁 {folder}",
+    "clearAriaLabel": "清除所选文件夹",
+    "clearButton": "✕"
   }
 }

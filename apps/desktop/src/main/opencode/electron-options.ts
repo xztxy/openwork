@@ -1,5 +1,5 @@
 import { app } from 'electron';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import type { TaskManagerOptions, TaskCallbacks } from '@accomplish_ai/agent-core';
@@ -12,9 +12,11 @@ import {
   isCliAvailable as coreIsCliAvailable,
   buildCliArgs as coreBuildCliArgs,
   buildOpenCodeEnvironment,
+  createSandboxProvider,
   type BrowserServerConfig,
   type CliResolverConfig,
   type EnvironmentConfig,
+  type SandboxPaths,
 } from '@accomplish_ai/agent-core';
 import { getHuggingFaceServerStatus } from '../providers/huggingface-local';
 import { getModelDisplayName } from '@accomplish_ai/agent-core';
@@ -24,6 +26,18 @@ import type {
   VertexCredentials,
 } from '@accomplish_ai/agent-core';
 import { getStorage } from '../store/storage';
+import { getLogCollector } from '../logging';
+
+function logOC(level: 'INFO' | 'WARN' | 'ERROR', msg: string, data?: Record<string, unknown>) {
+  try {
+    const l = getLogCollector();
+    if (l?.log) {
+      l.log(level, 'opencode', msg, data);
+    }
+  } catch (_e) {
+    /* best-effort logging */
+  }
+}
 import { getAllApiKeys, getBedrockCredentials, getApiKey } from '../store/secureStorage';
 import {
   generateOpenCodeConfig,
@@ -44,10 +58,10 @@ export function cleanupVertexServiceAccountKey(): void {
     const keyPath = path.join(app.getPath('userData'), VERTEX_SA_KEY_FILENAME);
     if (fs.existsSync(keyPath)) {
       fs.unlinkSync(keyPath);
-      console.log('[Vertex] Cleaned up service account key file');
+      logOC('INFO', '[Vertex] Cleaned up service account key file');
     }
   } catch (error) {
-    console.warn('[Vertex] Failed to clean up service account key file:', error);
+    logOC('WARN', '[Vertex] Failed to clean up service account key file', { error: String(error) });
   }
 }
 
@@ -103,11 +117,15 @@ export function getBundledOpenCodeVersion(): string | null {
   }
 
   try {
-    const fullCommand = `"${command}" --version`;
-    const output = execSync(fullCommand, {
+    const { command } = getOpenCodeCliPath();
+    // Use execFileSync (no shell) so installation paths that contain spaces
+    // (e.g. "C:\Users\My Name\...") are passed directly to the OS without
+    // cmd.exe quoting ambiguity.
+    // See: https://github.com/accomplish-ai/accomplish/issues/596
+    const output = execFileSync(command, ['--version'], {
       encoding: 'utf-8',
       timeout: 5000,
-      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
     }).trim();
 
     const versionMatch = output.match(/(\d+\.\d+\.\d+)/);
@@ -141,9 +159,22 @@ export async function buildEnvironment(taskId: string): Promise<NodeJS.ProcessEn
       console.log('[OpenCode CLI] Added bundled Node.js to PATH:', bundledNode.binDir);
     }
 
-    if (process.platform === 'darwin') {
-      env.PATH = getExtendedNodePath(env.PATH);
-    }
+  env.ELECTRON_RUN_AS_NODE = '1';
+  logBundledNodeInfo();
+
+  const delimiter = process.platform === 'win32' ? ';' : ':';
+  const existingPath = env.PATH ?? env.Path ?? '';
+  const combinedPath = existingPath
+    ? `${bundledNode.binDir}${delimiter}${existingPath}`
+    : bundledNode.binDir;
+  env.PATH = combinedPath;
+  if (process.platform === 'win32') {
+    env.Path = combinedPath;
+  }
+  logOC('INFO', `[OpenCode CLI] Added bundled Node.js to PATH: ${bundledNode.binDir}`);
+
+  if (process.platform === 'darwin') {
+    env.PATH = getExtendedNodePath(env.PATH);
   }
 
   // Gather configuration for the reusable environment builder
@@ -191,7 +222,7 @@ export async function buildEnvironment(taskId: string): Promise<NodeJS.ProcessEn
         fs.writeFileSync(vertexServiceAccountKeyPath, parsed.serviceAccountJson, { mode: 0o600 });
       }
     } catch {
-      console.warn('[OpenCode CLI] Failed to parse Vertex credentials');
+      logOC('WARN', '[OpenCode CLI] Failed to parse Vertex credentials');
     }
   }
 
@@ -211,7 +242,7 @@ export async function buildEnvironment(taskId: string): Promise<NodeJS.ProcessEn
   env = buildOpenCodeEnvironment(env, envConfig);
 
   if (taskId) {
-    console.log('[OpenCode CLI] Task ID in environment:', taskId);
+    logOC('INFO', `[OpenCode CLI] Task ID in environment: ${taskId}`);
   }
 
   return env;
@@ -280,6 +311,43 @@ function getBrowserServerConfig(): BrowserServerConfig {
   };
 }
 
+async function ensureBrowserServer(callbacks?: Pick<TaskCallbacks, 'onProgress'>): Promise<void> {
+  if (browserEnsurePromise) {
+    return browserEnsurePromise;
+  }
+
+  const browserConfig = getBrowserServerConfig();
+  browserEnsurePromise = ensureDevBrowserServer(browserConfig, callbacks?.onProgress)
+    .then(() => undefined)
+    .finally(() => {
+      browserEnsurePromise = null;
+    });
+
+  return browserEnsurePromise;
+}
+
+export async function recoverDevBrowserServer(
+  callbacks?: Pick<TaskCallbacks, 'onProgress'>,
+  options?: { reason?: string; force?: boolean },
+): Promise<boolean> {
+  const now = Date.now();
+  const force = options?.force === true;
+
+  if (!force && now - lastBrowserRecoveryAt < BROWSER_RECOVERY_COOLDOWN_MS) {
+    logOC('INFO', `[Browser] Recovery skipped due to cooldown (${BROWSER_RECOVERY_COOLDOWN_MS}ms)`);
+    return false;
+  }
+
+  const reason = options?.reason || 'Browser connection issue detected. Reconnecting browser...';
+  callbacks?.onProgress({ stage: 'browser-recovery', message: reason });
+
+  await ensureBrowserServer(callbacks);
+  lastBrowserRecoveryAt = Date.now();
+  callbacks?.onProgress({ stage: 'browser-recovery', message: 'Browser reconnected.' });
+
+  return true;
+}
+
 export async function onBeforeTaskStart(
   callbacks: TaskCallbacks,
   isFirstTask: boolean,
@@ -303,6 +371,20 @@ export function createElectronTaskManagerOptions(): TaskManagerOptions {
       onBeforeStart,
       getModelDisplayName,
       buildCliArgs,
+      // Resolve sandbox provider and config lazily at each task creation so that
+      // changes persisted by sandbox:set-config are reflected without recreating
+      // the TaskManager.
+      sandboxFactory: () => {
+        const config = getStorage().getSandboxConfig();
+        const getSandboxPaths = (): SandboxPaths => ({
+          configDir: app.getPath('userData'),
+          openDataHome: app.getPath('appData'),
+        });
+        return {
+          provider: createSandboxProvider(config, process.platform, getSandboxPaths),
+          config,
+        };
+      },
     },
     defaultWorkingDirectory: app.getPath('temp'),
     maxConcurrentTasks: 10,

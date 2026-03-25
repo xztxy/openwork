@@ -65,3 +65,4 @@ export {
   fetchHuggingFaceLocalModels,
   type HuggingFaceHubModel,
 } from './huggingface-local.js';
+export { testCustomConnection, type CustomConnectionResult } from './custom.js';

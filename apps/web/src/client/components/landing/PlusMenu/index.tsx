@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Paperclip } from '@phosphor-icons/react';
+import { Plus, Paperclip, FolderOpen } from '@phosphor-icons/react';
 import type { Skill, McpConnector } from '@accomplish_ai/agent-core/common';
 import {
   DropdownMenu,
@@ -15,11 +15,15 @@ import {
 import { SkillsSubmenu } from './SkillsSubmenu';
 import { ConnectorsSubmenu } from './ConnectorsSubmenu';
 import { CreateSkillModal } from '@/components/skills/CreateSkillModal';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('PlusMenu');
 
 interface PlusMenuProps {
   onSkillSelect: (command: string) => void;
   onOpenSettings: (tab: 'skills' | 'connectors') => void;
   onAttachFiles?: () => void;
+  onSelectFolder?: (folderPath: string) => void;
   disabled?: boolean;
   attachmentCount?: number;
   maxAttachments?: number;
@@ -29,6 +33,7 @@ export function PlusMenu({
   onSkillSelect,
   onOpenSettings,
   onAttachFiles,
+  onSelectFolder,
   disabled,
   attachmentCount = 0,
   maxAttachments = 5,
@@ -45,12 +50,12 @@ export function PlusMenu({
       window.accomplish
         .getEnabledSkills()
         .then((skills) => setSkills(skills.filter((s) => !s.isHidden)))
-        .catch((err) => console.error('Failed to load skills:', err));
+        .catch((err) => logger.error('Failed to load skills:', err));
 
       window.accomplish
         .getConnectors()
         .then(setConnectors)
-        .catch((err) => console.error('Failed to load connectors:', err));
+        .catch((err) => logger.error('Failed to load connectors:', err));
     }
   }, [open]);
 
@@ -65,7 +70,7 @@ export function PlusMenu({
       ]);
       setSkills(updatedSkills.filter((s) => !s.isHidden));
     } catch (err) {
-      console.error('Failed to refresh skills:', err);
+      logger.error('Failed to refresh skills:', err);
     } finally {
       setIsRefreshing(false);
     }
@@ -92,7 +97,7 @@ export function PlusMenu({
       await window.accomplish.setConnectorEnabled(id, enabled);
       setConnectors((prev) => prev.map((c) => (c.id === id ? { ...c, isEnabled: enabled } : c)));
     } catch (err) {
-      console.error('Failed to toggle connector:', err);
+      logger.error('Failed to toggle connector:', err);
     }
   }, []);
 
@@ -100,6 +105,22 @@ export function PlusMenu({
     setOpen(false);
     onOpenSettings('connectors');
   };
+
+  const handleSelectFolder = useCallback(async () => {
+    setOpen(false);
+    const accomplish = window.accomplish;
+    if (!accomplish?.pickFolder) {
+      return;
+    }
+    try {
+      const folderPath = await accomplish.pickFolder();
+      if (folderPath) {
+        onSelectFolder?.(folderPath);
+      }
+    } catch (err) {
+      logger.error('Failed to pick folder:', err);
+    }
+  }, [onSelectFolder]);
 
   return (
     <>
@@ -133,6 +154,17 @@ export function PlusMenu({
               </span>
             )}
           </DropdownMenuItem>
+
+          {window.accomplish?.pickFolder && onSelectFolder && (
+            <DropdownMenuItem
+              onSelect={() => {
+                void handleSelectFolder();
+              }}
+            >
+              <FolderOpen className="h-4 w-4 mr-2 shrink-0" />
+              {t('plusMenu.selectFolder')}
+            </DropdownMenuItem>
+          )}
 
           <DropdownMenuSeparator />
 

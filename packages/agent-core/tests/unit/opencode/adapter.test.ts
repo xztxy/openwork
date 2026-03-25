@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { OpenCodeCliNotFoundError } from '../../../src/internal/classes/OpenCodeAdapter.js';
+import os from 'os';
+import {
+  OpenCodeAdapter,
+  OpenCodeCliNotFoundError,
+  isNormalExit,
+  WINDOWS_CTRL_C_EXIT_CODE,
+  type AdapterOptions,
+} from '../../../src/internal/classes/OpenCodeAdapter.js';
 import {
   NON_TASK_CONTINUATION_TOOLS,
   isNonTaskContinuationToolName,
@@ -164,6 +171,96 @@ describe('Shell escaping utilities', () => {
     });
   });
 
+  // ---------------------------------------------------------------------------
+  // Issue #596 – Windows: opencode.exe fails to spawn when path has spaces or
+  // when the task text contains double-quotes, %, ^, &, # characters.
+  //
+  // buildPtySpawnArgs on win32 now spawns opencode.exe DIRECTLY in node-pty
+  // without any shell wrapper (no cmd.exe, no powershell.exe).  When args are
+  // passed as an array the OS hands each element to the process as a raw argv
+  // entry — no shell quoting is ever needed regardless of what characters the
+  // strings contain.
+  // ---------------------------------------------------------------------------
+  describe('Windows direct spawn – Issue #596 (paths with spaces + arbitrary task text)', () => {
+    let win32Adapter: OpenCodeAdapter;
+
+    beforeEach(() => {
+      const opts: AdapterOptions = {
+        platform: 'win32',
+        isPackaged: false,
+        tempPath: os.tmpdir(),
+        getCliCommand: () => ({ command: 'C:\\Programs\\opencode.exe', args: [] }),
+        buildEnvironment: async () => ({}),
+        buildCliArgs: async () => [],
+      };
+      win32Adapter = new OpenCodeAdapter(opts);
+    });
+
+    afterEach(() => {
+      win32Adapter.dispose();
+    });
+
+    function spawnArgs(exe: string, args: string[]) {
+      return (
+        win32Adapter as unknown as {
+          buildPtySpawnArgs: (c: string, a: string[]) => { file: string; args: string[] };
+        }
+      ).buildPtySpawnArgs(exe, args);
+    }
+
+    it('uses the exe path itself as the spawn file (no cmd.exe wrapper)', () => {
+      const exe = 'C:\\Programs\\opencode.exe';
+      const { file } = spawnArgs(exe, ['run']);
+
+      expect(file).toBe(exe);
+    });
+
+    it('passes args through unchanged (no shell quoting needed)', () => {
+      const exe = 'C:\\Programs\\opencode.exe';
+      const argsIn = ['run', '--format', 'json'];
+      const { args } = spawnArgs(exe, argsIn);
+
+      expect(args).toEqual(argsIn);
+    });
+
+    it('throws if the command does not end with .exe (safety guard)', () => {
+      expect(() => spawnArgs('C:\\Programs\\opencode', ['run'])).toThrow(
+        'Windows CLI command must resolve to an .exe path',
+      );
+    });
+
+    it('handles an exe path with spaces', () => {
+      const exe =
+        'C:\\Users\\Anish Maheshwari\\AppData\\Local\\Programs\\@accomplishdesktop\\resources\\app.asar.unpacked\\node_modules\\opencode-windows-x64\\bin\\opencode.exe';
+      const { file } = spawnArgs(exe, ['run']);
+
+      expect(file).toBe(exe);
+    });
+
+    it('handles task text containing double-quotes (the original failure case)', () => {
+      const exe = 'C:\\Programs\\opencode.exe';
+      const taskText = 'Take a screenshot. Type "Desktop automation by Accomplish - PR #189"';
+      const { args } = spawnArgs(exe, ['run', taskText]);
+
+      expect(args[1]).toBe(taskText);
+    });
+
+    it('handles task text with %, ^, &, # characters that break cmd.exe', () => {
+      const exe = 'C:\\Programs\\opencode.exe';
+      const taskText = 'Achieve 50% efficiency & log #progress ^ now';
+      const { args } = spawnArgs(exe, ['run', taskText]);
+
+      expect(args[1]).toBe(taskText);
+    });
+
+    it('handles a username with Unicode / CJK characters and spaces', () => {
+      const exe = 'C:\\Users\\李 四 Wang\\AppData\\Programs\\opencode.exe';
+      const { file } = spawnArgs(exe, ['run']);
+
+      expect(file).toBe(exe);
+    });
+  });
+
   describe('Unix shell escaping', () => {
     it('should handle arguments with single quotes', () => {
       // Single quotes need escaping on Unix
@@ -250,6 +347,7 @@ describe('Non-task continuation tool detection', () => {
     expect(NON_TASK_CONTINUATION_TOOLS).toContain('distill');
     expect(NON_TASK_CONTINUATION_TOOLS).toContain('extract');
     expect(NON_TASK_CONTINUATION_TOOLS).toContain('context_info');
+    expect(NON_TASK_CONTINUATION_TOOLS).toContain('request_connector_auth');
   });
 
   it('should classify housekeeping tool calls as non-task continuation tools', () => {
@@ -261,6 +359,7 @@ describe('Non-task continuation tool detection', () => {
     expect(isNonTaskContinuationToolName('mcp_distill')).toBe(true);
     expect(isNonTaskContinuationToolName('mcp_extract')).toBe(true);
     expect(isNonTaskContinuationToolName('mcp_context_info')).toBe(true);
+    expect(isNonTaskContinuationToolName('mcp_request_connector_auth')).toBe(true);
   });
 });
 
@@ -390,5 +489,30 @@ describe('serializeError', () => {
 
   it('should handle null error', () => {
     expect(serializeError(null)).toBe('null');
+  });
+});
+
+describe('isNormalExit', () => {
+  it('returns true for exit code 0 on any platform', () => {
+    expect(isNormalExit(0, 'linux')).toBe(true);
+    expect(isNormalExit(0, 'darwin')).toBe(true);
+    expect(isNormalExit(0, 'win32')).toBe(true);
+    expect(isNormalExit(0, undefined)).toBe(true);
+  });
+
+  it('returns true for Windows STATUS_CONTROL_C_EXIT (WINDOWS_CTRL_C_EXIT_CODE) on win32', () => {
+    expect(isNormalExit(WINDOWS_CTRL_C_EXIT_CODE, 'win32')).toBe(true);
+  });
+
+  it('returns false for Windows STATUS_CONTROL_C_EXIT on non-Windows platforms', () => {
+    expect(isNormalExit(WINDOWS_CTRL_C_EXIT_CODE, 'linux')).toBe(false);
+    expect(isNormalExit(WINDOWS_CTRL_C_EXIT_CODE, 'darwin')).toBe(false);
+    expect(isNormalExit(WINDOWS_CTRL_C_EXIT_CODE, undefined)).toBe(false);
+  });
+
+  it('returns false for non-zero exit codes', () => {
+    expect(isNormalExit(1, 'win32')).toBe(false);
+    expect(isNormalExit(-1, 'linux')).toBe(false);
+    expect(isNormalExit(null, 'win32')).toBe(false);
   });
 });

@@ -14,7 +14,13 @@ export type ProviderId =
   | 'minimax'
   | 'lmstudio'
   | 'vertex'
-  | 'huggingface-local';
+  | 'huggingface-local'
+  | 'nebius'
+  | 'together'
+  | 'fireworks'
+  | 'groq'
+  | 'venice'
+  | 'custom';
 
 export type ProviderCategory = 'classic' | 'aws' | 'gcp' | 'azure' | 'local' | 'proxy' | 'hybrid';
 
@@ -138,6 +144,53 @@ export const PROVIDER_META: Record<ProviderId, ProviderMeta> = {
     label: 'Local Models',
     logoKey: 'huggingface',
   },
+  nebius: {
+    id: 'nebius',
+    name: 'Nebius AI',
+    category: 'classic',
+    label: 'Llama & DeepSeek models',
+    logoKey: 'nebius',
+    helpUrl: 'https://studio.nebius.ai/',
+  },
+  together: {
+    id: 'together',
+    name: 'Together AI',
+    category: 'classic',
+    label: 'Llama & Mixtral models',
+    logoKey: 'together',
+    helpUrl: 'https://api.together.xyz/settings/api-keys',
+  },
+  fireworks: {
+    id: 'fireworks',
+    name: 'Fireworks AI',
+    category: 'classic',
+    label: 'Fast inference models',
+    logoKey: 'fireworks',
+    helpUrl: 'https://fireworks.ai/account/api-keys',
+  },
+  groq: {
+    id: 'groq',
+    name: 'Groq',
+    category: 'classic',
+    label: 'Ultra-fast Llama models',
+    logoKey: 'groq',
+    helpUrl: 'https://console.groq.com/keys',
+  },
+  venice: {
+    id: 'venice',
+    name: 'Venice AI',
+    category: 'classic',
+    label: 'Service',
+    logoKey: 'venice',
+    helpUrl: 'https://venice.ai/settings/api',
+  },
+  custom: {
+    id: 'custom',
+    name: 'Custom Endpoint',
+    category: 'hybrid',
+    label: 'Custom',
+    logoKey: 'custom',
+  },
 };
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -191,6 +244,14 @@ export interface HuggingFaceLocalCredentials {
   modelId: string;
 }
 
+export interface CustomCredentials {
+  type: 'custom';
+  baseUrl: string;
+  modelName: string;
+  hasApiKey: boolean;
+  keyPrefix?: string;
+}
+
 export interface AzureFoundryCredentials {
   type: 'azure-foundry';
   authMethod: 'api-key' | 'entra-id';
@@ -223,7 +284,8 @@ export type ProviderCredentials =
   | AzureFoundryCredentials
   | LMStudioCredentials
   | OAuthCredentials
-  | HuggingFaceLocalCredentials;
+  | HuggingFaceLocalCredentials
+  | CustomCredentials;
 
 export type ToolSupportStatus = 'supported' | 'unsupported' | 'unknown';
 
@@ -234,6 +296,8 @@ export interface ConnectedProvider {
   credentials: ProviderCredentials;
   lastConnectedAt: string;
   availableModels?: Array<{ id: string; name: string; toolSupport?: ToolSupportStatus }>;
+  /** Custom base URL override set by the user (for providers with editableBaseUrl: true) */
+  customBaseUrl?: string;
 }
 
 export interface ProviderSettings {
@@ -274,6 +338,11 @@ export const DEFAULT_MODELS: Partial<Record<ProviderId, string>> = {
   zai: 'zai/glm-4.7-flashx',
   minimax: 'minimax/MiniMax-M2',
   bedrock: 'amazon-bedrock/anthropic.claude-opus-4-5-20251101-v1:0',
+  nebius: 'nebius/meta-llama/Meta-Llama-3.1-70B-Instruct',
+  together: 'together/meta-llama/Llama-3-70b-chat-hf',
+  fireworks: 'fireworks/accounts/fireworks/models/llama-v3-70b-instruct',
+  groq: 'groq/llama3-70b-8192',
+  venice: 'venice/llama-3.3-70b',
 };
 
 export function getDefaultModelForProvider(providerId: ProviderId): string | null {
@@ -302,4 +371,10 @@ export const PROVIDER_ID_TO_OPENCODE: Record<ProviderId, string> = {
   vertex: 'vertex',
   // HuggingFace Local exposes an OpenAI-compatible API; opencode connects via OPENAI_API_BASE env var
   'huggingface-local': 'openai',
+  nebius: 'nebius',
+  together: 'together',
+  fireworks: 'fireworks',
+  groq: 'groq',
+  venice: 'venice',
+  custom: 'custom',
 };

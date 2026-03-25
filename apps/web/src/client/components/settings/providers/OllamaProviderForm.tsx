@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence, motion } from 'framer-motion';
 import { getAccomplish } from '@/lib/accomplish';
@@ -27,6 +27,7 @@ interface OllamaModel {
 interface OllamaProviderFormProps {
   connectedProvider?: ConnectedProvider;
   onConnect: (provider: ConnectedProvider) => void;
+  onUpdateProvider?: (provider: ConnectedProvider) => void;
   onDisconnect: () => void;
   onModelChange: (modelId: string) => void;
   showModelError: boolean;
@@ -172,6 +173,7 @@ function OllamaModelSelector({
 export function OllamaProviderForm({
   connectedProvider,
   onConnect,
+  onUpdateProvider,
   onDisconnect,
   onModelChange,
   showModelError,
@@ -179,8 +181,15 @@ export function OllamaProviderForm({
   const { t } = useTranslation('settings');
   const [serverUrl, setServerUrl] = useState('http://localhost:11434');
   const [connecting, setConnecting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [availableModels, setAvailableModels] = useState<OllamaModel[]>([]);
+
+  const latestProviderRef = useRef(connectedProvider);
+  const refreshRequestIdRef = useRef(0);
+  useEffect(() => {
+    latestProviderRef.current = connectedProvider;
+  }, [connectedProvider]);
 
   const isConnected = connectedProvider?.connectionStatus === 'connected';
 
@@ -226,6 +235,65 @@ export function OllamaProviderForm({
       setError(err instanceof Error ? err.message : t('status.connectionFailed'));
     } finally {
       setConnecting(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    const baseProvider = latestProviderRef.current;
+    if (!baseProvider) {
+      return;
+    }
+    const requestId = ++refreshRequestIdRef.current;
+    setRefreshing(true);
+    setError(null);
+
+    try {
+      const accomplish = getAccomplish();
+      const currentUrl =
+        (baseProvider.credentials as OllamaCredentials)?.serverUrl || 'http://localhost:11434';
+      const result = await accomplish.testOllamaConnection(currentUrl);
+
+      if (!result.success) {
+        setError(result.error || t('status.connectionFailed'));
+        return;
+      }
+
+      if (requestId !== refreshRequestIdRef.current) {
+        return;
+      }
+      const latestProvider = latestProviderRef.current;
+      if (!latestProvider || latestProvider.connectionStatus !== 'connected') {
+        return;
+      }
+
+      const freshModels: OllamaModel[] = (result.models || []).map((m) => ({
+        id: `ollama/${m.id}`,
+        name: m.displayName,
+        toolSupport: m.toolSupport || 'unknown',
+      }));
+      setAvailableModels(freshModels);
+
+      const freshModelIds = new Set(freshModels.map((m) => m.id));
+      const keepSelectedModel =
+        latestProvider.selectedModelId && freshModelIds.has(latestProvider.selectedModelId)
+          ? latestProvider.selectedModelId
+          : null;
+
+      const updatedProvider: ConnectedProvider = {
+        ...latestProvider,
+        selectedModelId: keepSelectedModel,
+        availableModels: freshModels.map((m) => ({
+          id: m.id,
+          name: m.name,
+          toolSupport: m.toolSupport,
+        })),
+      };
+
+      (onUpdateProvider || onConnect)(updatedProvider);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('status.connectionFailed'));
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -300,12 +368,41 @@ export function OllamaProviderForm({
 
               <ConnectedControls onDisconnect={onDisconnect} />
 
-              <OllamaModelSelector
-                models={models}
-                value={connectedProvider?.selectedModelId || null}
-                onChange={onModelChange}
-                error={showModelError && !connectedProvider?.selectedModelId}
-              />
+              <div className="flex items-start gap-2">
+                <div className="flex-1 min-w-0">
+                  <OllamaModelSelector
+                    models={models}
+                    value={connectedProvider?.selectedModelId || null}
+                    onChange={onModelChange}
+                    error={showModelError && !connectedProvider?.selectedModelId}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  data-testid="ollama-refresh-models"
+                  className="mt-6 flex-shrink-0 rounded-md border border-input bg-background px-2.5 py-2.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+                  title={t('ollama.refreshModels')}
+                  aria-label={t('ollama.refreshModels')}
+                >
+                  <svg
+                    className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <FormError error={error} />
 
               <div className="flex items-center gap-3 pt-2 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1">
