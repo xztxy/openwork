@@ -54,7 +54,11 @@
     "moonshot": "Moonshot",
     "litellm": "LiteLLM",
     "vertex": "Vertex AI",
-    "azure-foundry": "Azure AI Foundry"
+    "azure-foundry": "Azure AI Foundry",
+    "nebius": "Nebius AI",
+    "together": "Together AI",
+    "fireworks": "Fireworks AI",
+    "groq": "Groq"
   },
   "providerLabels": {
     "anthropic": "Claude models",
@@ -71,7 +75,11 @@
     "moonshot": "Kimi models",
     "litellm": "Unified proxy",
     "vertex": "Google Cloud",
-    "azure-foundry": "Azure Service"
+    "azure-foundry": "Azure Service",
+    "nebius": "Llama & DeepSeek models",
+    "together": "Llama & Mixtral models",
+    "fireworks": "Fast inference models",
+    "groq": "Ultra-fast Llama models"
   },
   "status": {
     "connected": "Connected",
@@ -114,7 +122,8 @@
   },
   "lmstudio": {
     "serverUrl": "LM Studio Server URL",
-    "serverHint": "Start LM Studio and enable the local server in Developer settings"
+    "serverHint": "Start LM Studio and enable the local server in Developer settings",
+    "refreshModels": "Refresh model list"
   },
   "vertex": {
     "serviceAccountTab": "Service Account",
@@ -167,7 +176,8 @@
     "selectModel": "Select Model",
     "useThisModel": "Use This Model",
     "helpText": "Make sure <link>Ollama</link> is installed and running, then click Test to connect.",
-    "currentlyUsing": "Currently using"
+    "currentlyUsing": "Currently using",
+    "refreshModels": "Refresh model list"
   },
   "azure": {
     "apiKey": "API Key",
@@ -238,9 +248,19 @@
     "providers": "Providers",
     "connectors": "Connectors",
     "skills": "Skills",
+    "daemon": "Daemon",
+    "browsers": "Cloud Browsers",
     "voiceInput": "Voice Input",
+    "workspaces": "Workspaces",
     "appearance": "Appearance",
+    "general": "General",
     "about": "About"
+  },
+  "notifications": {
+    "toggle": {
+      "label": "Desktop Notifications",
+      "description": "Show OS notifications when tasks complete while the app is in the background."
+    }
   },
   "appearance": {
     "title": "Theme",
@@ -248,15 +268,22 @@
     "ariaLabel": "Theme preference",
     "system": "System",
     "light": "Light",
-    "dark": "Dark"
+    "dark": "Dark",
+    "themeTitle": "Theme",
+    "themeDescription": "Choose how Accomplish looks. Select System to match your operating system setting.",
+    "themeSystem": "System",
+    "themeLight": "Light",
+    "themeDark": "Dark"
   },
   "connectors": {
-    "description": "Connect remote MCP servers using OAuth. Only servers that support the OAuth 2.0 authorization flow are currently supported.",
+    "description": "Connect built-in and custom MCP servers so Accomplish can use external tools.",
     "loading": "Loading connectors...",
     "placeholder": "https://mcp-server.example.com",
     "add": "Add",
-    "empty": "No MCP servers connected yet",
+    "empty": "No custom MCP servers added yet",
     "defaultName": "MCP Server",
+    "customTitle": "Custom MCP servers",
+    "customDescription": "Add your own remote MCP server URL. OAuth is supported for servers that expose the standard authorization flow.",
     "urlMustBeHttp": "URL must start with http:// or https://",
     "invalidUrl": "Please enter a valid URL",
     "addFailed": "Failed to add connector",
@@ -272,7 +299,26 @@
     "enable": "Enable",
     "disable": "Disable",
     "confirmDelete": "Click again to confirm",
-    "delete": "Delete"
+    "delete": "Delete",
+    "slack": {
+      "title": "Slack",
+      "description": "Authenticate Slack so the agent can send messages and use Slack context through the built-in Slack MCP.",
+      "authenticate": "Authenticate Slack",
+      "authenticating": "Authenticating...",
+      "restartAuth": "Restart authentication",
+      "disconnect": "Disconnect Slack",
+      "disconnecting": "Disconnecting...",
+      "authHint": "Accomplish will open your browser so you can approve Slack access.",
+      "pendingHint": "A Slack sign-in was started earlier but not finished. Restart it to try again.",
+      "connectedHint": "Slack is authenticated and ready for the agent to use.",
+      "authFailed": "Failed to authenticate Slack",
+      "disconnectFailed": "Failed to disconnect Slack",
+      "status": {
+        "connected": "Connected",
+        "disconnected": "Not connected",
+        "pending": "Authorization started"
+      }
+    }
   },
   "zai": {
     "region": "Region",
@@ -319,16 +365,16 @@
     "buildWithAccomplish": "Build with Accomplish",
     "buildDescription": "Create skills through conversation",
     "uploadSkill": "Upload a skill",
-    "uploadDescription": "Upload a SKILL.md file",
+    "uploadDescription": "Select a skill folder to import",
     "importFromGitHub": "Import from GitHub",
     "importDescription": "Paste a repository link",
     "importDialogDescription": "Enter the URL of a GitHub repository containing a SKILL.md file.",
     "importing": "Importing...",
     "import": "Import",
     "uploadFailedTitle": "Upload Failed",
-    "uploadFailedDescription": "The skill file could not be uploaded.",
+    "uploadFailedDescription": "The skill could not be uploaded.",
     "uploadErrorHelp": "Make sure your SKILL.md file has valid YAML frontmatter with at least a",
-    "selectFile": "Select a SKILL.md file",
+    "selectFile": "Select a skill folder",
     "uploadErrorField": "name",
     "uploadErrorFieldSuffix": "field:",
     "ok": "OK",
@@ -354,7 +400,9 @@
     "auto": "Auto (System)",
     "autoUnsupported": "Auto (Unsupported)",
     "en": "English",
-    "zhCN": "Simplified Chinese"
+    "zhCN": "Simplified Chinese",
+    "ru": "Русский",
+    "fr": "Français"
   },
   "about": {
     "title": "About",
@@ -394,5 +442,9 @@
     "tooltipError": "Error during transcription - Click to retry",
     "tooltipDefault": "Click to record or hold Alt to record voice input",
     "processing": "Processing..."
+  },
+  "baseUrl": {
+    "title": "Base URL",
+    "description": "Leave empty to use the default URL."
   }
 }

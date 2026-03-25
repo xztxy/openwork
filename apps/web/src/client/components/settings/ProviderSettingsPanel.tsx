@@ -13,6 +13,7 @@ import {
   LiteLLMProviderForm,
   LMStudioProviderForm,
   VertexProviderForm,
+  CustomProviderForm,
 } from './providers';
 import { ZaiProviderForm } from './providers/ZaiProviderForm';
 import { settingsVariants, settingsTransitions } from '@/lib/animations';
@@ -21,6 +22,7 @@ interface ProviderSettingsPanelProps {
   providerId: ProviderId;
   connectedProvider?: ConnectedProvider;
   onConnect: (provider: ConnectedProvider) => void;
+  onUpdateProvider?: (provider: ConnectedProvider) => void;
   onDisconnect: () => void;
   onModelChange: (modelId: string) => void;
   showModelError: boolean;
@@ -30,6 +32,7 @@ export function ProviderSettingsPanel({
   providerId,
   connectedProvider,
   onConnect,
+  onUpdateProvider,
   onDisconnect,
   onModelChange,
   showModelError,
@@ -106,6 +109,7 @@ export function ProviderSettingsPanel({
             <LMStudioProviderForm
               connectedProvider={connectedProvider}
               onConnect={onConnect}
+              onUpdateProvider={onUpdateProvider}
               onDisconnect={onDisconnect}
               onModelChange={onModelChange}
               showModelError={showModelError}
@@ -117,6 +121,7 @@ export function ProviderSettingsPanel({
           <OllamaProviderForm
             connectedProvider={connectedProvider}
             onConnect={onConnect}
+            onUpdateProvider={onUpdateProvider}
             onDisconnect={onDisconnect}
             onModelChange={onModelChange}
             showModelError={showModelError}
@@ -135,6 +140,19 @@ export function ProviderSettingsPanel({
         );
 
       case 'hybrid':
+        // Handle different hybrid providers
+        if (providerId === 'custom') {
+          return (
+            <CustomProviderForm
+              connectedProvider={connectedProvider}
+              onConnect={onConnect}
+              onDisconnect={onDisconnect}
+              onModelChange={onModelChange}
+              showModelError={showModelError}
+            />
+          );
+        }
+        // Default to LiteLLM for other hybrid providers
         return (
           <LiteLLMProviderForm
             connectedProvider={connectedProvider}

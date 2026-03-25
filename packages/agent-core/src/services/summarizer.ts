@@ -6,10 +6,14 @@
  */
 
 import type { ApiKeyProvider } from '../common/types/provider.js';
+import { createConsoleLogger } from '../utils/logging.js';
+
+const log = createConsoleLogger({ prefix: 'Summarizer' });
 
 const SUMMARY_PROMPT = `Generate a very short title (3-5 words max) that summarizes this task request.
 The title should be in sentence case, no quotes, no punctuation at end.
-Examples: "Check calendar", "Download invoice", "Search flights to Paris"
+Output ONLY the title on a single line, nothing else.
+Examples: Check calendar, Download invoice, Search flights to Paris
 
 Task: `;
 
@@ -35,17 +39,17 @@ export async function generateTaskSummary(prompt: string, getApiKey: GetApiKeyFn
     try {
       const summary = await callProvider(provider, apiKey, prompt);
       if (summary) {
-        console.log(`[Summarizer] Generated summary using ${provider}: "${summary}"`);
+        log.info(`[Summarizer] Generated summary using ${provider}: "${summary}"`);
         return summary;
       }
     } catch (error) {
-      console.warn(`[Summarizer] ${provider} failed:`, error);
+      log.warn(`[Summarizer] ${provider} failed: ${String(error)}`);
       // Continue to next provider
     }
   }
 
   // Fallback: truncate prompt
-  console.log('[Summarizer] All providers failed, using truncated prompt');
+  log.info('[Summarizer] All providers failed, using truncated prompt');
   return truncatePrompt(prompt);
 }
 
@@ -192,11 +196,20 @@ async function callXAI(apiKey: string, prompt: string): Promise<string> {
 }
 
 /**
- * Clean up the generated summary
+ * Clean up the generated summary.
+ * Extracts only the first non-empty line to handle cases where the LLM
+ * returns multiple titles or additional explanation text.
  */
 function cleanSummary(text: string): string {
-  return (
+  // Take only the first non-empty line — LLMs sometimes return multiple titles
+  const firstLine =
     text
+      .split('\n')
+      .map((l) => l.trim())
+      .find((l) => l.length > 0) ?? text.trim();
+
+  return (
+    firstLine
       // Remove surrounding quotes
       .replace(/^["']|["']$/g, '')
       // Remove trailing punctuation

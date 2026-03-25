@@ -54,7 +54,11 @@
     "moonshot": "Moonshot",
     "litellm": "LiteLLM",
     "vertex": "Vertex AI",
-    "azure-foundry": "Azure AI Foundry"
+    "azure-foundry": "Azure AI Foundry",
+    "nebius": "Nebius AI",
+    "together": "Together AI",
+    "fireworks": "Fireworks AI",
+    "groq": "Groq"
   },
   "providerLabels": {
     "anthropic": "Claude 系列模型",
@@ -71,7 +75,11 @@
     "moonshot": "Kimi 系列模型",
     "litellm": "统一代理",
     "vertex": "谷歌云平台",
-    "azure-foundry": "Azure 服务"
+    "azure-foundry": "Azure 服务",
+    "nebius": "Llama 和 DeepSeek 模型",
+    "together": "Llama 和 Mixtral 模型",
+    "fireworks": "快速推理模型",
+    "groq": "超快速 Llama 模型"
   },
   "status": {
     "connected": "已连接",
@@ -114,7 +122,8 @@
   },
   "lmstudio": {
     "serverUrl": "LM Studio 服务器地址",
-    "serverHint": "启动 LM Studio 并在开发者设置中启用本地服务器"
+    "serverHint": "启动 LM Studio 并在开发者设置中启用本地服务器",
+    "refreshModels": "刷新模型列表"
   },
   "vertex": {
     "serviceAccountTab": "服务账号",
@@ -167,7 +176,8 @@
     "selectModel": "选择模型",
     "useThisModel": "使用此模型",
     "helpText": "请确保已安装并运行 <link>Ollama</link>，然后点击测试连接。",
-    "currentlyUsing": "当前使用"
+    "currentlyUsing": "当前使用",
+    "refreshModels": "刷新模型列表"
   },
   "bedrock": {
     "accessKeys": "访问密钥",
@@ -210,9 +220,19 @@
     "providers": "服务商",
     "connectors": "连接器",
     "skills": "技能",
+    "daemon": "后台守护进程",
+    "browsers": "云浏览器",
     "voiceInput": "语音输入",
+    "workspaces": "工作区",
     "appearance": "外观",
+    "general": "通用",
     "about": "关于"
+  },
+  "notifications": {
+    "toggle": {
+      "label": "桌面通知",
+      "description": "当应用在后台运行时，任务完成后显示系统通知。"
+    }
   },
   "appearance": {
     "title": "主题",
@@ -220,15 +240,22 @@
     "ariaLabel": "主题偏好",
     "system": "系统",
     "light": "浅色",
-    "dark": "深色"
+    "dark": "深色",
+    "themeTitle": "主题",
+    "themeDescription": "选择 Accomplish 的外观。选择「系统」以匹配操作系统设置。",
+    "themeSystem": "跟随系统",
+    "themeLight": "浅色",
+    "themeDark": "深色"
   },
   "connectors": {
-    "description": "通过 OAuth 连接远程 MCP 服务器。目前仅支持支持 OAuth 2.0 授权流程的服务器。",
+    "description": "连接内置或自定义 MCP 服务器，让 Accomplish 可以使用外部工具。",
     "loading": "加载连接器...",
     "placeholder": "https://mcp-server.example.com",
     "add": "添加",
-    "empty": "尚未连接任何 MCP 服务器",
+    "empty": "尚未添加任何自定义 MCP 服务器",
     "defaultName": "MCP 服务器",
+    "customTitle": "自定义 MCP 服务器",
+    "customDescription": "添加您自己的远程 MCP 服务器 URL。支持标准 OAuth 授权流程的服务器可以直接完成 OAuth 连接。",
     "urlMustBeHttp": "URL 必须以 http:// 或 https:// 开头",
     "invalidUrl": "请输入有效的 URL",
     "addFailed": "添加连接器失败",
@@ -244,7 +271,26 @@
     "enable": "启用",
     "disable": "禁用",
     "confirmDelete": "再次点击确认",
-    "delete": "删除"
+    "delete": "删除",
+    "slack": {
+      "title": "Slack",
+      "description": "验证 Slack 后，智能体就可以通过内置 Slack MCP 发送消息并使用 Slack 上下文。",
+      "authenticate": "验证 Slack",
+      "authenticating": "正在验证...",
+      "restartAuth": "重新开始验证",
+      "disconnect": "断开 Slack",
+      "disconnecting": "断开中...",
+      "authHint": "Accomplish 会打开浏览器，供您完成 Slack 授权。",
+      "pendingHint": "之前已开始 Slack 登录，但尚未完成。您可以重新开始一次。",
+      "connectedHint": "Slack 已完成验证，智能体现在可以使用它。",
+      "authFailed": "Slack 验证失败",
+      "disconnectFailed": "断开 Slack 失败",
+      "status": {
+        "connected": "已连接",
+        "disconnected": "未连接",
+        "pending": "已开始授权"
+      }
+    }
   },
   "zai": {
     "region": "地区",
@@ -319,16 +365,16 @@
     "buildWithAccomplish": "使用 Accomplish 构建",
     "buildDescription": "通过对话创建技能",
     "uploadSkill": "上传技能",
-    "uploadDescription": "上传 SKILL.md 文件",
+    "uploadDescription": "选择技能文件夹以导入",
     "importFromGitHub": "从 GitHub 导入",
     "importDescription": "粘贴仓库链接",
     "importDialogDescription": "输入包含 SKILL.md 文件的 GitHub 仓库 URL。",
     "importing": "导入中...",
     "import": "导入",
     "uploadFailedTitle": "上传失败",
-    "uploadFailedDescription": "无法上传技能文件。",
+    "uploadFailedDescription": "无法上传技能文件夹。",
     "uploadErrorHelp": "确保您的 SKILL.md 文件包含有效的 YAML frontmatter，至少包含一个",
-    "selectFile": "选择 SKILL.md 文件",
+    "selectFile": "选择技能文件夹",
     "uploadErrorField": "name",
     "uploadErrorFieldSuffix": "字段：",
     "ok": "确定",
@@ -354,7 +400,9 @@
     "auto": "自动（跟随系统）",
     "autoUnsupported": "自动（不支持）",
     "en": "English",
-    "zhCN": "简体中文"
+    "zhCN": "简体中文",
+    "ru": "Русский",
+    "fr": "Français"
   },
   "about": {
     "title": "关于",
@@ -394,5 +442,9 @@
     "tooltipError": "转录过程中出错 - 点击重试",
     "tooltipDefault": "点击录音或按住 Alt 键进行语音输入",
     "processing": "处理中..."
+  },
+  "baseUrl": {
+    "title": "基础 URL",
+    "description": "留空以使用默认 URL。"
   }
 }

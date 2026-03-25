@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { PERMISSION_API_PORT } from '../../../src/common/constants.js';
 import {
   generateConfig,
   getOpenCodeConfigPath,
@@ -9,6 +10,7 @@ import {
   ConfigGeneratorOptions,
   ProviderConfig,
   BrowserConfig,
+  buildCliArgs,
 } from '../../../src/opencode/config-generator.js';
 
 describe('ConfigGenerator', () => {
@@ -19,8 +21,10 @@ describe('ConfigGenerator', () => {
   const requiredMcpDistEntries = [
     ['file-permission', 'dist/index.mjs'],
     ['ask-user-question', 'dist/index.mjs'],
+    ['request-connector-auth', 'dist/index.mjs'],
     ['complete-task', 'dist/index.mjs'],
     ['start-task', 'dist/index.mjs'],
+    ['desktop-control', 'dist/index.mjs'],
     ['dev-browser-mcp', 'dist/index.mjs'],
   ] as const;
 
@@ -171,11 +175,33 @@ describe('ConfigGenerator', () => {
 
       const result = generateConfig(options);
 
+      expect(result.mcpServers.slack).toBeDefined();
       expect(result.mcpServers['file-permission']).toBeDefined();
       expect(result.mcpServers['ask-user-question']).toBeDefined();
+      expect(result.mcpServers['request-connector-auth']).toBeDefined();
       expect(result.mcpServers['dev-browser-mcp']).toBeDefined();
       expect(result.mcpServers['complete-task']).toBeDefined();
       expect(result.mcpServers['start-task']).toBeDefined();
+      expect(result.mcpServers['desktop-control']).toBeDefined();
+    });
+
+    it('should include the Slack MCP with OpenCode-compatible OAuth config', () => {
+      const options: ConfigGeneratorOptions = {
+        ...baseOptions,
+        mcpToolsPath,
+        userDataPath,
+      };
+
+      const result = generateConfig(options);
+
+      expect(result.mcpServers.slack).toEqual({
+        type: 'remote',
+        url: 'https://mcp.slack.com/mcp',
+        oauth: {
+          clientId: '1601185624273.8899143856786',
+        },
+      });
+      expect(result.config.mcp?.slack).toEqual(result.mcpServers.slack);
     });
 
     it('should set permission API port in environment', () => {
@@ -189,6 +215,7 @@ describe('ConfigGenerator', () => {
       const result = generateConfig(options);
 
       expect(result.mcpServers['file-permission'].environment?.PERMISSION_API_PORT).toBe('9999');
+      expect(result.mcpServers['desktop-control'].environment?.PERMISSION_API_PORT).toBe('9999');
     });
 
     it('should set question API port in environment', () => {
@@ -213,7 +240,12 @@ describe('ConfigGenerator', () => {
 
       const result = generateConfig(options);
 
-      expect(result.mcpServers['file-permission'].environment?.PERMISSION_API_PORT).toBe('9226');
+      expect(result.mcpServers['file-permission'].environment?.PERMISSION_API_PORT).toBe(
+        String(PERMISSION_API_PORT),
+      );
+      expect(result.mcpServers['desktop-control'].environment?.PERMISSION_API_PORT).toBe(
+        String(PERMISSION_API_PORT),
+      );
       expect(result.mcpServers['ask-user-question'].environment?.QUESTION_API_PORT).toBe('9227');
     });
 
@@ -462,6 +494,22 @@ describe('ConfigGenerator', () => {
     });
   });
 
+  describe('buildCliArgs', () => {
+    it('should normalize Z.AI models for API requests', () => {
+      const args = buildCliArgs({
+        prompt: 'test prompt',
+        selectedModel: {
+          provider: 'zai',
+          model: 'zai/glm-5',
+        },
+      });
+
+      const modelFlagIndex = args.indexOf('--model');
+      expect(modelFlagIndex).toBeGreaterThanOrEqual(0);
+      expect(args[modelFlagIndex + 1]).toBe('zai-coding-plan/glm-5');
+    });
+  });
+
   describe('getOpenCodeConfigPath', () => {
     it('should return correct config path', () => {
       const result = getOpenCodeConfigPath(userDataPath);
@@ -546,6 +594,8 @@ describe('ConfigGenerator', () => {
       expect(result.systemPrompt).toContain('<capabilities>');
       expect(result.systemPrompt).toContain('Browser Automation');
       expect(result.systemPrompt).toContain('File Management');
+      expect(result.systemPrompt).toContain('Slack');
+      expect(result.systemPrompt).toContain('built-in Slack connector');
     });
 
     it('should instruct agent NOT to call complete_task for conversational responses', () => {
@@ -576,6 +626,35 @@ describe('ConfigGenerator', () => {
 
       expect(result.systemPrompt).toContain('AskUserQuestion');
       expect(result.systemPrompt).toContain('user CANNOT see your text output');
+    });
+
+    it('should include Slack usage and authentication guidance', () => {
+      const options: ConfigGeneratorOptions = {
+        platform: 'darwin',
+        mcpToolsPath,
+        userDataPath,
+        isPackaged: false,
+        bundledNodeBinPath: sharedBundledNodeBinPath,
+      };
+
+      const result = generateConfig(options);
+
+      expect(result.systemPrompt).toContain('For Slack-related requests, use the Slack MCP tools');
+      expect(result.systemPrompt).toContain('the built-in Slack connector is the default path');
+      expect(result.systemPrompt).toContain('Never invent Slack tool names');
+      expect(result.systemPrompt).toContain(
+        'Never answer a Slack access request with generic advice',
+      );
+      expect(result.systemPrompt).toContain(
+        'If the user asks you to connect or authenticate Slack',
+      );
+      expect(result.systemPrompt).toContain('If Slack authentication is required');
+      expect(result.systemPrompt).toContain('request-connector-auth_request_connector_auth');
+      expect(result.systemPrompt).toContain('Authenticate Slack');
+      expect(result.systemPrompt).toContain('Settings -> Connectors -> Slack');
+      expect(result.systemPrompt).toContain('Authenticate button');
+      expect(result.systemPrompt).toContain('Do not claim a Slack message was sent');
+      expect(result.systemPrompt).toContain('confirm where you sent it');
     });
   });
 
@@ -698,9 +777,11 @@ describe('ConfigGenerator', () => {
 
     it('should contain needs_planning: true for multi-step tasks', () => {
       expect(prompt).toContain('needs_planning: true');
-      expect(prompt).toContain(
-        'will require tools beyond start_task and complete_task (e.g., file operations, browser actions, bash commands)',
-      );
+      expect(prompt).toContain('will require tools beyond start_task and complete_task');
+      expect(prompt).toContain('file operations');
+      expect(prompt).toContain('browser actions');
+      expect(prompt).toContain('bash commands');
+      expect(prompt).toContain('desktop automation');
     });
 
     it('should contain needs_planning: false for conversational messages', () => {

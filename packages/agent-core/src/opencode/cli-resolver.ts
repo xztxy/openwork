@@ -2,9 +2,18 @@ import path from 'path';
 import fs from 'fs';
 import { execFileSync, spawnSync } from 'child_process';
 import type { CliResolverConfig, ResolvedCliPaths } from '../types.js';
+import { createConsoleLogger } from '../utils/logging.js';
+
+const log = createConsoleLogger({ prefix: 'CLIResolver' });
 
 const WINDOWS_OPENCODE_X64_PACKAGE = 'opencode-windows-x64';
 const WINDOWS_OPENCODE_X64_BASELINE_PACKAGE = 'opencode-windows-x64-baseline';
+const LINUX_OPENCODE_X64_PACKAGE = 'opencode-linux-x64';
+const LINUX_OPENCODE_X64_BASELINE_PACKAGE = 'opencode-linux-x64-baseline';
+const LINUX_OPENCODE_X64_MUSL_PACKAGE = 'opencode-linux-x64-musl';
+const LINUX_OPENCODE_X64_BASELINE_MUSL_PACKAGE = 'opencode-linux-x64-baseline-musl';
+const LINUX_OPENCODE_ARM64_PACKAGE = 'opencode-linux-arm64';
+const LINUX_OPENCODE_ARM64_MUSL_PACKAGE = 'opencode-linux-arm64-musl';
 const OPENCODE_LAUNCHER_PACKAGE = 'opencode-ai';
 let cachedWindowsPackageNames: string[] | null = null;
 
@@ -52,11 +61,29 @@ function getWindowsPackageNames(): string[] {
   return cachedWindowsPackageNames;
 }
 
+function getLinuxPackageNames(): string[] {
+  if (process.arch === 'arm64') {
+    return [LINUX_OPENCODE_ARM64_PACKAGE, LINUX_OPENCODE_ARM64_MUSL_PACKAGE];
+  }
+  return [
+    LINUX_OPENCODE_X64_PACKAGE,
+    LINUX_OPENCODE_X64_BASELINE_PACKAGE,
+    LINUX_OPENCODE_X64_MUSL_PACKAGE,
+    LINUX_OPENCODE_X64_BASELINE_MUSL_PACKAGE,
+  ];
+}
+
 function getOpenCodePlatformInfo(): { packageNames: string[]; binaryName: string } {
   if (process.platform === 'win32') {
     return {
       packageNames: getWindowsPackageNames(),
       binaryName: 'opencode.exe',
+    };
+  }
+  if (process.platform === 'linux') {
+    return {
+      packageNames: getLinuxPackageNames(),
+      binaryName: 'opencode',
     };
   }
   return {
@@ -120,7 +147,7 @@ function resolveLocalCliPath(appPath?: string): ResolvedCliPaths | null {
       for (const packageName of packageNames) {
         const cliPath = path.join(root, 'node_modules', packageName, 'bin', binaryName);
         if (fs.existsSync(cliPath)) {
-          console.log('[CLI Resolver] Using local OpenCode CLI executable:', cliPath);
+          log.info(`[CLI Resolver] Using local OpenCode CLI executable: ${cliPath}`);
           return {
             cliPath,
             cliDir: path.dirname(cliPath),
@@ -141,7 +168,7 @@ function resolveLocalCliPath(appPath?: string): ResolvedCliPaths | null {
 
     const cliPath = path.join(root, 'node_modules', '.bin', binaryName);
     if (fs.existsSync(cliPath)) {
-      console.log('[CLI Resolver] Using local OpenCode CLI executable:', cliPath);
+      log.info(`[CLI Resolver] Using local OpenCode CLI executable: ${cliPath}`);
       return {
         cliPath,
         cliDir: path.dirname(cliPath),
@@ -174,7 +201,7 @@ function resolveWindowsCliFromLauncher(
     for (const packageName of packageNames) {
       const cliPath = path.join(moduleRoot, packageName, 'bin', 'opencode.exe');
       if (fs.existsSync(cliPath)) {
-        console.log('[CLI Resolver] Using OpenCode CLI executable via launcher package:', cliPath);
+        log.info(`[CLI Resolver] Using OpenCode CLI executable via launcher package: ${cliPath}`);
         return {
           cliPath,
           cliDir: path.dirname(cliPath),
@@ -224,10 +251,13 @@ export async function getCliVersion(cliPath: string): Promise<string | null> {
       }
     }
 
+    // Use execFileSync (no shell) so paths that contain spaces are passed
+    // directly to CreateProcess/execvp without cmd.exe quoting ambiguity.
+    // See: https://github.com/accomplish-ai/accomplish/issues/596
     const output = execFileSync(cliPath, ['--version'], {
       encoding: 'utf-8',
       timeout: 5000,
-      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
     }).trim();
 
     const versionMatch = output.match(/(\d+\.\d+\.\d+)/);

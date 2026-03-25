@@ -8,12 +8,26 @@ import {
   getOpenCodeAuthPath,
   isTokenExpired,
   refreshAccessToken,
+  PERMISSION_API_PORT,
+  QUESTION_API_PORT,
 } from '@accomplish_ai/agent-core';
+import type { BrowserConfig } from '@accomplish_ai/agent-core';
 import { getApiKey, getAllApiKeys } from '../store/secureStorage';
 import { getStorage } from '../store/storage';
 import { getBundledNodePaths } from '../utils/bundled-node';
 import { skillsManager } from '../skills';
-import { PERMISSION_API_PORT, QUESTION_API_PORT } from '@accomplish_ai/agent-core';
+import { getLogCollector } from '../logging';
+
+function logOC(level: 'INFO' | 'WARN' | 'ERROR', msg: string, data?: Record<string, unknown>) {
+  try {
+    const l = getLogCollector();
+    if (l?.log) {
+      l.log(level, 'opencode', msg, data);
+    }
+  } catch (_e) {
+    /* best-effort logging */
+  }
+}
 
 export { ACCOMPLISH_AGENT_NAME };
 
@@ -52,8 +66,8 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
   const userDataPath = app.getPath('userData');
   const bundledNodeBinPath = getBundledNodePaths()?.binDir;
 
-  console.log('[OpenCode Config] MCP tools path:', mcpToolsPath);
-  console.log('[OpenCode Config] User data path:', userDataPath);
+  logOC('INFO', `[OpenCode Config] MCP tools path: ${mcpToolsPath}`);
+  logOC('INFO', `[OpenCode Config] User data path: ${userDataPath}`);
   if (!bundledNodeBinPath) {
     throw new Error(
       '[OpenCode Config] Bundled Node.js path is missing. ' +
@@ -94,7 +108,7 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
 
     let tokens = storage.getConnectorTokens(connector.id);
     if (!tokens?.accessToken) {
-      console.warn(`[Connectors] Missing access token for ${connector.name}`);
+      logOC('WARN', `[Connectors] Missing access token for ${connector.name}`);
       storage.setConnectorStatus(connector.id, 'error');
       continue;
     }
@@ -111,12 +125,15 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
           });
           storage.storeConnectorTokens(connector.id, tokens);
         } catch (err) {
-          console.warn(`[Connectors] Token refresh failed for ${connector.name}:`, err);
+          logOC('WARN', `[Connectors] Token refresh failed for ${connector.name}`, {
+            err: String(err),
+          });
           storage.setConnectorStatus(connector.id, 'error');
           continue;
         }
       } else {
-        console.warn(
+        logOC(
+          'WARN',
           `[Connectors] Access token expired for ${connector.name} and cannot be refreshed`,
         );
         storage.setConnectorStatus(connector.id, 'error');
@@ -130,6 +147,20 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
       url: connector.url,
       accessToken: tokens.accessToken,
     });
+  }
+
+  // Build browser config from cloud browser settings
+  const cloudBrowserConfig = storage.getCloudBrowserConfig();
+  let browserConfig: BrowserConfig | undefined;
+  if (cloudBrowserConfig?.activeProvider) {
+    const providerCfg = cloudBrowserConfig.providers[cloudBrowserConfig.activeProvider];
+    if (providerCfg?.endpoint) {
+      browserConfig = {
+        mode: 'remote',
+        cdpEndpoint: providerCfg.endpoint,
+        cdpHeaders: providerCfg.apiKey ? { 'X-CDP-Secret': providerCfg.apiKey } : undefined,
+      };
+    }
   }
 
   const result = generateConfig({
@@ -146,14 +177,18 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
     model: modelOverride?.model,
     smallModel: modelOverride?.smallModel,
     connectors: connectors.length > 0 ? connectors : undefined,
+    browser: browserConfig,
   });
 
   process.env.OPENCODE_CONFIG = result.configPath;
   process.env.OPENCODE_CONFIG_DIR = path.dirname(result.configPath);
 
-  console.log('[OpenCode Config] Generated config at:', result.configPath);
-  console.log('[OpenCode Config] OPENCODE_CONFIG env set to:', process.env.OPENCODE_CONFIG);
-  console.log('[OpenCode Config] OPENCODE_CONFIG_DIR env set to:', process.env.OPENCODE_CONFIG_DIR);
+  logOC('INFO', `[OpenCode Config] Generated config at: ${result.configPath}`);
+  logOC('INFO', `[OpenCode Config] OPENCODE_CONFIG env set to: ${process.env.OPENCODE_CONFIG}`);
+  logOC(
+    'INFO',
+    `[OpenCode Config] OPENCODE_CONFIG_DIR env set to: ${process.env.OPENCODE_CONFIG_DIR}`,
+  );
 
   return result.configPath;
 }
