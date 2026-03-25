@@ -2,174 +2,17 @@
  * WhatsAppCard — connection management UI for WhatsApp integration
  *
  * Contributed by aryan877 (PR #595 feat/whatsapp-integration).
- * - QR code display with countdown timer
- * - Connected / disconnected / reconnecting / logged-out states
- * - Confirm-before-disconnect UX pattern
+ * State logic extracted to useWhatsAppCard hook for modularity.
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { getAccomplish } from '@/lib/accomplish';
 import { QRCodeDisplay } from './QRCodeDisplay';
-
-const QR_EXPIRY_SECONDS = 60;
-
-interface WhatsAppState {
-  status: string;
-  phoneNumber?: string;
-  lastConnectedAt?: number;
-}
+import { useWhatsAppCard } from './useWhatsAppCard';
 
 export function WhatsAppCard() {
-  const accomplish = getAccomplish();
-
-  const [config, setConfig] = useState<WhatsAppState | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [connecting, setConnecting] = useState(false);
-  const [disconnecting, setDisconnecting] = useState(false);
-  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [qrCode, setQrCode] = useState<string | null>(null);
-  const [qrExpiresAt, setQrExpiresAt] = useState<number>(0);
-  const qrTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Auto-clear confirm disconnect after 3 seconds
-  useEffect(() => {
-    if (!confirmDisconnect) {
-      return;
-    }
-    const timer = setTimeout(() => setConfirmDisconnect(false), 3000);
-    return () => clearTimeout(timer);
-  }, [confirmDisconnect]);
-
-  useEffect(() => {
-    return () => {
-      if (qrTimerRef.current) {
-        clearInterval(qrTimerRef.current);
-      }
-      if (connectTimeoutRef.current) {
-        clearTimeout(connectTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const fetchConfig = useCallback(async () => {
-    try {
-      const result = await accomplish.getWhatsAppConfig();
-      if (result?.enabled) {
-        setConfig({
-          status: result.status,
-          phoneNumber: result.phoneNumber,
-          lastConnectedAt: result.lastConnectedAt,
-        });
-      } else {
-        setConfig(null);
-      }
-    } catch {
-      setConfig(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [accomplish]);
-
-  useEffect(() => {
-    fetchConfig();
-  }, [fetchConfig]);
-
-  useEffect(() => {
-    const unsubQR = accomplish.onWhatsAppQR((qr: string) => {
-      setQrCode(qr);
-      setQrExpiresAt(Date.now() + QR_EXPIRY_SECONDS * 1000);
-      if (connectTimeoutRef.current) {
-        clearTimeout(connectTimeoutRef.current);
-        connectTimeoutRef.current = null;
-      }
-      setConnecting(false);
-      setConfig((prev) => (prev ? { ...prev, status: 'qr_ready' } : { status: 'qr_ready' }));
-    });
-
-    const unsubStatus = accomplish.onWhatsAppStatus((status: string) => {
-      setConfig((prev) => (prev ? { ...prev, status } : { status }));
-
-      if (status === 'connected') {
-        setQrCode(null);
-        setConnecting(false);
-        if (qrTimerRef.current) {
-          clearInterval(qrTimerRef.current);
-          qrTimerRef.current = null;
-        }
-        if (connectTimeoutRef.current) {
-          clearTimeout(connectTimeoutRef.current);
-          connectTimeoutRef.current = null;
-        }
-        fetchConfig();
-      }
-      if (status === 'disconnected' || status === 'logged_out') {
-        setQrCode(null);
-        setConnecting(false);
-        if (qrTimerRef.current) {
-          clearInterval(qrTimerRef.current);
-          qrTimerRef.current = null;
-        }
-        if (connectTimeoutRef.current) {
-          clearTimeout(connectTimeoutRef.current);
-          connectTimeoutRef.current = null;
-        }
-      }
-    });
-
-    return () => {
-      unsubQR();
-      unsubStatus();
-    };
-  }, [accomplish, fetchConfig]);
-
-  const handleConnect = useCallback(async () => {
-    setConnecting(true);
-    setError(null);
-    setQrCode(null);
-
-    if (connectTimeoutRef.current) {
-      clearTimeout(connectTimeoutRef.current);
-    }
-    connectTimeoutRef.current = setTimeout(() => {
-      setConnecting((prev) => {
-        if (prev) {
-          setError('Connection timed out. Please try again.');
-        }
-        return false;
-      });
-    }, 30_000);
-
-    try {
-      await accomplish.connectWhatsApp();
-    } catch (err) {
-      if (connectTimeoutRef.current) {
-        clearTimeout(connectTimeoutRef.current);
-        connectTimeoutRef.current = null;
-      }
-      setError(err instanceof Error ? err.message : 'Failed to connect');
-      setConnecting(false);
-    }
-  }, [accomplish]);
-
-  const handleDisconnect = useCallback(async () => {
-    if (!confirmDisconnect) {
-      setConfirmDisconnect(true);
-      return;
-    }
-    setDisconnecting(true);
-    setConfirmDisconnect(false);
-    try {
-      await accomplish.disconnectWhatsApp();
-      setConfig(null);
-      setQrCode(null);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to disconnect');
-    } finally {
-      setDisconnecting(false);
-    }
-  }, [confirmDisconnect, accomplish]);
+  const {
+    config, loading, connecting, disconnecting, confirmDisconnect,
+    error, qrCode, qrExpiresAt,
+    handleConnect, handleDisconnect, setQrCode,
+  } = useWhatsAppCard();
 
   if (loading) {
     return (
@@ -191,6 +34,12 @@ export function WhatsAppCard() {
   const isQrReady = config?.status === 'qr_ready' && qrCode;
   const isConnecting = connecting || config?.status === 'connecting';
 
+  function getDisconnectLabel(): string {
+    if (disconnecting) { return 'Disconnecting…'; }
+    if (confirmDisconnect) { return 'Confirm Disconnect?'; }
+    return 'Disconnect';
+  }
+
   return (
     <div className="rounded-lg border border-border bg-muted/30 p-4" data-testid="whatsapp-card">
       {/* Header */}
@@ -208,10 +57,7 @@ export function WhatsAppCard() {
 
       {/* Error */}
       {error && (
-        <div
-          role="alert"
-          className="mb-3 rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
-        >
+        <div role="alert" className="mb-3 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
           {error}
         </div>
       )}
@@ -220,8 +66,7 @@ export function WhatsAppCard() {
       {isConnected && (
         <div className="space-y-3">
           <div
-            role="status"
-            aria-live="polite"
+            role="status" aria-live="polite"
             className="flex items-center gap-2 rounded-full bg-green-500/20 px-2 py-0.5 w-fit text-green-600 dark:text-green-400"
             data-testid="whatsapp-connection-status"
           >
@@ -231,28 +76,14 @@ export function WhatsAppCard() {
             </span>
           </div>
           <button
-            type="button"
-            onClick={handleDisconnect}
-            disabled={disconnecting}
-            aria-label={
-              confirmDisconnect ? 'Confirm disconnect from WhatsApp' : 'Disconnect from WhatsApp'
-            }
+            type="button" onClick={handleDisconnect} disabled={disconnecting}
+            aria-label={confirmDisconnect ? 'Confirm disconnect from WhatsApp' : 'Disconnect from WhatsApp'}
             data-testid="whatsapp-disconnect-button"
             className={`w-full rounded-md border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
-              confirmDisconnect
-                ? 'border-destructive text-destructive hover:bg-destructive/10'
-                : 'border-border hover:bg-muted'
+              confirmDisconnect ? 'border-destructive text-destructive hover:bg-destructive/10' : 'border-border hover:bg-muted'
             }`}
           >
-            {(() => {
-              if (disconnecting) {
-                return 'Disconnecting…';
-              }
-              if (confirmDisconnect) {
-                return 'Confirm Disconnect?';
-              }
-              return 'Disconnect';
-            })()}
+            {getDisconnectLabel()}
           </button>
         </div>
       )}
@@ -266,9 +97,7 @@ export function WhatsAppCard() {
             </p>
           </div>
           <button
-            type="button"
-            onClick={handleConnect}
-            disabled={isConnecting}
+            type="button" onClick={handleConnect} disabled={isConnecting}
             className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             {isConnecting ? 'Connecting…' : 'Reconnect WhatsApp'}
@@ -279,16 +108,12 @@ export function WhatsAppCard() {
       {/* QR ready */}
       {isQrReady && qrCode && (
         <div className="flex flex-col items-center gap-3 py-2 space-y-3">
-          {/* QRCodeDisplay from kartikangiras (PR #455) */}
           <QRCodeDisplay
-            qrString={qrCode}
-            expiresAt={qrExpiresAt}
-            onExpired={() => setQrCode(null)}
-            size={200}
+            qrString={qrCode} expiresAt={qrExpiresAt}
+            onExpired={() => setQrCode(null)} size={200}
           />
           <p className="text-sm text-center text-muted-foreground">
-            Open WhatsApp on your phone, go to <strong>Settings &gt; Linked Devices</strong>, and
-            scan this code.
+            Open WhatsApp on your phone, go to <strong>Settings &gt; Linked Devices</strong>, and scan this code.
           </p>
         </div>
       )}
@@ -302,9 +127,7 @@ export function WhatsAppCard() {
             </p>
           </div>
           <button
-            type="button"
-            onClick={handleConnect}
-            disabled={isConnecting}
+            type="button" onClick={handleConnect} disabled={isConnecting}
             data-testid="whatsapp-connect-button"
             className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
