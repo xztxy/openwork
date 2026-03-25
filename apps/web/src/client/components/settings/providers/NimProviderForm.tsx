@@ -67,12 +67,8 @@ export function NimProviderForm({
       // Save API key
       await accomplish.addApiKey('nim', trimmedKey);
 
-      // Map models to the expected format
-      const models =
-        result.models?.map((m) => ({
-          id: m.id,
-          name: m.name,
-        })) || [];
+      // Map models to the expected format, preserving all metadata including toolSupport
+      const models = result.models?.map((m) => ({ ...m })) || [];
 
       const provider: ConnectedProvider = {
         providerId: 'nim',
@@ -118,10 +114,11 @@ export function NimProviderForm({
               className="space-y-3"
             >
               <div>
-                <label className="mb-2 block text-sm font-medium text-foreground">
+                <label htmlFor="nim-server-url" className="mb-2 block text-sm font-medium text-foreground">
                   {t('nim.serverUrl', 'Endpoint URL')}
                 </label>
                 <input
+                  id="nim-server-url"
                   type="text"
                   value={serverUrl}
                   onChange={(e) => setServerUrl(e.target.value)}
@@ -132,11 +129,12 @@ export function NimProviderForm({
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-foreground">
+                <label htmlFor="nim-api-key" className="mb-2 block text-sm font-medium text-foreground">
                   {t('apiKey.title')}
                   <span className="text-destructive ml-0.5">*</span>
                 </label>
                 <input
+                  id="nim-api-key"
                   type="password"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
@@ -168,10 +166,11 @@ export function NimProviderForm({
               {/* Display saved connection details */}
               <div className="space-y-3">
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-foreground">
+                  <label htmlFor="nim-server-url-connected" className="mb-2 block text-sm font-medium text-foreground">
                     {t('nim.serverUrl', 'Endpoint URL')}
                   </label>
                   <input
+                    id="nim-server-url-connected"
                     type="text"
                     value={
                       (connectedProvider?.credentials as NimCredentials)?.serverUrl ||
@@ -182,10 +181,11 @@ export function NimProviderForm({
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-foreground">
+                  <label htmlFor="nim-api-key-connected" className="mb-2 block text-sm font-medium text-foreground">
                     {t('apiKey.title')}
                   </label>
                   <input
+                    id="nim-api-key-connected"
                     type="text"
                     value={
                       (connectedProvider?.credentials as NimCredentials)?.keyPrefix ||

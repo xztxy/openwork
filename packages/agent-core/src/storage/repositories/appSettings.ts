@@ -4,6 +4,7 @@ import type {
   LiteLLMConfig,
   AzureFoundryConfig,
   LMStudioConfig,
+  NimConfig,
 } from '../../common/types/provider.js';
 import type { ThemePreference } from '../../types/storage.js';
 import type { SandboxConfig } from '../../common/types/sandbox.js';
@@ -27,6 +28,7 @@ interface AppSettingsRow {
   sandbox_config: string;
   cloud_browser_config: string | null;
   notifications_enabled: number;
+  nim_config: string | null;
 }
 
 export interface AppSettings {
@@ -144,6 +146,23 @@ export function getLMStudioConfig(): LMStudioConfig | null {
 export function setLMStudioConfig(config: LMStudioConfig | null): void {
   const db = getDatabase();
   db.prepare('UPDATE app_settings SET lmstudio_config = ? WHERE id = 1').run(
+    config ? JSON.stringify(config) : null,
+  );
+}
+
+export function getNimConfig(): NimConfig | null {
+  const row = getRow();
+  if (!row.nim_config) return null;
+  try {
+    return JSON.parse(row.nim_config) as NimConfig;
+  } catch {
+    return null;
+  }
+}
+
+export function setNimConfig(config: NimConfig | null): void {
+  const db = getDatabase();
+  db.prepare('UPDATE app_settings SET nim_config = ? WHERE id = 1').run(
     config ? JSON.stringify(config) : null,
   );
 }

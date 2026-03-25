@@ -85,7 +85,14 @@ interface AccomplishAPI {
       | 'together'
       | 'fireworks'
       | 'groq'
-      | 'elevenlabs',
+      | 'elevenlabs'
+      | 'nim'
+      | 'minimax'
+      | 'vertex'
+      | 'venice'
+      | 'aws-agentcore'
+      | 'browserbase'
+      | 'steel',
     key: string,
     label?: string,
   ): Promise<ApiKeyConfig>;
