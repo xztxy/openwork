@@ -234,7 +234,9 @@ export async function buildEnvironment(taskId: string): Promise<NodeJS.ProcessEn
     vertexServiceAccountKeyPath,
     bundledNodeBinPath: bundledNode?.binDir,
     taskId: taskId || undefined,
-    openAiBaseUrl: hfProvider && hfBaseUrl ? hfBaseUrl : configuredOpenAiBaseUrl || undefined,
+    openAiBaseUrl: hfProvider
+      ? hfBaseUrl ?? (() => { throw new Error('HuggingFace Local server is not running. Please start the server before sending requests.'); })()
+      : configuredOpenAiBaseUrl || undefined,
     ollamaHost,
   };
 

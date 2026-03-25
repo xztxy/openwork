@@ -61,6 +61,8 @@ const state: ServerState = {
 
 // Mutex to prevent concurrent loadModel calls
 let loadModelPromise: Promise<void> | null = null;
+// Mutex to prevent concurrent startServer calls
+let startServerPromise: Promise<{ success: boolean; port?: number; error?: string }> | null = null;
 
 /**
  * Load a model into memory using Transformers.js.
@@ -358,6 +360,18 @@ function readBody(req: http.IncomingMessage, limitBytes = 10 * 1024 * 1024): Pro
  * Start the local inference HTTP server.
  */
 export async function startServer(
+  modelId: string,
+): Promise<{ success: boolean; port?: number; error?: string }> {
+  if (startServerPromise) {
+    return startServerPromise;
+  }
+  startServerPromise = _startServerImpl(modelId).finally(() => {
+    startServerPromise = null;
+  });
+  return startServerPromise;
+}
+
+async function _startServerImpl(
   modelId: string,
 ): Promise<{ success: boolean; port?: number; error?: string }> {
   if (state.server) {

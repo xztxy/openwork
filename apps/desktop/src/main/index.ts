@@ -320,11 +320,13 @@ if (!gotTheLock) {
       // Auto-start HuggingFace local server if enabled
       const hfConfig = storage.getHuggingFaceLocalConfig();
       if (hfConfig?.enabled && hfConfig.selectedModelId) {
-        console.log(
-          `[Main] Auto-starting HuggingFace server for model: ${hfConfig.selectedModelId}`,
-        );
-        startHuggingFaceServer(hfConfig.selectedModelId).catch((err: unknown) => {
-          console.error('[Main] Failed to auto-start HuggingFace local server:', err);
+        logMain('INFO', `[Main] Auto-starting HuggingFace server for model: ${hfConfig.selectedModelId}`);
+        startHuggingFaceServer(hfConfig.selectedModelId).then((result) => {
+          if (!result.success) {
+            logMain('ERROR', '[Main] Failed to auto-start HuggingFace local server', { error: result.error });
+          }
+        }).catch((err: unknown) => {
+          logMain('ERROR', '[Main] Failed to auto-start HuggingFace local server (thrown)', { err: String(err) });
         });
       }
     } catch (err) {
@@ -454,7 +456,12 @@ app.on('before-quit', (event) => {
     }
     // Stop HuggingFace inference server so its port is released (ENG-687)
     try {
-      await stopHuggingFaceServer();
+      await Promise.race([
+        stopHuggingFaceServer(),
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error('HuggingFace server stop timed out after 5s')), 5000),
+        ),
+      ]);
     } catch (error: unknown) {
       logger?.logEnv('ERROR', `[Main] Failed to stop HuggingFace server: ${String(error)}`);
     }

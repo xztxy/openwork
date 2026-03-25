@@ -15,6 +15,7 @@ import {
   testHuggingFaceConnection,
   fetchHuggingFaceLocalModels as hfListCachedModels,
   HF_RECOMMENDED_MODELS as HF_SUGGESTED_MODELS,
+  deleteHuggingFaceModel,
 } from '../../providers/huggingface-local';
 
 export function registerHuggingFaceHandlers(): void {
@@ -70,7 +71,7 @@ export function registerHuggingFaceHandlers(): void {
       }
       // Stop server before deleting to avoid file-lock issues
       await stopHuggingFaceServer().catch(() => {});
-      return { success: true };
+      return deleteHuggingFaceModel(modelId.trim());
     },
   );
 

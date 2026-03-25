@@ -90,7 +90,9 @@ export async function searchHuggingFaceHubModels(
     url.searchParams.set('sort', 'downloads');
 
     const response = await fetch(url.toString(), { signal: controller.signal });
-    if (!response.ok) throw new Error(`HuggingFace Hub API error: ${response.status}`);
+    if (!response.ok) {
+      throw new Error(`HuggingFace Hub API error: ${response.status}`);
+    }
     const data = (await response.json()) as HuggingFaceHubModel[];
     return data;
   } finally {
@@ -132,7 +134,9 @@ export async function fetchHuggingFaceLocalModels(
   const timeout = setTimeout(() => controller.abort(), HF_LOCAL_API_TIMEOUT_MS);
   try {
     const response = await fetch(`${serverUrl}/v1/models`, { signal: controller.signal });
-    if (!response.ok) throw new Error(`Server error: ${response.status}`);
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
     const data = (await response.json()) as { data?: Array<{ id: string }> };
     return (data.data ?? []).map((m) => ({
       id: m.id,
