@@ -62,6 +62,7 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
     if (this.disposed) { throw new Error('WhatsApp service has been disposed'); }
     clearReconnectTimer(this.reconnect);
     this.reconnect.scheduled = false;
+    this.reconnect.attempts = 0;
     this.manualDisconnect = false;
     if (this.status === 'connecting') { return; }
     this.setStatus('connecting');

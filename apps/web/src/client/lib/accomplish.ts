@@ -32,6 +32,7 @@ import type {
   BrowserFramePayload,
   BrowserStatusPayload,
   BrowserNavigatePayload,
+  MessagingConnectionStatus,
 } from '@accomplish_ai/agent-core';
 import type { CloudBrowserConfig } from '@accomplish_ai/agent-core/common';
 
@@ -106,7 +107,7 @@ interface AccomplishAPI {
   getWhatsAppConfig(): Promise<{
     providerId: string;
     enabled: boolean;
-    status: string;
+    status: MessagingConnectionStatus;
     phoneNumber?: string;
     lastConnectedAt?: number;
   } | null>;
@@ -114,7 +115,7 @@ interface AccomplishAPI {
   disconnectWhatsApp(): Promise<void>;
   setWhatsAppEnabled(enabled: boolean): Promise<void>;
   onWhatsAppQR(callback: (qr: string) => void): () => void;
-  onWhatsAppStatus(callback: (status: string) => void): () => void;
+  onWhatsAppStatus(callback: (status: MessagingConnectionStatus) => void): () => void;
 
   getOpenAiBaseUrl(): Promise<string>;
   setOpenAiBaseUrl(baseUrl: string): Promise<void>;

@@ -10,6 +10,14 @@ import type { Migration } from './index.js';
 export const migration: Migration = {
   version: 17,
   up: (db: Database) => {
-    db.exec(`ALTER TABLE app_settings ADD COLUMN messaging_config TEXT DEFAULT NULL`);
+    const columns = db.prepare(`PRAGMA table_info(app_settings)`).all() as Array<{
+      name: string;
+    }>;
+    const hasMessagingConfig = columns.some((column) => {
+      return column.name === 'messaging_config';
+    });
+    if (!hasMessagingConfig) {
+      db.exec(`ALTER TABLE app_settings ADD COLUMN messaging_config TEXT DEFAULT NULL`);
+    }
   },
 };

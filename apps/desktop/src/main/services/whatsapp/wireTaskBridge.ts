@@ -10,6 +10,7 @@ import { TaskBridge, MAX_MESSAGE_LENGTH } from './taskBridge';
 import { createTaskId, createMessageId, type TaskMessage } from '@accomplish_ai/agent-core';
 import { getTaskManager } from '../../opencode/index.js';
 import { getStorage } from '../../store/storage';
+import { getLogCollector } from '../../logging';
 
 export { wireStatusListeners } from './whatsappStorageSync';
 
@@ -125,7 +126,7 @@ export function wireTaskBridge(service: WhatsAppService): { bridge: TaskBridge }
         },
       );
     } catch (err) {
-      console.error('[WhatsApp] Task creation failed:', err);
+      getLogCollector().logEnv('ERROR', '[WhatsApp] Task creation failed:', { error: String(err) });
       storage.saveTask({
         id: taskId,
         prompt,

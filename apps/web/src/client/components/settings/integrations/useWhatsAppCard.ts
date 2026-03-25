@@ -9,6 +9,19 @@ import { getAccomplish } from '@/lib/accomplish';
 
 const QR_EXPIRY_SECONDS = 60;
 
+const VALID_STATUSES = new Set([
+  'connecting',
+  'qr_ready',
+  'connected',
+  'disconnected',
+  'logged_out',
+  'reconnecting',
+]);
+
+function normalizeStatus(status: string): string {
+  return VALID_STATUSES.has(status) ? status : 'disconnected';
+}
+
 export interface WhatsAppCardState {
   config: { status: string; phoneNumber?: string; lastConnectedAt?: number } | null;
   loading: boolean;
@@ -88,6 +101,7 @@ export function useWhatsAppCard(): WhatsAppCardState & WhatsAppCardActions {
     const unsubQR = accomplish.onWhatsAppQR((qr: string) => {
       setQrCode(qr);
       setQrExpiresAt(Date.now() + QR_EXPIRY_SECONDS * 1000);
+      setError(null);
       if (connectTimeoutRef.current) {
         clearTimeout(connectTimeoutRef.current);
         connectTimeoutRef.current = null;
@@ -97,11 +111,13 @@ export function useWhatsAppCard(): WhatsAppCardState & WhatsAppCardActions {
     });
 
     const unsubStatus = accomplish.onWhatsAppStatus((status: string) => {
-      setConfig((prev) => (prev ? { ...prev, status } : { status }));
+      const nextStatus = normalizeStatus(status);
+      setConfig((prev) => (prev ? { ...prev, status: nextStatus } : { status: nextStatus }));
 
       if (status === 'connected') {
         setQrCode(null);
         setConnecting(false);
+        setError(null);
         if (qrTimerRef.current) { clearInterval(qrTimerRef.current); qrTimerRef.current = null; }
         if (connectTimeoutRef.current) { clearTimeout(connectTimeoutRef.current); connectTimeoutRef.current = null; }
         fetchConfig();
