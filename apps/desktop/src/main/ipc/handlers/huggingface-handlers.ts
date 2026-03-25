@@ -16,7 +16,10 @@ import {
   HF_RECOMMENDED_MODELS as HF_SUGGESTED_MODELS,
   deleteHuggingFaceModel,
 } from '../../providers/huggingface-local';
-import { listCachedModels as hfListCachedModels } from '../../providers/huggingface-local/model-manager';
+import {
+  listCachedModels as hfListCachedModels,
+  downloadModel,
+} from '../../providers/huggingface-local/model-manager';
 
 export function registerHuggingFaceHandlers(): void {
   const storage = getStorage();
@@ -41,16 +44,18 @@ export function registerHuggingFaceHandlers(): void {
     return testHuggingFaceConnection();
   });
 
-  handle(
-    'huggingface-local:download-model',
-    async (_event: IpcMainInvokeEvent, modelId: string) => {
-      if (typeof modelId !== 'string' || !modelId.trim()) {
-        return { success: false, error: 'Invalid model ID' };
+  handle('huggingface-local:download-model', async (event: IpcMainInvokeEvent, modelId: string) => {
+    if (typeof modelId !== 'string' || !modelId.trim()) {
+      return { success: false, error: 'Invalid model ID' };
+    }
+    return downloadModel(modelId.trim(), (progress: unknown) => {
+      try {
+        event.sender.send('huggingface-local:download-progress', progress);
+      } catch {
+        // Window may have been closed
       }
-      // Start server (which will download and load the model)
-      return startHuggingFaceServer(modelId.trim());
-    },
-  );
+    });
+  });
 
   handle('huggingface-local:list-models', async () => {
     const cached = await hfListCachedModels();

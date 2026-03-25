@@ -10,6 +10,7 @@ import http from 'http';
 import { app } from 'electron';
 import path from 'path';
 import { getStorage } from '../../store/storage';
+import { getLogCollector } from '../../logging';
 
 /**
  * Structure of a chat message in the conversation.
@@ -69,7 +70,7 @@ let startServerPromise: Promise<{ success: boolean; port?: number; error?: strin
  */
 async function loadModel(modelId: string): Promise<void> {
   if (state.loadedModelId === modelId && state.tokenizer && state.model) {
-    console.log(`[HF Server] Model ${modelId} already loaded`);
+    getLogCollector().logEnv('INFO', '[HF Server] Model ${modelId} already loaded');
     return;
   }
 
@@ -85,7 +86,7 @@ async function loadModel(modelId: string): Promise<void> {
     state.isLoading = true;
     // Capture stop flag at start so we can detect a concurrent stopServer() call
     const stoppedAtStart = state.isStopping;
-    console.log(`[HF Server] Loading model: ${modelId}`);
+    getLogCollector().logEnv('INFO', '[HF Server] Loading model: ${modelId}');
 
     try {
       const { env, AutoTokenizer, AutoModelForCausalLM } =
@@ -109,7 +110,10 @@ async function loadModel(modelId: string): Promise<void> {
           local_files_only: true,
         });
       } catch (err) {
-        console.warn(`[HF Server] Failed to load q4 model, trying fp32: ${err}`);
+        getLogCollector().logEnv(
+          'WARN',
+          `[HF Server] Failed to load q4 model, trying fp32: ${err}`,
+        );
         model = await AutoModelForCausalLM.from_pretrained(modelId, {
           cache_dir: cacheDir,
           dtype: 'fp32',
@@ -120,7 +124,10 @@ async function loadModel(modelId: string): Promise<void> {
       // If stopServer() was called while we were loading, dispose the freshly
       // created resources and skip state mutation to avoid stale references.
       if (state.isStopping || stoppedAtStart) {
-        console.log(`[HF Server] Stop requested during load of ${modelId}; discarding.`);
+        getLogCollector().logEnv(
+          'INFO',
+          '[HF Server] Stop requested during load of ${modelId}; discarding.',
+        );
         try {
           await model.dispose?.();
         } catch {
@@ -142,9 +149,11 @@ async function loadModel(modelId: string): Promise<void> {
       state.model = model;
 
       state.loadedModelId = modelId;
-      console.log(`[HF Server] Model loaded: ${modelId}`);
+      getLogCollector().logEnv('INFO', '[HF Server] Model loaded: ${modelId}');
     } catch (error) {
-      console.error(`[HF Server] Failed to load model: ${modelId}`, error);
+      getLogCollector().logEnv('ERROR', `[HF Server] Failed to load model: ${modelId}`, {
+        error: String(error),
+      });
       throw error;
     } finally {
       state.isLoading = false;
@@ -533,7 +542,7 @@ async function _startServerImpl(
         res.end(JSON.stringify({ error: { message: 'Not found', type: 'invalid_request' } }));
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (error: any) {
-        console.error('[HF Server] Request error:', error);
+        getLogCollector().logEnv('ERROR', '[HF Server] Request error:', { error: String(error) });
 
         if (error.message === 'PayloadTooLarge') {
           if (!res.headersSent) {
@@ -569,7 +578,10 @@ async function _startServerImpl(
       if (address && typeof address !== 'string') {
         state.server = server;
         state.port = address.port;
-        console.log(`[HF Server] Listening on http://127.0.0.1:${address.port}`);
+        getLogCollector().logEnv(
+          'INFO',
+          '[HF Server] Listening on http://127.0.0.1:${address.port}',
+        );
         // Persist the chosen port so clients can reconnect after restart
         try {
           const storage = getStorage();
@@ -578,7 +590,9 @@ async function _startServerImpl(
             storage.setHuggingFaceLocalConfig({ ...existingConfig, serverPort: address.port });
           }
         } catch (err) {
-          console.warn('[HF Server] Failed to persist port to config:', err);
+          getLogCollector().logEnv('WARN', '[HF Server] Failed to persist port to config:', {
+            error: String(err),
+          });
         }
         resolve({ success: true, port: address.port });
       } else {
@@ -587,7 +601,7 @@ async function _startServerImpl(
     });
 
     server.on('error', (error) => {
-      console.error('[HF Server] Server error:', error);
+      getLogCollector().logEnv('ERROR', '[HF Server] Server error:', { error: String(error) });
       resolve({ success: false, error: error.message });
     });
   });
@@ -610,7 +624,7 @@ export async function stopServer(): Promise<void> {
         (srv as any).closeAllConnections();
       }
       srv.close(() => {
-        console.log('[HF Server] Server stopped');
+        getLogCollector().logEnv('INFO', '[HF Server] Server stopped');
         resolve();
       });
     });
