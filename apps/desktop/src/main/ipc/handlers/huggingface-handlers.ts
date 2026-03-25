@@ -41,19 +41,16 @@ export function registerHuggingFaceHandlers(): void {
     return testHuggingFaceConnection();
   });
 
-  handle('huggingface-local:download-model', async (event: IpcMainInvokeEvent, modelId: string) => {
-    if (typeof modelId !== 'string' || !modelId.trim()) {
-      return { success: false, error: 'Invalid model ID' };
-    }
-    // Inline download with progress — re-uses startHuggingFaceServer which streams progress
-    return startHuggingFaceServer(modelId.trim(), (progress: unknown) => {
-      try {
-        event.sender.send('huggingface-local:download-progress', progress);
-      } catch {
-        // Window may have been closed
+  handle(
+    'huggingface-local:download-model',
+    async (_event: IpcMainInvokeEvent, modelId: string) => {
+      if (typeof modelId !== 'string' || !modelId.trim()) {
+        return { success: false, error: 'Invalid model ID' };
       }
-    });
-  });
+      // Start server (which will download and load the model)
+      return startHuggingFaceServer(modelId.trim());
+    },
+  );
 
   handle('huggingface-local:list-models', async () => {
     const cached = await hfListCachedModels();
