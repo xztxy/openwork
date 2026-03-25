@@ -49,7 +49,9 @@ function logMain(level: 'INFO' | 'WARN' | 'ERROR', msg: string, data?: Record<st
     if (l?.log) {
       l.log(level, 'main', msg, data);
     }
-  } catch (_e) { /* best-effort logging */ }
+  } catch (_e) {
+    /* best-effort logging */
+  }
 }
 
 if (process.argv.includes('--e2e-skip-auth')) {
@@ -320,14 +322,23 @@ if (!gotTheLock) {
       // Auto-start HuggingFace local server if enabled
       const hfConfig = storage.getHuggingFaceLocalConfig();
       if (hfConfig?.enabled && hfConfig.selectedModelId) {
-        logMain('INFO', `[Main] Auto-starting HuggingFace server for model: ${hfConfig.selectedModelId}`);
-        startHuggingFaceServer(hfConfig.selectedModelId).then((result) => {
-          if (!result.success) {
-            logMain('ERROR', '[Main] Failed to auto-start HuggingFace local server', { error: result.error });
-          }
-        }).catch((err: unknown) => {
-          logMain('ERROR', '[Main] Failed to auto-start HuggingFace local server (thrown)', { err: String(err) });
-        });
+        logMain(
+          'INFO',
+          `[Main] Auto-starting HuggingFace server for model: ${hfConfig.selectedModelId}`,
+        );
+        startHuggingFaceServer(hfConfig.selectedModelId)
+          .then((result) => {
+            if (!result.success) {
+              logMain('ERROR', '[Main] Failed to auto-start HuggingFace local server', {
+                error: result.error,
+              });
+            }
+          })
+          .catch((err: unknown) => {
+            logMain('ERROR', '[Main] Failed to auto-start HuggingFace local server (thrown)', {
+              err: String(err),
+            });
+          });
       }
     } catch (err) {
       logMain('ERROR', '[Main] Provider validation failed', { err: String(err) });
