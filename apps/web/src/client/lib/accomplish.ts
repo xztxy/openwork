@@ -32,9 +32,11 @@ import type {
   BrowserFramePayload,
   BrowserStatusPayload,
   BrowserNavigatePayload,
-  MessagingConnectionStatus,
 } from '@accomplish_ai/agent-core';
-import type { CloudBrowserConfig } from '@accomplish_ai/agent-core/common';
+import type {
+  CloudBrowserConfig,
+  MessagingConnectionStatus,
+} from '@accomplish_ai/agent-core/common';
 
 // Define the API interface
 interface AccomplishAPI {
