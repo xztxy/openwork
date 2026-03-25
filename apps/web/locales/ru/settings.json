@@ -58,7 +58,8 @@
     "nebius": "Nebius AI",
     "together": "Together AI",
     "fireworks": "Fireworks AI",
-    "groq": "Groq"
+    "groq": "Groq",
+    "huggingface-local": "HuggingFace Local"
   },
   "providerLabels": {
     "anthropic": "Модели Claude",
@@ -79,7 +80,8 @@
     "nebius": "Модели Llama и DeepSeek",
     "together": "Модели Llama и Mixtral",
     "fireworks": "Модели быстрого вывода",
-    "groq": "Сверхбыстрые модели Llama"
+    "groq": "Сверхбыстрые модели Llama",
+    "huggingface-local": "Local inference"
   },
   "status": {
     "connected": "Подключено",
@@ -446,5 +448,13 @@
   "baseUrl": {
     "title": "Базовый URL",
     "description": "Оставьте пустым, чтобы использовать URL по умолчанию."
+  },
+  "huggingfaceLocal": {
+    "serverUrl": "HuggingFace Local Server URL",
+    "serverHint": "Run a local HuggingFace Transformers.js inference server with ONNX Runtime",
+    "selectModel": "Please select a model",
+    "selectModelPlaceholder": "Select a model...",
+    "infoBannerTitle": "Local inference with Transformers.js",
+    "infoBannerDescription": "Models run locally using ONNX Runtime. Smaller quantized models (Q4) are recommended for faster inference."
   }
 }

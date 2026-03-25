@@ -58,7 +58,8 @@
     "nebius": "Nebius AI",
     "together": "Together AI",
     "fireworks": "Fireworks AI",
-    "groq": "Groq"
+    "groq": "Groq",
+    "huggingface-local": "HuggingFace Local"
   },
   "providerLabels": {
     "anthropic": "Claude 系列模型",
@@ -79,7 +80,8 @@
     "nebius": "Llama 和 DeepSeek 模型",
     "together": "Llama 和 Mixtral 模型",
     "fireworks": "快速推理模型",
-    "groq": "超快速 Llama 模型"
+    "groq": "超快速 Llama 模型",
+    "huggingface-local": "Local inference"
   },
   "status": {
     "connected": "已连接",
@@ -446,5 +448,13 @@
   "baseUrl": {
     "title": "基础 URL",
     "description": "留空以使用默认 URL。"
+  },
+  "huggingfaceLocal": {
+    "serverUrl": "HuggingFace Local Server URL",
+    "serverHint": "Run a local HuggingFace Transformers.js inference server with ONNX Runtime",
+    "selectModel": "Please select a model",
+    "selectModelPlaceholder": "Select a model...",
+    "infoBannerTitle": "Local inference with Transformers.js",
+    "infoBannerDescription": "Models run locally using ONNX Runtime. Smaller quantized models (Q4) are recommended for faster inference."
   }
 }
