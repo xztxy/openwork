@@ -79,7 +79,7 @@ export function useWhatsAppCard(): WhatsAppCardState & WhatsAppCardActions {
       const result = await accomplish.getWhatsAppConfig();
       if (result?.enabled) {
         setConfig({
-          status: result.status,
+          status: normalizeStatus(result.status),
           phoneNumber: result.phoneNumber,
           lastConnectedAt: result.lastConnectedAt,
         });
@@ -114,7 +114,7 @@ export function useWhatsAppCard(): WhatsAppCardState & WhatsAppCardActions {
       const nextStatus = normalizeStatus(status);
       setConfig((prev) => (prev ? { ...prev, status: nextStatus } : { status: nextStatus }));
 
-      if (status === 'connected') {
+      if (nextStatus === 'connected') {
         setQrCode(null);
         setConnecting(false);
         setError(null);
