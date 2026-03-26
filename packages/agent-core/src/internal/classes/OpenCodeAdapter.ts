@@ -11,7 +11,6 @@ import {
   CompletionEnforcer,
   CompletionEnforcerCallbacks,
 } from '../../opencode/completion/index.js';
-import { isNonTaskContinuationToolName } from '../../opencode/tool-classification.js';
 import type { TaskConfig, Task, TaskMessage, TaskResult } from '../../common/types/task.js';
 import type { OpenCodeMessage } from '../../common/types/opencode.js';
 import type { PermissionRequest } from '../../common/types/permission.js';
@@ -24,6 +23,21 @@ import { serializeError } from '../../utils/error.js';
 import { getOAuthProviderDisplayName, isOAuthProviderId } from '../../common/types/connector.js';
 import { CONNECTOR_AUTH_REQUIRED_MARKER } from '../../common/constants.js';
 import { createConsoleLogger } from '../../utils/logging.js';
+import {
+  generateTaskId,
+  generateMessageId,
+  generateRequestId,
+  escapeShellArg,
+  buildShellCommand,
+  buildPtySpawnArgs,
+  isStartTaskTool,
+  isExemptTool,
+  isRequestConnectorAuthTool,
+  isNonTaskContinuationTool,
+  appendToCircularBuffer,
+} from './adapter/adapter-utils.js';
+import { parseBrowserFrames } from './adapter/browser-frame-parser.js';
+import { buildPlanMessage, type StartTaskInput } from './adapter/message-synthesis.js';
 
 const log = createConsoleLogger({ prefix: 'OpenCodeAdapter' });
 
@@ -135,11 +149,11 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   private static readonly OUTPUT_BUFFER_MAX = 4096;
 
   private appendToOutputBuffer(data: string): void {
-    if (data.length >= OpenCodeAdapter.OUTPUT_BUFFER_MAX) {
-      this.outputBuffer = data.slice(-OpenCodeAdapter.OUTPUT_BUFFER_MAX);
-    } else {
-      this.outputBuffer = (this.outputBuffer + data).slice(-OpenCodeAdapter.OUTPUT_BUFFER_MAX);
-    }
+    this.outputBuffer = appendToCircularBuffer(
+      this.outputBuffer,
+      data,
+      OpenCodeAdapter.OUTPUT_BUFFER_MAX,
+    );
   }
 
   /**
@@ -155,53 +169,11 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
    * Contributed by samarthsinh2660 (PR #414) for ENG-695.
    */
   private checkForBrowserFrame(data: string): string {
-    try {
-      const combined = `${this.browserFrameBuffer}${data}`;
-      const lines = combined.split('\n');
-      // Keep the incomplete trailing chunk for the next call
-      this.browserFrameBuffer = lines.pop() ?? '';
-
-      const passthrough: string[] = [];
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) {
-          passthrough.push(line);
-          continue;
-        }
-
-        let isBrowserFrame = false;
-        try {
-          const parsed = JSON.parse(trimmed) as {
-            type?: string;
-            frame?: string;
-            pageName?: string;
-            timestamp?: number;
-          };
-          if (parsed.type === 'browser-frame' && parsed.frame && parsed.pageName) {
-            const framePayload: BrowserFramePayload = {
-              pageName: parsed.pageName,
-              frame: parsed.frame,
-              timestamp: parsed.timestamp ?? Date.now(),
-            };
-            this.emit('browser-frame', framePayload);
-            isBrowserFrame = true;
-          }
-        } catch {
-          // Not JSON or not a browser-frame — pass through as-is
-        }
-
-        if (!isBrowserFrame) {
-          passthrough.push(line);
-        }
-      }
-
-      // Re-join lines; trailing incomplete chunk stays in browserFrameBuffer
-      return passthrough.join('\n');
-    } catch {
-      // Ignore errors in frame detection to avoid breaking the main data path
-      return data;
-    }
+    const result = parseBrowserFrames(data, this.browserFrameBuffer, (payload) => {
+      this.emit('browser-frame', payload);
+    });
+    this.browserFrameBuffer = result.buffer;
+    return result.output;
   }
 
   private options: AdapterOptions;
@@ -556,30 +528,11 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   }
 
   private escapeShellArg(arg: string): string {
-    if (this.options.platform === 'win32') {
-      // Quote if the argument contains spaces, double-quotes, or any cmd.exe
-      // metacharacter (&, |, <, >, ^, %) that would be misinterpreted when
-      // executing via cmd.exe /s /c. See: https://github.com/accomplish-ai/accomplish/issues/596
-      if (/[ "&|<>^%]/.test(arg)) {
-        // Double embedded quotes per cmd.exe rules; escape % as ^% to prevent
-        // environment variable expansion (e.g. %PATH%) inside the quoted string.
-        const escaped = arg.replace(/"/g, '""').replace(/%/g, '^%');
-        return `"${escaped}"`;
-      }
-      return arg;
-    } else {
-      const needsEscaping = ["'", ' ', '$', '`', '\\', '"', '\n'].some((c) => arg.includes(c));
-      if (needsEscaping) {
-        return `'${arg.replace(/'/g, "'\\''")}'`;
-      }
-      return arg;
-    }
+    return escapeShellArg(arg, this.options.platform);
   }
 
   private buildShellCommand(command: string, args: string[]): string {
-    const escapedCommand = this.escapeShellArg(command);
-    const escapedArgs = args.map((arg) => this.escapeShellArg(arg));
-    return [escapedCommand, ...escapedArgs].join(' ');
+    return buildShellCommand(command, args, this.options.platform);
   }
 
   private setupStreamParsing(): void {
@@ -998,60 +951,36 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   }
 
   private generateTaskId(): string {
-    return `task_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    return generateTaskId();
   }
 
   private generateMessageId(): string {
-    return `msg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    return generateMessageId();
   }
 
   private generateRequestId(): string {
-    return `req_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    return generateRequestId();
   }
 
   private isStartTaskTool(toolName: string): boolean {
-    return toolName === 'start_task' || toolName.endsWith('_start_task');
+    return isStartTaskTool(toolName);
   }
 
   private isExemptTool(toolName: string): boolean {
-    if (toolName === 'todowrite' || toolName.endsWith('_todowrite')) {
-      return true;
-    }
-    if (this.isStartTaskTool(toolName)) {
-      return true;
-    }
-    return false;
+    return isExemptTool(toolName);
   }
 
   private isRequestConnectorAuthTool(toolName: string): boolean {
-    return toolName === 'request_connector_auth' || toolName.endsWith('_request_connector_auth');
+    return isRequestConnectorAuthTool(toolName);
   }
 
   private isNonTaskContinuationTool(toolName: string): boolean {
-    return isNonTaskContinuationToolName(toolName);
+    return isNonTaskContinuationTool(toolName);
   }
 
   private emitPlanMessage(input: StartTaskInput, sessionId: string): void {
-    const verificationSection = input.verification?.length
-      ? `\n\n**Verification:**\n${input.verification.map((v, i) => `${i + 1}. ${v}`).join('\n')}`
-      : '';
-    const skillsSection = input.skills?.length ? `\n\n**Skills:** ${input.skills.join(', ')}` : '';
-    const planText = `**Plan:**\n\n**Goal:** ${input.goal}\n\n**Steps:**\n${input.steps?.map((s, i) => `${i + 1}. ${s}`).join('\n') ?? ''}${verificationSection}${skillsSection}`;
-
-    const syntheticMessage: OpenCodeMessage = {
-      type: 'text',
-      timestamp: Date.now(),
-      sessionID: sessionId,
-      part: {
-        id: this.generateMessageId(),
-        sessionID: sessionId,
-        messageID: this.generateMessageId(),
-        type: 'text',
-        text: planText,
-      },
-    } as import('../../common/types/opencode.js').OpenCodeTextMessage;
-
-    this.emit('message', syntheticMessage);
+    const message = buildPlanMessage(input, sessionId, () => this.generateMessageId());
+    this.emit('message', message);
     log.info('[OpenCode Adapter] Emitted synthetic plan message');
   }
 
@@ -1143,41 +1072,8 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   }
 
   private buildPtySpawnArgs(command: string, args: string[]): { file: string; args: string[] } {
-    if (this.options.platform === 'win32') {
-      if (!command.toLowerCase().endsWith('.exe')) {
-        throw new Error(`Windows CLI command must resolve to an .exe path. Received: ${command}`);
-      }
-
-      // On Windows, spawn the opencode .exe directly in node-pty without a shell wrapper.
-      // Passing args as an array avoids all cmd.exe / PowerShell quoting issues:
-      // the OS hands each element to the process as a raw argv entry regardless
-      // of what characters it contains (double-quotes, %, ^, &, newlines, etc.).
-      // See: https://github.com/accomplish-ai/accomplish/issues/596
-      return { file: command, args };
-    }
-
-    const shell =
-      this.options.isPackaged && this.options.platform === 'darwin'
-        ? '/bin/sh'
-        : process.env.SHELL ||
-          (fs.existsSync('/bin/bash')
-            ? '/bin/bash'
-            : fs.existsSync('/bin/zsh')
-              ? '/bin/zsh'
-              : '/bin/sh');
-
-    const fullCommand = this.buildShellCommand(command, args);
-    return { file: shell, args: ['-c', fullCommand] };
+    return buildPtySpawnArgs(command, args, this.options.platform, this.options.isPackaged);
   }
-}
-
-interface StartTaskInput {
-  original_request: string;
-  needs_planning: boolean;
-  goal?: string;
-  steps?: string[];
-  verification?: string[];
-  skills: string[];
 }
 
 export function createAdapter(options: AdapterOptions, taskId?: string): OpenCodeAdapter {

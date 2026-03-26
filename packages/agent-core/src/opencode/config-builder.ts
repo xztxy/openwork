@@ -1,5 +1,3 @@
-import path from 'path';
-import fs from 'fs';
 import type {
   ZaiCredentials,
   VertexProviderCredentials,
@@ -24,17 +22,10 @@ import {
   getSelectedModel,
 } from '../storage/repositories/index.js';
 import { createConsoleLogger } from '../utils/logging.js';
+import { OPENAI_COMPATIBLE_PROVIDER_IDS } from './config-auth-sync.js';
+export { syncApiKeysToOpenCodeAuth } from './config-auth-sync.js';
 
 const log = createConsoleLogger({ prefix: 'OpenCodeConfigBuilder' });
-
-/** Providers that use the @ai-sdk/openai-compatible adapter */
-const OPENAI_COMPATIBLE_PROVIDER_IDS = [
-  'nebius',
-  'together',
-  'fireworks',
-  'groq',
-  'venice',
-] as const;
 
 /**
  * Paths required for config generation (Electron-specific resolution stays in desktop)
@@ -784,56 +775,4 @@ export async function buildProviderConfigs(
   }
 
   return { providerConfigs, enabledProviders, modelOverride };
-}
-
-const AUTH_KEY_MAPPING: Record<string, string> = {
-  deepseek: 'deepseek',
-  zai: 'zai-coding-plan',
-  minimax: 'minimax',
-  ...Object.fromEntries(OPENAI_COMPATIBLE_PROVIDER_IDS.map((id) => [id, id])),
-};
-
-/**
- * Syncs API keys to OpenCode auth.json file.
- *
- * OpenCode auth.json keys must match provider IDs; the mapping bridges internal IDs to those keys.
- *
- * @param authPath - Path to the auth.json file
- * @param apiKeys - Record of provider IDs to API keys (null values are ignored)
- */
-export async function syncApiKeysToOpenCodeAuth(
-  authPath: string,
-  apiKeys: Record<string, string | null | undefined>,
-): Promise<void> {
-  const authDir = path.dirname(authPath);
-
-  if (!fs.existsSync(authDir)) {
-    fs.mkdirSync(authDir, { recursive: true });
-  }
-
-  let auth: Record<string, { type: string; key: string }> = {};
-  if (fs.existsSync(authPath)) {
-    try {
-      auth = JSON.parse(fs.readFileSync(authPath, 'utf-8'));
-    } catch (_e) {
-      log.warn('[OpenCode Auth] Failed to parse existing auth.json, creating new one');
-      auth = {};
-    }
-  }
-
-  let updated = false;
-
-  for (const [internalId, authId] of Object.entries(AUTH_KEY_MAPPING)) {
-    const key = apiKeys[internalId];
-    if (key && (!auth[authId] || auth[authId].key !== key)) {
-      auth[authId] = { type: 'api', key };
-      updated = true;
-      log.info(`[OpenCode Auth] Synced ${internalId} API key`);
-    }
-  }
-
-  if (updated) {
-    fs.writeFileSync(authPath, JSON.stringify(auth, null, 2));
-    log.info(`[OpenCode Auth] Updated auth.json at: ${authPath}`);
-  }
 }
