@@ -84,6 +84,7 @@ export function ExecutionHeader({ prompt, status }: { prompt: string; status: st
             variant="ghost"
             size="icon"
             onClick={() => navigate('/')}
+            aria-label="Back"
             className="shrink-0 no-drag"
           >
             <ArrowLeft className="h-4 w-4" />

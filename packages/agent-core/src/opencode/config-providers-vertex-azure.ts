@@ -62,7 +62,8 @@ export async function buildVertexConfig(ctx: ProviderBuildContext): Promise<Prov
   };
   const vertexModels: Record<string, ProviderModelConfig> = {};
   if (activeModel?.provider === 'vertex' && activeModel.model) {
-    const modelId = activeModel.model.replace(/^vertex\/[^/]+\//, '');
+    // Normalize: strip any leading "vertex/" prefix (including "vertex/<segment>/")
+    const modelId = activeModel.model.replace(/^vertex\/(?:[^/]+\/)?/, '');
     vertexModels[modelId] = { name: modelId, tools: true };
   }
   log.info('[OpenCode Config Builder] Vertex AI configured:', {
@@ -71,7 +72,7 @@ export async function buildVertexConfig(ctx: ProviderBuildContext): Promise<Prov
   });
   let modelOverride: { model: string; smallModel: string } | undefined;
   if (activeModel?.provider === 'vertex' && activeModel.model) {
-    const vertexModelId = activeModel.model.replace(/^vertex\/[^/]+\//, '');
+    const vertexModelId = activeModel.model.replace(/^vertex\/(?:[^/]+\/)?/, '');
     modelOverride = { model: `vertex/${vertexModelId}`, smallModel: `vertex/${vertexModelId}` };
   }
   return {
@@ -99,13 +100,21 @@ export async function buildAzureFoundryConfig(
     azureFoundryProvider.credentials.type === 'azure-foundry'
   ) {
     const creds = azureFoundryProvider.credentials;
-    const config = await buildAzureFoundryProviderConfig(
-      creds.endpoint,
-      creds.deploymentName,
-      creds.authMethod,
-      getApiKey,
-      azureFoundryToken,
-    );
+    let config: ProviderConfig | null = null;
+    try {
+      config = await buildAzureFoundryProviderConfig(
+        creds.endpoint,
+        creds.deploymentName,
+        creds.authMethod,
+        getApiKey,
+        azureFoundryToken,
+      );
+    } catch (error) {
+      log.error('[OpenCode Config Builder] Azure Foundry config build failed:', {
+        error: String(error),
+      });
+      return { configs: [], enableToAdd: [] };
+    }
     if (config) {
       log.info('[OpenCode Config Builder] Azure Foundry configured:', {
         deployment: creds.deploymentName,
@@ -119,13 +128,21 @@ export async function buildAzureFoundryConfig(
   // Legacy path
   const azureFoundryConfig = getAzureFoundryConfig();
   if (azureFoundryConfig?.enabled && activeModel?.provider === 'azure-foundry') {
-    const config = await buildAzureFoundryProviderConfig(
-      azureFoundryConfig.baseUrl,
-      azureFoundryConfig.deploymentName || 'default',
-      azureFoundryConfig.authType,
-      getApiKey,
-      azureFoundryToken,
-    );
+    let config: ProviderConfig | null = null;
+    try {
+      config = await buildAzureFoundryProviderConfig(
+        azureFoundryConfig.baseUrl,
+        azureFoundryConfig.deploymentName || 'default',
+        azureFoundryConfig.authType,
+        getApiKey,
+        azureFoundryToken,
+      );
+    } catch (error) {
+      log.error('[OpenCode Config Builder] Azure Foundry (legacy) config build failed:', {
+        error: String(error),
+      });
+      return { configs: [], enableToAdd: [] };
+    }
     if (config) {
       log.info('[OpenCode Config Builder] Azure Foundry (legacy) configured:', {
         deployment: azureFoundryConfig.deploymentName,
