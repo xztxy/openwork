@@ -16,6 +16,7 @@ import { AboutTab } from '@/components/settings/AboutTab';
 import { GeneralTab } from '@/components/settings/GeneralTab';
 import { SandboxSection } from '@/components/settings/SandboxSection';
 import { ConnectorsPanel } from '@/components/settings/connectors';
+import { IntegrationsPanel } from '@/components/settings/integrations';
 import { DaemonPanel } from '@/components/settings/DaemonPanel';
 import { CloudBrowsersPanel } from '@/components/settings/CloudBrowsersPanel';
 import {
@@ -27,6 +28,7 @@ import {
   Robot,
   FolderSimple,
   Globe,
+  ChatCircle,
   GearSix,
 } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
@@ -39,6 +41,7 @@ const TABS = [
   { id: 'daemon' as const, labelKey: 'tabs.daemon', icon: Robot },
   { id: 'browsers' as const, labelKey: 'tabs.browsers', icon: Globe },
   { id: 'workspaces' as const, labelKey: 'tabs.workspaces', icon: FolderSimple },
+  { id: 'integrations' as const, labelKey: 'tabs.integrations', icon: ChatCircle },
   { id: 'voice' as const, labelKey: 'tabs.voiceInput', icon: Microphone },
   { id: 'general' as const, labelKey: 'tabs.general', icon: GearSix },
   { id: 'about' as const, labelKey: 'tabs.about', icon: Info },
@@ -63,6 +66,7 @@ interface SettingsDialogProps {
     | 'daemon'
     | 'browsers'
     | 'workspaces'
+    | 'integrations'
     | 'general'
     | 'about';
 }
@@ -87,6 +91,7 @@ export function SettingsDialog({
     | 'daemon'
     | 'browsers'
     | 'workspaces'
+    | 'integrations'
     | 'general'
     | 'about'
   >(initialTab);
@@ -491,6 +496,13 @@ export function SettingsDialog({
               {activeTab === 'browsers' && (
                 <div className="space-y-6">
                   <CloudBrowsersPanel />
+                </div>
+              )}
+
+              {/* Integrations Tab (ENG-684) */}
+              {activeTab === 'integrations' && (
+                <div className="space-y-6">
+                  <IntegrationsPanel />
                 </div>
               )}
 

@@ -17,6 +17,7 @@ import type {
 import type { McpConnector, ConnectorStatus, OAuthTokens } from '../common/types/connector.js';
 import type { SandboxConfig } from '../common/types/sandbox.js';
 import type { CloudBrowserConfig } from '../common/types/cloud-browser.js';
+import type { MessagingConfig } from '../common/types/messaging.js';
 import type { BlocklistEntry } from '../common/types/desktop.js';
 
 /** Options for creating a Storage instance */
@@ -164,6 +165,10 @@ export interface AppSettingsAPI {
   getCloudBrowserConfig(): CloudBrowserConfig | null;
   /** Set cloud browser configuration */
   setCloudBrowserConfig(config: CloudBrowserConfig | null): void;
+  /** Get messaging integration configuration (ENG-684) */
+  getMessagingConfig(): MessagingConfig | null;
+  /** Set messaging integration configuration (ENG-684) */
+  setMessagingConfig(config: MessagingConfig | null): void;
   /** Get whether desktop notifications are enabled */
   getNotificationsEnabled(): boolean;
   /** Enable or disable desktop notifications */
@@ -312,4 +317,5 @@ export type {
   ConnectorStatus,
   OAuthTokens,
   CloudBrowserConfig,
+  MessagingConfig,
 };

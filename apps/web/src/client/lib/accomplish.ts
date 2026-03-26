@@ -36,7 +36,10 @@ import type {
   BrowserStatusPayload,
   BrowserNavigatePayload,
 } from '@accomplish_ai/agent-core';
-import type { CloudBrowserConfig } from '@accomplish_ai/agent-core/common';
+import type {
+  CloudBrowserConfig,
+  MessagingConnectionStatus,
+} from '@accomplish_ai/agent-core/common';
 
 // Define the API interface
 interface AccomplishAPI {
@@ -110,6 +113,20 @@ interface AccomplishAPI {
   getAppSettings(): Promise<{ debugMode: boolean; onboardingComplete: boolean; theme: string }>;
   getCloudBrowserConfig(): Promise<CloudBrowserConfig | null>;
   setCloudBrowserConfig(config: CloudBrowserConfig | null): Promise<void>;
+
+  getWhatsAppConfig(): Promise<{
+    providerId: string;
+    enabled: boolean;
+    status: MessagingConnectionStatus;
+    phoneNumber?: string;
+    lastConnectedAt?: number;
+  } | null>;
+  connectWhatsApp(): Promise<void>;
+  disconnectWhatsApp(): Promise<void>;
+  setWhatsAppEnabled(enabled: boolean): Promise<void>;
+  onWhatsAppQR(callback: (qr: string) => void): () => void;
+  onWhatsAppStatus(callback: (status: MessagingConnectionStatus) => void): () => void;
+
   getOpenAiBaseUrl(): Promise<string>;
   setOpenAiBaseUrl(baseUrl: string): Promise<void>;
   getOpenAiOauthStatus(): Promise<{ connected: boolean; expires?: number }>;
@@ -437,7 +454,6 @@ interface AccomplishAPI {
   onAuthError?(callback: (data: { providerId: string; message: string }) => void): () => void;
 
   // Browser Preview (ENG-695)
-  // Contributed by dhruvawani17 (PR #489), samarthsinh2660 (PR #414), david-mamani (PR #553)
   onBrowserFrame?(callback: (event: BrowserFramePayload & { taskId: string }) => void): () => void;
   onBrowserNavigate?(
     callback: (event: BrowserNavigatePayload & { taskId: string; pageName: string }) => void,

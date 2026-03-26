@@ -25,6 +25,7 @@ import { FutureSchemaError } from '@accomplish_ai/agent-core';
 import { initThoughtStreamApi, startThoughtStreamServer } from './thought-stream-api';
 import type { ProviderId } from '@accomplish_ai/agent-core';
 import { getTaskManager, disposeTaskManager, cleanupVertexServiceAccountKey } from './opencode';
+import { disposeWhatsAppService } from './services/whatsapp';
 import { stopAllBrowserPreviewStreams } from './services/browserPreview';
 import { oauthBrowserFlow } from './opencode/auth-browser';
 import { slackMcpOAuthFlow } from './opencode/slack-auth';
@@ -464,6 +465,12 @@ app.on('before-quit', (event) => {
       disposeTaskManager(); // Also cleans up proxies internally
     } catch (error: unknown) {
       logger?.logEnv('ERROR', `[Main] Error during disposeTaskManager: ${String(error)}`);
+    }
+    // Dispose WhatsApp service (ENG-684) — best-effort, non-fatal
+    try {
+      disposeWhatsAppService();
+    } catch (error: unknown) {
+      logger?.logEnv('ERROR', `[Main] Error during disposeWhatsAppService: ${String(error)}`);
     }
     // Stop HuggingFace inference server so its port is released (ENG-687)
     try {
