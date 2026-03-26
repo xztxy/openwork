@@ -2,28 +2,17 @@ import path from 'path';
 import fs from 'fs';
 import type { ProviderId } from '../common/types/providerSettings.js';
 import type { Skill } from '../common/types/skills.js';
-import { OPENCODE_SLACK_MCP_SERVER_URL, OPENCODE_SLACK_MCP_CLIENT_ID } from './auth.js';
-import { MCP_TOOL_TIMEOUT_MS } from '../common/constants.js';
 import { createConsoleLogger } from '../utils/logging.js';
 import {
   getPlatformEnvironmentInstructions,
   ACCOMPLISH_SYSTEM_PROMPT_TEMPLATE,
 } from './system-prompt.js';
+import { buildMcpServers } from './generator-mcp.js';
+export type { BrowserConfig, McpServerConfig } from './generator-mcp.js';
 
 const log = createConsoleLogger({ prefix: 'OpenCodeConfig' });
 
 export const ACCOMPLISH_AGENT_NAME = 'accomplish';
-
-export interface BrowserConfig {
-  /** 'builtin' = dev-browser HTTP server (default), 'remote' = connect to CDP endpoint, 'none' = no browser */
-  mode: 'builtin' | 'remote' | 'none';
-  /** For 'remote': the CDP endpoint URL */
-  cdpEndpoint?: string;
-  /** For 'remote': auth headers (e.g. { 'X-CDP-Secret': '...' }) */
-  cdpHeaders?: Record<string, string>;
-  /** For 'builtin': run headless */
-  headless?: boolean;
-}
 
 export interface ConfigGeneratorOptions {
   platform: NodeJS.Platform;
@@ -48,7 +37,7 @@ export interface ConfigGeneratorOptions {
   smallModel?: string;
   enabledProviders?: string[];
   /** Browser configuration. Defaults to { mode: 'builtin' } */
-  browser?: BrowserConfig;
+  browser?: import('./generator-mcp.js').BrowserConfig;
   /** Connected MCP remote servers with OAuth access tokens */
   connectors?: Array<{
     id: string;
@@ -80,27 +69,10 @@ export interface ProviderModelConfig {
 
 export interface GeneratedConfig {
   systemPrompt: string;
-  mcpServers: Record<string, McpServerConfig>;
+  mcpServers: Record<string, import('./generator-mcp.js').McpServerConfig>;
   environment: Record<string, string>;
   config: OpenCodeConfigFile;
   configPath: string;
-}
-
-interface McpServerConfig {
-  type?: 'local' | 'remote';
-  command?: string[];
-  url?: string;
-  headers?: Record<string, string>;
-  enabled?: boolean;
-  environment?: Record<string, string>;
-  timeout?: number;
-  oauth?:
-    | false
-    | {
-        clientId?: string;
-        clientSecret?: string;
-        scope?: string;
-      };
 }
 
 interface AgentConfig {
@@ -117,29 +89,10 @@ interface OpenCodeConfigFile {
   enabled_providers?: string[];
   permission?: string | Record<string, string | Record<string, string>>;
   agent?: Record<string, AgentConfig>;
-  mcp?: Record<string, McpServerConfig>;
+  mcp?: Record<string, import('./generator-mcp.js').McpServerConfig>;
   provider?: Record<string, Omit<ProviderConfig, 'id'>>;
   plugin?: string[];
   experimental?: Record<string, unknown>;
-}
-
-function resolveMcpCommand(
-  mcpToolsPath: string,
-  mcpName: string,
-  distRelPath: string,
-  nodePath: string,
-): string[] {
-  const mcpDir = path.join(mcpToolsPath, mcpName);
-  const distPath = path.join(mcpDir, distRelPath);
-
-  if (!fs.existsSync(distPath)) {
-    throw new Error(
-      `[OpenCode Config] Missing MCP dist entry: ${distPath}. ` +
-        'Run "pnpm -F @accomplish/desktop build:mcp-tools:dev" before launching.',
-    );
-  }
-
-  return [nodePath, distPath];
 }
 
 export function generateConfig(options: ConfigGeneratorOptions): GeneratedConfig {
@@ -223,116 +176,15 @@ ${options.knowledgeNotes}
     throw new Error(`[OpenCode Config] Missing bundled Node.js executable: ${nodeExe}`);
   }
 
-  const mcpServers: Record<string, McpServerConfig> = {
-    slack: {
-      type: 'remote',
-      url: OPENCODE_SLACK_MCP_SERVER_URL,
-      oauth: {
-        clientId: OPENCODE_SLACK_MCP_CLIENT_ID,
-      },
-    },
-    'file-permission': {
-      type: 'local',
-      command: resolveMcpCommand(mcpToolsPath, 'file-permission', 'dist/index.mjs', nodeExe),
-      enabled: true,
-      environment: {
-        PERMISSION_API_PORT: String(permissionApiPort),
-      },
-      timeout: 30000,
-    },
-    'ask-user-question': {
-      type: 'local',
-      command: resolveMcpCommand(mcpToolsPath, 'ask-user-question', 'dist/index.mjs', nodeExe),
-      enabled: true,
-      environment: {
-        QUESTION_API_PORT: String(questionApiPort),
-      },
-      timeout: 600000, // 10 minutes — user needs time to read and respond
-    },
-    'request-connector-auth': {
-      type: 'local',
-      command: resolveMcpCommand(mcpToolsPath, 'request-connector-auth', 'dist/index.mjs', nodeExe),
-      enabled: true,
-      timeout: MCP_TOOL_TIMEOUT_MS,
-    },
-    'complete-task': {
-      type: 'local',
-      command: resolveMcpCommand(mcpToolsPath, 'complete-task', 'dist/index.mjs', nodeExe),
-      enabled: true,
-      timeout: 30000,
-    },
-    'start-task': {
-      type: 'local',
-      command: resolveMcpCommand(mcpToolsPath, 'start-task', 'dist/index.mjs', nodeExe),
-      enabled: true,
-      timeout: 30000,
-    },
-    'desktop-control': {
-      type: 'local',
-      command: resolveMcpCommand(mcpToolsPath, 'desktop-control', 'dist/index.mjs', nodeExe),
-      enabled: true,
-      environment: {
-        PERMISSION_API_PORT: String(permissionApiPort),
-      },
-      timeout: 60000,
-    },
-  };
-
-  // Conditionally register dev-browser-mcp based on browser config
-  const browserConfig = options.browser ?? { mode: 'builtin' };
-
-  if (browserConfig.mode !== 'none') {
-    const browserEnv: Record<string, string> = {};
-
-    if (browserConfig.mode === 'remote') {
-      if (browserConfig.cdpEndpoint) {
-        browserEnv.CDP_ENDPOINT = browserConfig.cdpEndpoint;
-      }
-      if (browserConfig.cdpHeaders) {
-        for (const [key, value] of Object.entries(browserConfig.cdpHeaders)) {
-          if (key === 'X-CDP-Secret') {
-            browserEnv.CDP_SECRET = value;
-          }
-        }
-      }
-    }
-
-    mcpServers['dev-browser-mcp'] = {
-      type: 'local',
-      command: resolveMcpCommand(mcpToolsPath, 'dev-browser-mcp', 'dist/index.mjs', nodeExe),
-      enabled: true,
-      ...(Object.keys(browserEnv).length > 0 && { environment: browserEnv }),
-      timeout: 30000,
-    };
-  }
-
-  // Add connected MCP connectors as remote servers
-  if (options.connectors) {
-    for (const connector of options.connectors) {
-      // Use short sanitized name + ID suffix as key to prevent collisions
-      const sanitized = connector.name
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, '-')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '')
-        .slice(0, 20);
-      const baseName = sanitized || 'mcp-remote';
-      const idSuffix = connector.id.slice(0, 6);
-      let key = `connector-${baseName}-${idSuffix}`;
-      // Guard against unlikely collision with existing keys
-      if (mcpServers[key]) {
-        let i = 1;
-        while (mcpServers[`${key}-${i}`]) i += 1;
-        key = `${key}-${i}`;
-      }
-      mcpServers[key] = {
-        type: 'remote',
-        url: connector.url,
-        headers: { Authorization: `Bearer ${connector.accessToken}` },
-        enabled: true,
-      };
-    }
-  }
+  const browserConfig = options.browser ?? { mode: 'builtin' as const };
+  const mcpServers = buildMcpServers({
+    mcpToolsPath,
+    nodeExe,
+    permissionApiPort,
+    questionApiPort,
+    browserConfig,
+    connectors: options.connectors,
+  });
 
   // Fill browser-specific template sections based on mode
   const hasBrowser = browserConfig.mode !== 'none';
@@ -408,10 +260,7 @@ Example too terse (avoid):
     ...(smallModel && { small_model: smallModel }),
     default_agent: ACCOMPLISH_AGENT_NAME,
     enabled_providers: enabledProviders,
-    permission: {
-      '*': 'allow',
-      todowrite: 'allow',
-    },
+    permission: { '*': 'allow', todowrite: 'allow' },
     provider: Object.keys(providerConfig).length > 0 ? providerConfig : undefined,
     plugin: ['@tarquinen/opencode-dcp@^2.0.0'],
     agent: {
@@ -448,74 +297,9 @@ Example too terse (avoid):
     environment.NODE_BIN_PATH = bundledNodeBinPath;
   }
 
-  return {
-    systemPrompt,
-    mcpServers,
-    environment,
-    config,
-    configPath,
-  };
+  return { systemPrompt, mcpServers, environment, config, configPath };
 }
 
 export function getOpenCodeConfigPath(userDataPath: string): string {
   return path.join(userDataPath, 'opencode', 'opencode.json');
-}
-
-export interface BuildCliArgsOptions {
-  prompt: string;
-  sessionId?: string;
-  selectedModel?: {
-    provider: string;
-    model: string;
-  } | null;
-}
-
-export function buildCliArgs(options: BuildCliArgsOptions): string[] {
-  const { prompt, sessionId, selectedModel } = options;
-
-  const args: string[] = ['run'];
-
-  // CRITICAL: JSON format required for StreamParser to parse messages
-  args.push('--format', 'json');
-
-  if (selectedModel?.model) {
-    if (selectedModel.provider === 'zai') {
-      const modelId = selectedModel.model.split('/').pop();
-      args.push('--model', `zai-coding-plan/${modelId}`);
-    } else if (selectedModel.provider === 'deepseek') {
-      const modelId = selectedModel.model.split('/').pop();
-      args.push('--model', `deepseek/${modelId}`);
-    } else if (selectedModel.provider === 'openrouter') {
-      args.push('--model', selectedModel.model);
-    } else if (selectedModel.provider === 'ollama') {
-      // Accept both "qwen3:4b" and "ollama/qwen3:4b" inputs consistently
-      const normalizedModelId = selectedModel.model.replace(/^ollama\//, '');
-      args.push('--model', `ollama/${normalizedModelId}`);
-    } else if (selectedModel.provider === 'litellm') {
-      const modelId = selectedModel.model.replace(/^litellm\//, '');
-      args.push('--model', `litellm/${modelId}`);
-    } else if (selectedModel.provider === 'lmstudio') {
-      const modelId = selectedModel.model.replace(/^lmstudio\//, '');
-      args.push('--model', `lmstudio/${modelId}`);
-    } else if (selectedModel.provider === 'vertex') {
-      // Model IDs stored as "vertex/{publisher}/{model}" — strip publisher for @ai-sdk/google-vertex
-      const modelId = selectedModel.model.replace(/^vertex\/[^/]+\//, '');
-      args.push('--model', `vertex/${modelId}`);
-    } else if (selectedModel.provider === 'custom') {
-      const modelId = selectedModel.model.replace(/^custom\//, '');
-      args.push('--model', `custom/${modelId}`);
-    } else {
-      args.push('--model', selectedModel.model);
-    }
-  }
-
-  if (sessionId) {
-    args.push('--session', sessionId);
-  }
-
-  args.push('--agent', ACCOMPLISH_AGENT_NAME);
-
-  args.push(prompt);
-
-  return args;
 }

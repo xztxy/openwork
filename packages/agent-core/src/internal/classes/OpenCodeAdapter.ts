@@ -26,9 +26,6 @@ import { createConsoleLogger } from '../../utils/logging.js';
 import {
   generateTaskId,
   generateMessageId,
-  generateRequestId,
-  escapeShellArg,
-  buildShellCommand,
   buildPtySpawnArgs,
   isStartTaskTool,
   isExemptTool,
@@ -285,7 +282,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       throw new Error('Adapter has been disposed and cannot start new tasks');
     }
 
-    const taskId = config.taskId || this.generateTaskId();
+    const taskId = config.taskId || generateTaskId();
     this.currentTaskId = taskId;
     this.currentSessionId = null;
     this.currentModelId = config.modelId || null;
@@ -352,7 +349,12 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.emit('debug', { type: 'info', message: cwdMsg });
 
     {
-      const { file: spawnFile, args: spawnArgs } = this.buildPtySpawnArgs(command, allArgs);
+      const { file: spawnFile, args: spawnArgs } = buildPtySpawnArgs(
+        command,
+        allArgs,
+        this.options.platform,
+        this.options.isPackaged,
+      );
 
       const spawnMsg = `PTY spawn: ${spawnFile} ${spawnArgs.join(' ')}`;
       log.info(`[OpenCode CLI] ${spawnMsg}`);
@@ -527,14 +529,6 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     log.info('[OpenCode Adapter] Adapter disposed');
   }
 
-  private escapeShellArg(arg: string): string {
-    return escapeShellArg(arg, this.options.platform);
-  }
-
-  private buildShellCommand(command: string, args: string[]): string {
-    return buildShellCommand(command, args, this.options.platform);
-  }
-
   private setupStreamParsing(): void {
     this.streamParser.on('message', (message: OpenCodeMessage) => {
       this.handleMessage(message);
@@ -582,7 +576,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
         if (message.part.text) {
           const taskMessage: TaskMessage = {
-            id: this.generateMessageId(),
+            id: generateMessageId(),
             type: 'assistant',
             content: message.part.text,
             timestamp: new Date().toISOString(),
@@ -618,7 +612,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
             timestamp: message.timestamp,
             sessionID: message.sessionID,
             part: {
-              id: this.generateMessageId(),
+              id: generateMessageId(),
               sessionID: toolUseMessage.part.sessionID,
               messageID: toolUseMessage.part.messageID,
               type: 'text',
@@ -635,7 +629,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
 
         if (toolUseStatus === 'completed' || toolUseStatus === 'error') {
           if (
-            this.isRequestConnectorAuthTool(toolUseName) &&
+            isRequestConnectorAuthTool(toolUseName) &&
             toolUseOutput.includes(CONNECTOR_AUTH_REQUIRED_MARKER)
           ) {
             this.pauseForConnectorAuth(
@@ -737,13 +731,19 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       return;
     }
 
-    if (this.isStartTaskTool(toolName)) {
+    if (isStartTaskTool(toolName)) {
       this.startTaskCalled = true;
       const startInput = toolInput as StartTaskInput;
       if (startInput?.needs_planning) {
         this.completionEnforcer.markTaskRequiresCompletion();
         if (startInput.goal && startInput.steps) {
-          this.emitPlanMessage(startInput, sessionID || this.currentSessionId || '');
+          this.emit(
+            'message',
+            buildPlanMessage(startInput, sessionID || this.currentSessionId || '', () =>
+              generateMessageId(),
+            ),
+          );
+          log.info('[OpenCode Adapter] Emitted synthetic plan message');
           const todos: TodoItem[] = startInput.steps.map((step, i) => ({
             id: String(i + 1),
             content: step,
@@ -758,7 +758,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       }
     }
 
-    if (!this.startTaskCalled && !this.isExemptTool(toolName)) {
+    if (!this.startTaskCalled && !isExemptTool(toolName)) {
       this.emit('debug', {
         type: 'warning',
         message: `Tool "${toolName}" called before start_task - plan may not be captured`,
@@ -773,7 +773,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       }
     }
 
-    this.completionEnforcer.markToolsUsed(!this.isNonTaskContinuationTool(toolName));
+    this.completionEnforcer.markToolsUsed(!isNonTaskContinuationTool(toolName));
 
     // Intercept invalid tool calls where model tried to call complete_task but opencode rejected it.
     // This happens with local models (e.g. Ollama) that don't support function calling natively —
@@ -806,7 +806,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
           },
         } as OpenCodeMessage);
         this.messages.push({
-          id: this.generateMessageId(),
+          id: generateMessageId(),
           type: 'assistant',
           content: completeInput.summary,
           timestamp: new Date().toISOString(),
@@ -903,7 +903,12 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     const allArgs = [...baseArgs, ...cliArgs];
     const safeCwd = config.workingDirectory || this.options.tempPath;
 
-    const { file: spawnFile, args: spawnArgs } = this.buildPtySpawnArgs(command, allArgs);
+    const { file: spawnFile, args: spawnArgs } = buildPtySpawnArgs(
+      command,
+      allArgs,
+      this.options.platform,
+      this.options.isPackaged,
+    );
 
     const sandboxedArgs = await this.sandboxProvider.wrapSpawnArgs(
       {
@@ -948,40 +953,6 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.ptyProcess.onExit(({ exitCode }) => {
       this.handleProcessExit(exitCode);
     });
-  }
-
-  private generateTaskId(): string {
-    return generateTaskId();
-  }
-
-  private generateMessageId(): string {
-    return generateMessageId();
-  }
-
-  private generateRequestId(): string {
-    return generateRequestId();
-  }
-
-  private isStartTaskTool(toolName: string): boolean {
-    return isStartTaskTool(toolName);
-  }
-
-  private isExemptTool(toolName: string): boolean {
-    return isExemptTool(toolName);
-  }
-
-  private isRequestConnectorAuthTool(toolName: string): boolean {
-    return isRequestConnectorAuthTool(toolName);
-  }
-
-  private isNonTaskContinuationTool(toolName: string): boolean {
-    return isNonTaskContinuationTool(toolName);
-  }
-
-  private emitPlanMessage(input: StartTaskInput, sessionId: string): void {
-    const message = buildPlanMessage(input, sessionId, () => this.generateMessageId());
-    this.emit('message', message);
-    log.info('[OpenCode Adapter] Emitted synthetic plan message');
   }
 
   private pauseForConnectorAuth(input: ConnectorAuthPauseInput, sessionId?: string): void {
@@ -1038,9 +1009,9 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       timestamp: Date.now(),
       sessionID: effectiveSessionId,
       part: {
-        id: this.generateMessageId(),
+        id: generateMessageId(),
         sessionID: effectiveSessionId,
-        messageID: this.generateMessageId(),
+        messageID: generateMessageId(),
         type: 'text',
         text: pauseMessage,
       },
@@ -1069,10 +1040,6 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       }
       this.ptyProcess = null;
     }
-  }
-
-  private buildPtySpawnArgs(command: string, args: string[]): { file: string; args: string[] } {
-    return buildPtySpawnArgs(command, args, this.options.platform, this.options.isPackaged);
   }
 }
 
