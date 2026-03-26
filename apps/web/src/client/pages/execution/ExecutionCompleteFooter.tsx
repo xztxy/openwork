@@ -2,6 +2,7 @@ import { useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTaskStore } from '../../stores/taskStore';
 import { FAVORITABLE_STATUSES } from '../../lib/task-utils';
+import { getStatusTranslationKey } from './executionStatusUtils';
 import { Button } from '@/components/ui/button';
 import { StarButton } from '@/components/ui/StarButton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -34,8 +35,7 @@ export function ExecutionCompleteFooter({
   }, [taskId, isFavorited, addFavorite, removeFavorite]);
 
   const rawStatus = currentTask?.status ?? '';
-  const statusLabelKey = rawStatus === 'interrupted' ? 'status.stopped' : `status.${rawStatus}`;
-  const statusLabel = rawStatus ? tExecution(statusLabelKey) : '';
+  const statusLabel = rawStatus ? tExecution(getStatusTranslationKey(rawStatus)) : '';
   const canFavorite = FAVORITABLE_STATUSES.includes(rawStatus);
 
   const failedErrorMessage =

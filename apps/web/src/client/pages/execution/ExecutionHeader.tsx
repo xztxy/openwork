@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { Button } from '@/components/ui/button';
-import { XCircle, ArrowLeft, CheckCircle, Clock, Square } from '@phosphor-icons/react';
+import { XCircle, ArrowLeft, CheckCircle, Clock, Square, Hourglass } from '@phosphor-icons/react';
 
 function StatusBadge({ status }: { status: string }) {
   const { t } = useTranslation('execution');
@@ -48,6 +48,20 @@ function StatusBadge({ status }: { status: string }) {
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-600 shrink-0">
           <Square className="h-3 w-3" />
           {t('status.stopped')}
+        </span>
+      );
+    case 'pending':
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground shrink-0">
+          <Hourglass className="h-3 w-3" />
+          {t('status.pending')}
+        </span>
+      );
+    case 'waiting_permission':
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 shrink-0">
+          <Hourglass className="h-3 w-3" />
+          {t('status.waiting_permission')}
         </span>
       );
     default:

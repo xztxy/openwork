@@ -24,7 +24,10 @@ async function buildAzureFoundryProviderConfig(
     if (azureApiKey) {
       azureOptions.apiKey = azureApiKey;
     }
-  } else if (authMethod === 'entra-id' && azureFoundryToken) {
+  } else if (authMethod === 'entra-id') {
+    if (!azureFoundryToken) {
+      return null;
+    }
     azureOptions.apiKey = '';
     azureOptions.headers = { Authorization: `Bearer ${azureFoundryToken}` };
   }

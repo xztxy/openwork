@@ -98,7 +98,9 @@ export function buildOpenAICompatibleConfigs(ctx: ProviderBuildContext): Provide
       }
     } else if (providerDef.models.length > 0) {
       for (const model of providerDef.models) {
-        models[model.id] = { name: model.displayName, tools: true };
+        const prefix = `${providerId}/`;
+        const modelId = model.id.startsWith(prefix) ? model.id.slice(prefix.length) : model.id;
+        models[modelId] = { name: model.displayName, tools: true };
       }
     }
     if (Object.keys(models).length === 0 && providerDef.defaultModelId) {

@@ -67,15 +67,18 @@ export function buildPtySpawnArgs(
     return { file: command, args };
   }
 
-  const shell =
-    isPackaged && platform === 'darwin'
-      ? '/bin/sh'
-      : process.env.SHELL ||
-        (fs.existsSync('/bin/bash')
-          ? '/bin/bash'
-          : fs.existsSync('/bin/zsh')
-            ? '/bin/zsh'
-            : '/bin/sh');
+  let shell: string;
+  if (isPackaged && platform === 'darwin') {
+    shell = '/bin/sh';
+  } else if (process.env.SHELL) {
+    shell = process.env.SHELL;
+  } else if (fs.existsSync('/bin/bash')) {
+    shell = '/bin/bash';
+  } else if (fs.existsSync('/bin/zsh')) {
+    shell = '/bin/zsh';
+  } else {
+    shell = '/bin/sh';
+  }
 
   const fullCommand = buildShellCommand(command, args, platform);
   return { file: shell, args: ['-c', fullCommand] };
