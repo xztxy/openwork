@@ -6,6 +6,7 @@
  */
 
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
+import type { MessagingConnectionStatus } from '@accomplish_ai/agent-core/common';
 import type {
   ProviderType,
   Skill,
@@ -771,6 +772,35 @@ const accomplishAPI = {
     const listener = (_: unknown, data: { workspaceId: string }) => callback(data);
     ipcRenderer.on('workspace:deleted', listener);
     return () => ipcRenderer.removeListener('workspace:deleted', listener);
+  },
+
+  // ── WhatsApp Integration (ENG-684) ─────────────────────────────────────────
+  // Contributed by aryan877 (PR #595), kartikangiras (PR #455)
+  getWhatsAppConfig: (): Promise<{
+    providerId: string;
+    enabled: boolean;
+    status: MessagingConnectionStatus;
+    phoneNumber?: string;
+    lastConnectedAt?: number;
+  } | null> => ipcRenderer.invoke('integrations:whatsapp:get-config'),
+
+  connectWhatsApp: (): Promise<void> => ipcRenderer.invoke('integrations:whatsapp:connect'),
+
+  disconnectWhatsApp: (): Promise<void> => ipcRenderer.invoke('integrations:whatsapp:disconnect'),
+
+  setWhatsAppEnabled: (enabled: boolean): Promise<void> =>
+    ipcRenderer.invoke('integrations:whatsapp:set-enabled', enabled),
+
+  onWhatsAppQR: (callback: (qr: string) => void): (() => void) => {
+    const listener = (_: unknown, qr: string) => callback(qr);
+    ipcRenderer.on('integrations:whatsapp:qr', listener);
+    return () => ipcRenderer.removeListener('integrations:whatsapp:qr', listener);
+  },
+
+  onWhatsAppStatus: (callback: (status: MessagingConnectionStatus) => void): (() => void) => {
+    const listener = (_: unknown, status: MessagingConnectionStatus) => callback(status);
+    ipcRenderer.on('integrations:whatsapp:status', listener);
+    return () => ipcRenderer.removeListener('integrations:whatsapp:status', listener);
   },
 };
 

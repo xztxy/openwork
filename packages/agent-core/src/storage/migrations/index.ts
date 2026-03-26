@@ -26,6 +26,7 @@ import { migration as v016 } from './v016-notifications.js';
 import { migration as v017 } from './v017-nim-config.js';
 import { migration as v018 } from './v018-copilot-provider.js';
 import { migration as v019 } from './v019-huggingface-local.js';
+import { migration as v020 } from './v020-messaging.js';
 
 const migrations: Migration[] = [
   v001,
@@ -47,13 +48,14 @@ const migrations: Migration[] = [
   v017,
   v018,
   v019,
+  v020,
 ];
 export function registerMigration(migration: Migration): void {
   migrations.push(migration);
   migrations.sort((a, b) => a.version - b.version);
 }
 
-export const CURRENT_VERSION = 19;
+export const CURRENT_VERSION = 20;
 export function getStoredVersion(db: Database): number {
   try {
     const tableExists = db

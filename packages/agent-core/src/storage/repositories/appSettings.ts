@@ -10,6 +10,7 @@ import type {
 import type { ThemePreference } from '../../types/storage.js';
 import type { SandboxConfig } from '../../common/types/sandbox.js';
 import type { CloudBrowserConfig } from '../../common/types/cloud-browser.js';
+import type { MessagingConfig } from '../../common/types/messaging.js';
 import { DEFAULT_SANDBOX_CONFIG } from '../../common/types/sandbox.js';
 import { getDatabase } from '../database.js';
 import { safeParseJsonWithFallback } from '../../utils/json.js';
@@ -29,6 +30,7 @@ interface AppSettingsRow {
   run_in_background: number;
   sandbox_config: string;
   cloud_browser_config: string | null;
+  messaging_config: string | null;
   notifications_enabled: number;
   nim_config: string | null;
 }
@@ -294,6 +296,23 @@ export function getAppSettings(): AppSettings {
   };
 }
 
+export function getMessagingConfig(): MessagingConfig | null {
+  const row = getRow();
+  if (!row.messaging_config) return null;
+  try {
+    return JSON.parse(row.messaging_config) as MessagingConfig;
+  } catch {
+    return null;
+  }
+}
+
+export function setMessagingConfig(config: MessagingConfig | null): void {
+  const db = getDatabase();
+  db.prepare('UPDATE app_settings SET messaging_config = ? WHERE id = 1').run(
+    config ? JSON.stringify(config) : null,
+  );
+}
+
 export function clearAppSettings(): void {
   const db = getDatabase();
   db.prepare(
@@ -312,6 +331,7 @@ export function clearAppSettings(): void {
       run_in_background = 0,
       sandbox_config = '${JSON.stringify(DEFAULT_SANDBOX_CONFIG)}',
       cloud_browser_config = NULL,
+      messaging_config = NULL,
       notifications_enabled = 1
     WHERE id = 1`,
   ).run();
