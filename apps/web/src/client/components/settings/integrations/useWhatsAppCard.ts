@@ -5,7 +5,7 @@
  * Encapsulates IPC bootstrapping, subscription cleanup, and status transitions.
  * IPC subscriptions are delegated to useWhatsAppSubscriptions.
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { getAccomplish } from '@/lib/accomplish';
 import { useWhatsAppSubscriptions } from './useWhatsAppSubscriptions';
 
@@ -40,7 +40,7 @@ export interface WhatsAppCardActions {
 }
 
 export function useWhatsAppCard(): WhatsAppCardState & WhatsAppCardActions {
-  const accomplish = getAccomplish();
+  const accomplish = useMemo(() => getAccomplish(), []);
 
   const [config, setConfig] = useState<WhatsAppCardState['config']>(null);
   const [loading, setLoading] = useState(true);

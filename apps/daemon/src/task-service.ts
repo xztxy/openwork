@@ -53,7 +53,10 @@ export class TaskService extends EventEmitter {
         getCliCommand: () => getCliCommand(this.opts),
         buildEnvironment: (taskId) => buildEnvironment(taskId, this.storage, this.opts),
         buildCliArgs: (config) => buildCliArgs(config, this.storage),
-        onBeforeStart: () => onBeforeStart(this.storage, this.opts),
+        onBeforeStart: async () => {
+          const result = await onBeforeStart(this.storage, this.opts);
+          return result.env;
+        },
         getModelDisplayName,
       },
       defaultWorkingDirectory: homedir(),

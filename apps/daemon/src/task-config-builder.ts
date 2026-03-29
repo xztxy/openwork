@@ -114,7 +114,7 @@ export async function isCliAvailable(opts: TaskConfigBuilderOptions): Promise<bo
 export async function onBeforeStart(
   storage: StorageAPI,
   opts: TaskConfigBuilderOptions,
-): Promise<void> {
+): Promise<{ configPath: string; env: NodeJS.ProcessEnv }> {
   const authPath = getOpenCodeAuthPath();
   const apiKeys = await storage.getAllApiKeys();
   await syncApiKeysToOpenCodeAuth(authPath, apiKeys);
@@ -123,12 +123,17 @@ export async function onBeforeStart(
     getApiKey: (provider) => storage.getApiKey(provider),
   });
 
-  const permissionApiPort = process.env.ACCOMPLISH_PERMISSION_API_PORT
-    ? parseInt(process.env.ACCOMPLISH_PERMISSION_API_PORT, 10)
-    : undefined;
-  const questionApiPort = process.env.ACCOMPLISH_QUESTION_API_PORT
-    ? parseInt(process.env.ACCOMPLISH_QUESTION_API_PORT, 10)
-    : undefined;
+  const getPort = (envVar: string) => {
+    const val = process.env[envVar];
+    if (!val) {
+      return undefined;
+    }
+    const parsed = parseInt(val, 10);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  };
+
+  const permissionApiPort = getPort('ACCOMPLISH_PERMISSION_API_PORT');
+  const questionApiPort = getPort('ACCOMPLISH_QUESTION_API_PORT');
 
   const result = generateConfig({
     platform: process.platform,
@@ -145,8 +150,13 @@ export async function onBeforeStart(
     smallModel: modelOverride?.smallModel,
   });
 
-  process.env.OPENCODE_CONFIG = result.configPath;
-  process.env.OPENCODE_CONFIG_DIR = path.dirname(result.configPath);
+  return {
+    configPath: result.configPath,
+    env: {
+      OPENCODE_CONFIG: result.configPath,
+      OPENCODE_CONFIG_DIR: path.dirname(result.configPath),
+    },
+  };
 }
 
 export function getBrowserServerConfig(opts: TaskConfigBuilderOptions): BrowserServerConfig {

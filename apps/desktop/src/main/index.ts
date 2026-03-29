@@ -127,7 +127,7 @@ if (!gotTheLock) {
       }
       mainWindow.focus();
       logMain('INFO', '[Main] Focused existing instance after second-instance event');
-      handleSecondInstanceProtocolUrl(mainWindow, commandLine);
+      handleSecondInstanceProtocolUrl(mainWindow, commandLine, () => mainWindow);
     }
   });
 

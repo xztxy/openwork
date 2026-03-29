@@ -122,6 +122,17 @@ export async function buildEnvironment(taskId: string): Promise<NodeJS.ProcessEn
     }
   }
 
+  // Resolve OpenAI base URL (handles HuggingFace Local and configured OpenAI endpoint)
+  let openAiBaseUrlVal: string | undefined = configuredOpenAiBaseUrl || undefined;
+  if (hfProvider) {
+    if (!hfBaseUrl) {
+      throw new Error(
+        'HuggingFace Local server is not running. Please start the server before sending requests.',
+      );
+    }
+    openAiBaseUrlVal = hfBaseUrl;
+  }
+
   // Build environment configuration
   const envConfig: EnvironmentConfig = {
     apiKeys,
@@ -130,14 +141,7 @@ export async function buildEnvironment(taskId: string): Promise<NodeJS.ProcessEn
     vertexServiceAccountKeyPath,
     bundledNodeBinPath: bundledNode?.binDir,
     taskId: taskId || undefined,
-    openAiBaseUrl: hfProvider
-      ? (hfBaseUrl ??
-        (() => {
-          throw new Error(
-            'HuggingFace Local server is not running. Please start the server before sending requests.',
-          );
-        })())
-      : configuredOpenAiBaseUrl || undefined,
+    openAiBaseUrl: openAiBaseUrlVal,
     ollamaHost,
   };
 

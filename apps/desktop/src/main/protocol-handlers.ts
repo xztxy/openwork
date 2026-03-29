@@ -92,21 +92,18 @@ export function registerProtocolEventHandlers(getMainWindow: WindowGetter): void
  * Handle second-instance protocol URL on Windows. Called inside the
  * `second-instance` event handler in index.ts where mainWindow is in scope.
  */
-export function handleSecondInstanceProtocolUrl(win: BrowserWindow, commandLine: string[]): void {
+export function handleSecondInstanceProtocolUrl(
+  win: BrowserWindow,
+  commandLine: string[],
+  getMainWindow: WindowGetter,
+): void {
   if (process.platform !== 'win32') {
     return;
   }
 
   const protocolUrl = commandLine.find((arg) => arg.startsWith('accomplish://'));
   if (protocolUrl) {
-    if (!win.isDestroyed() && isRendererReady(win)) {
-      dispatchProtocolUrl(win, protocolUrl);
-    } else {
-      protocolUrlQueue.push(protocolUrl);
-      if (!win.isDestroyed()) {
-        win.webContents.once('did-finish-load', () => drainProtocolUrlQueue(win));
-      }
-    }
+    enqueueProtocolUrl(protocolUrl, getMainWindow);
   }
 }
 

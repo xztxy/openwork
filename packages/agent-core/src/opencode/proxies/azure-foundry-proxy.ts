@@ -17,6 +17,18 @@ const MAX_REQUEST_SIZE = 10 * 1024 * 1024;
 
 let server: http.Server | null = null;
 let targetBaseUrl: string | null = null;
+let serverStartupPromise: Promise<void> | null = null;
+
+const HOP_BY_HOP_HEADERS = [
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailers',
+  'transfer-encoding',
+  'upgrade',
+];
 
 export interface AzureFoundryProxyInfo {
   baseURL: string;
@@ -60,7 +72,13 @@ function forwardRequest(
       path: `${targetUrl.pathname}${targetUrl.search}`,
     },
     (proxyRes) => {
-      res.writeHead(proxyRes.statusCode || 500, proxyRes.headers);
+      const responseHeaders = { ...proxyRes.headers };
+      // Remove hop-by-hop headers from the response to prevent logic errors in the proxy
+      HOP_BY_HOP_HEADERS.forEach((header) => {
+        delete responseHeaders[header];
+      });
+
+      res.writeHead(proxyRes.statusCode || 500, responseHeaders);
       proxyRes.pipe(res);
     },
   );
@@ -175,7 +193,12 @@ async function startProxyServer(): Promise<void> {
 export async function ensureAzureFoundryProxy(baseURL: string): Promise<AzureFoundryProxyInfo> {
   targetBaseUrl = normalizeBaseUrl(baseURL);
   if (!server) {
-    await startProxyServer();
+    if (!serverStartupPromise) {
+      serverStartupPromise = startProxyServer().finally(() => {
+        serverStartupPromise = null;
+      });
+    }
+    await serverStartupPromise;
   }
   return {
     baseURL: getProxyBaseUrl(),

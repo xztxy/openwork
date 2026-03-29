@@ -41,6 +41,17 @@ export function useWhatsAppSubscriptions({
   fetchConfig,
   normalizeStatus,
 }: UseWhatsAppSubscriptionsOptions) {
+  const clearTimers = () => {
+    if (qrTimerRef.current) {
+      clearInterval(qrTimerRef.current);
+      qrTimerRef.current = null;
+    }
+    if (connectTimeoutRef.current) {
+      clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = null;
+    }
+  };
+
   useEffect(() => {
     const unsubQR = accomplish.onWhatsAppQR((qr: string) => {
       setQrCode(qr);
@@ -62,27 +73,13 @@ export function useWhatsAppSubscriptions({
         setQrCode(null);
         setConnecting(false);
         setError(null);
-        if (qrTimerRef.current) {
-          clearInterval(qrTimerRef.current);
-          qrTimerRef.current = null;
-        }
-        if (connectTimeoutRef.current) {
-          clearTimeout(connectTimeoutRef.current);
-          connectTimeoutRef.current = null;
-        }
+        clearTimers();
         void fetchConfig();
       }
       if (nextStatus === 'disconnected' || nextStatus === 'logged_out') {
         setQrCode(null);
         setConnecting(false);
-        if (qrTimerRef.current) {
-          clearInterval(qrTimerRef.current);
-          qrTimerRef.current = null;
-        }
-        if (connectTimeoutRef.current) {
-          clearTimeout(connectTimeoutRef.current);
-          connectTimeoutRef.current = null;
-        }
+        clearTimers();
       }
     });
 
