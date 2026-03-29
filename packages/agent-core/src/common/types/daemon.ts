@@ -209,11 +209,12 @@ export interface DaemonMethodMap {
   'task.listScheduled': { params: undefined; result: ScheduledTask[] };
   'task.cancelScheduled': { params: TaskCancelScheduledParams; result: void };
 
-  // Health
+  // Health & lifecycle
   'daemon.ping': { params: undefined; result: { status: 'ok'; uptime: number } };
+  /** Graceful shutdown: drain active tasks (30s), then exit. */
+  'daemon.shutdown': { params: undefined; result: void };
 
   // Extended task methods used by the standalone daemon process
-  'task.stop': { params: TaskIdParams; result: void };
   'task.status': {
     params: TaskIdParams;
     result: {

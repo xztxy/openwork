@@ -158,7 +158,7 @@ async function main(): Promise<void> {
     }),
   );
   rpc.registerMethod(
-    'task.stop',
+    'task.cancel',
     safeHandler((params) => {
       const validated = validate(taskIdSchema, params);
       return taskService.stopTask(validated);
@@ -378,6 +378,17 @@ async function main(): Promise<void> {
     pidLock?.release();
     process.exit(1);
   };
+
+  // Register daemon.shutdown RPC method (must be after shutdown() is defined)
+  rpc.registerMethod(
+    'daemon.shutdown',
+    safeHandler(async () => {
+      console.log('[Daemon] Shutdown requested via RPC');
+      // Defer actual shutdown to after the RPC response is sent
+      setTimeout(() => void shutdown(), 100);
+      return Promise.resolve();
+    }),
+  );
 
   process.on('SIGINT', () => {
     setTimeout(forceShutdown, DRAIN_TIMEOUT_MS + 10_000).unref();

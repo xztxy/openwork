@@ -15,7 +15,7 @@ import {
   validateTaskConfig,
   ensureDevBrowserServer,
   generateConfig,
-  buildProviderConfigs,
+  resolveTaskConfig,
   syncApiKeysToOpenCodeAuth,
   getOpenCodeAuthPath,
   getBundledNodePaths,
@@ -60,6 +60,8 @@ export class TaskService extends EventEmitter {
   private isPackaged: boolean;
   private resourcesPath: string;
   private appPath: string;
+  /** Active workspace ID — set from task.start params for knowledge note injection */
+  private activeWorkspaceId: string | undefined;
   constructor(storage: StorageAPI, options: TaskServiceOptions) {
     super();
     this.storage = storage;
@@ -106,7 +108,13 @@ export class TaskService extends EventEmitter {
     modelId?: string;
     sessionId?: string;
     workingDirectory?: string;
+    workspaceId?: string;
+    attachments?: Array<{ name: string; path: string; size: number; mimeType?: string }>;
   }): Promise<Task> {
+    // Track active workspace for config resolution (knowledge notes)
+    if (params.workspaceId) {
+      this.activeWorkspaceId = params.workspaceId;
+    }
     const taskId = params.taskId || createTaskId();
     const config: TaskConfig = {
       prompt: params.prompt,
@@ -376,35 +384,39 @@ export class TaskService extends EventEmitter {
   }
 
   private async onBeforeStart(): Promise<void> {
+    // Sync API keys to OpenCode auth file
     const authPath = getOpenCodeAuthPath();
     const apiKeys = await this.storage.getAllApiKeys();
     await syncApiKeysToOpenCodeAuth(authPath, apiKeys);
 
-    const { providerConfigs, enabledProviders, modelOverride } = await buildProviderConfigs({
-      getApiKey: (provider) => this.storage.getApiKey(provider),
-    });
+    // Resolve skills from DB (daemon has no SkillsManager, reads directly)
+    const { getEnabledSkills } = await import('@accomplish_ai/agent-core');
+    const skills = getEnabledSkills();
 
-    const permissionApiPort = process.env.ACCOMPLISH_PERMISSION_API_PORT
-      ? parseInt(process.env.ACCOMPLISH_PERMISSION_API_PORT, 10)
-      : undefined;
-    const questionApiPort = process.env.ACCOMPLISH_QUESTION_API_PORT
-      ? parseInt(process.env.ACCOMPLISH_QUESTION_API_PORT, 10)
-      : undefined;
-
-    const result = generateConfig({
+    // Use shared "one brain" config resolution
+    const { configOptions } = await resolveTaskConfig({
+      storage: this.storage,
       platform: process.platform,
       mcpToolsPath: this.mcpToolsPath,
       userDataPath: this.userDataPath,
       isPackaged: this.isPackaged,
       bundledNodeBinPath: this.getBundledNodeBinPath(),
-      providerConfigs,
-      enabledProviders,
-      permissionApiPort,
-      questionApiPort,
+      getApiKey: (provider) => this.storage.getApiKey(provider),
+      permissionApiPort: process.env.ACCOMPLISH_PERMISSION_API_PORT
+        ? parseInt(process.env.ACCOMPLISH_PERMISSION_API_PORT, 10)
+        : undefined,
+      questionApiPort: process.env.ACCOMPLISH_QUESTION_API_PORT
+        ? parseInt(process.env.ACCOMPLISH_QUESTION_API_PORT, 10)
+        : undefined,
       authToken: process.env.ACCOMPLISH_DAEMON_AUTH_TOKEN,
-      model: modelOverride?.model,
-      smallModel: modelOverride?.smallModel,
+      skills,
+      workspaceId: this.activeWorkspaceId,
+      log: (level, msg, data) => {
+        console.warn(`[TaskService] [${level}] ${msg}`, data ?? '');
+      },
     });
+
+    const result = generateConfig(configOptions);
 
     process.env.OPENCODE_CONFIG = result.configPath;
     process.env.OPENCODE_CONFIG_DIR = path.dirname(result.configPath);

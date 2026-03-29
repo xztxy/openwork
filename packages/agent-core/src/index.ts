@@ -118,6 +118,12 @@ export type { EnvironmentConfig } from './opencode/environment.js';
 
 export { buildProviderConfigs, syncApiKeysToOpenCodeAuth } from './opencode/config-builder.js';
 
+export { resolveTaskConfig } from './opencode/resolve-task-config.js';
+export type {
+  ResolveTaskConfigOptions,
+  ResolvedTaskConfig,
+} from './opencode/resolve-task-config.js';
+
 export {
   getOpenCodeAuthPath,
   getOpenCodeAuthJsonPath,
@@ -180,6 +186,8 @@ export {
   deleteKnowledgeNote,
   getKnowledgeNotesForPrompt,
 } from './storage/repositories/knowledgeNotes.js';
+
+export { getEnabledSkills } from './storage/repositories/skills.js';
 
 // -----------------------------------------------------------------------------
 // Providers Module (from ./providers/)
