@@ -63,6 +63,7 @@ export function registerTaskHandlers(): void {
     const task = await client.call('task.start', {
       prompt: config.prompt,
       taskId,
+      modelId: config.modelId,
       workspaceId: workspaceManager.getActiveWorkspace() ?? undefined,
       workingDirectory: config.workingDirectory,
       allowedTools: config.allowedTools,
