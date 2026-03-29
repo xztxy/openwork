@@ -18,7 +18,7 @@ import { getLogCollector } from './logging';
 import { skillsManager } from './skills';
 import { startHuggingFaceServer } from './providers/huggingface-local';
 import { createTray } from './tray';
-import { bootstrapDaemon } from './daemon-bootstrap';
+import { bootstrapDaemon, registerNotificationForwarding } from './daemon-bootstrap';
 import { registerIPCHandlers } from './ipc/handlers';
 
 function logMain(level: 'INFO' | 'WARN' | 'ERROR', msg: string, data?: Record<string, unknown>) {
@@ -134,7 +134,7 @@ export async function startApp(
   }
 
   await bootstrapDaemon();
-  logMain('INFO', '[Main] Daemon bootstrap complete (no-op stub — pending socket migration)');
+  logMain('INFO', '[Main] Daemon connected');
 
   registerIPCHandlers();
   logMain('INFO', '[Main] IPC handlers registered');
@@ -145,6 +145,10 @@ export async function startApp(
   if (mainWindow) {
     initThoughtStreamApi(mainWindow);
     startThoughtStreamServer();
+
+    // Forward daemon notifications to the renderer via IPC
+    registerNotificationForwarding(mainWindow);
+    logMain('INFO', '[Main] Daemon notification forwarding registered');
 
     mainWindow.on('close', (event) => {
       if (!isQuittingRef.value) {
