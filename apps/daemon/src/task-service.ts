@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { unlink } from 'node:fs/promises';
 import { tmpdir, homedir } from 'node:os';
 import path from 'node:path';
 import {
@@ -219,6 +220,7 @@ export class TaskService extends EventEmitter {
         sessionId,
         taskId,
         modelId: selectedModel?.model,
+        files: params.attachments,
       },
       callbacks,
     );
@@ -288,6 +290,7 @@ export class TaskService extends EventEmitter {
 
       onComplete: (result: TaskResult) => {
         this.taskContextMap.delete(taskId);
+        this.cleanupTaskConfig(taskId);
         this.emit('complete', { taskId, result });
 
         const taskStatus = mapResultToStatus(result);
@@ -305,6 +308,7 @@ export class TaskService extends EventEmitter {
 
       onError: (error: Error) => {
         this.taskContextMap.delete(taskId);
+        this.cleanupTaskConfig(taskId);
         this.emit('error', { taskId, error: error.message });
         this.storage.updateTaskStatus(taskId, 'failed', new Date().toISOString());
       },
@@ -318,6 +322,14 @@ export class TaskService extends EventEmitter {
         this.storage.saveTodosForTask(taskId, todos);
       },
     };
+  }
+
+  /** Remove per-task config file after task completes. Best-effort, never throws. */
+  private cleanupTaskConfig(taskId: string): void {
+    const configPath = path.join(this.userDataPath, 'opencode', `opencode-${taskId}.json`);
+    unlink(configPath).catch(() => {
+      // File may already be removed or never written — safe to ignore
+    });
   }
 
   private getCliCommand(): { command: string; args: string[] } {
@@ -334,11 +346,19 @@ export class TaskService extends EventEmitter {
   }
 
   private async buildEnvironment(taskId: string): Promise<NodeJS.ProcessEnv> {
-    // Resolve per-task config (workspace-aware, concurrent-safe via taskContextMap)
+    // Resolve per-task config with per-task file name (concurrent-safe)
     const taskContext = this.taskContextMap.get(taskId);
-    await this.resolveAndWriteConfig(taskContext?.workspaceId);
+    const { configPath, configDir } = await this.resolveAndWriteConfig(
+      taskId,
+      taskContext?.workspaceId,
+    );
 
-    const env: NodeJS.ProcessEnv = { ...process.env };
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      // Override with per-task config path — not set on process.env globally
+      OPENCODE_CONFIG: configPath,
+      OPENCODE_CONFIG_DIR: configDir,
+    };
 
     const apiKeys = await this.storage.getAllApiKeys();
     const bedrockCredentials = this.storage.getBedrockCredentials() as BedrockCredentials | null;
@@ -412,10 +432,14 @@ export class TaskService extends EventEmitter {
   }
 
   /**
-   * Resolve full task config and write opencode.json.
-   * Called from buildEnvironment(taskId) so workspace context is per-task.
+   * Resolve full task config and write a per-task opencode config file.
+   * Returns the config path — callers set it on the per-task env, NOT on process.env.
+   * This ensures concurrent tasks with different workspaces don't overwrite each other.
    */
-  private async resolveAndWriteConfig(workspaceId?: string): Promise<void> {
+  private async resolveAndWriteConfig(
+    taskId: string,
+    workspaceId?: string,
+  ): Promise<{ configPath: string; configDir: string }> {
     const { getEnabledSkills } = await import('@accomplish_ai/agent-core');
     const skills = getEnabledSkills();
 
@@ -441,9 +465,11 @@ export class TaskService extends EventEmitter {
       },
     });
 
-    const result = generateConfig(configOptions);
-    process.env.OPENCODE_CONFIG = result.configPath;
-    process.env.OPENCODE_CONFIG_DIR = path.dirname(result.configPath);
+    // Per-task config file name prevents concurrent task overwrites
+    const configFileName = `opencode-${taskId}.json`;
+    const result = generateConfig({ ...configOptions, configFileName });
+
+    return { configPath: result.configPath, configDir: path.dirname(result.configPath) };
   }
 
   private getBrowserServerConfig(): BrowserServerConfig {
