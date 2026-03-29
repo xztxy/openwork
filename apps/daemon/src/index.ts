@@ -69,21 +69,27 @@ async function main(): Promise<void> {
   installCrashHandlers();
 
   // Resolve dataDir early — all identity files (socket, PID, DB) derive from it.
-  // In production (packaged app), --data-dir is required to prevent the daemon from
-  // silently using the wrong profile. Dev mode falls back to ~/.accomplish.
+  // --data-dir is required by default. Only explicitly opted-in dev mode skips it,
+  // so a misconfigured launcher can never silently use the wrong profile.
   const dataDir = args.dataDir;
-  const isDev = process.env.NODE_ENV === 'development' || !process.env.ACCOMPLISH_IS_PACKAGED;
-  if (!dataDir && !isDev) {
+  const isDevMode = process.env.ACCOMPLISH_DAEMON_DEV === '1';
+  if (!dataDir && !isDevMode) {
     console.error(
-      '[Daemon] Error: --data-dir is required in production mode.\n' +
+      '[Daemon] Error: --data-dir is required.\n' +
         'The daemon must know which data directory to use so it shares the same\n' +
         'database, socket, and PID file as the desktop app.\n\n' +
-        'Usage: node daemon/index.js --data-dir /path/to/userData',
+        'Usage: node daemon/index.js --data-dir /path/to/userData\n\n' +
+        'For local development without --data-dir, set ACCOMPLISH_DAEMON_DEV=1\n' +
+        'to fall back to ~/.accomplish.',
     );
     process.exit(1);
   }
 
-  console.log(`[Daemon] Starting... (dataDir=${dataDir ?? '~/.accomplish (dev default)'})`);
+  if (!dataDir && isDevMode) {
+    console.warn('[Daemon] Warning: running in dev mode without --data-dir, using ~/.accomplish');
+  }
+
+  console.log(`[Daemon] Starting... (dataDir=${dataDir ?? '~/.accomplish (dev fallback)'})`);
 
   // 1. Acquire PID lock scoped to dataDir (atomic, with stale detection)
   const pidPath = getPidFilePath(dataDir);
