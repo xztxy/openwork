@@ -1,4 +1,7 @@
 import type { TaskMessage } from '../common/types/task.js';
+import { createLogger } from '../daemon/logger.js';
+
+const logger = createLogger('MessageBatcher');
 
 /**
  * Delay in milliseconds for batching messages before sending to renderer.
@@ -38,19 +41,47 @@ export function createMessageBatcher(
     timeout: null,
     taskId,
     flush: () => {
-      if (batcher.pendingMessages.length === 0) return;
-
-      forwardToRenderer('task:update:batch', {
-        taskId,
-        messages: batcher.pendingMessages,
-      });
-
-      for (const msg of batcher.pendingMessages) {
-        addTaskMessage(taskId, msg);
+      if (batcher.pendingMessages.length === 0) {
+        if (batcher.timeout) {
+          clearTimeout(batcher.timeout);
+          batcher.timeout = null;
+        }
+        return;
       }
 
-      batcher.pendingMessages = [];
-      if (batcher.timeout) {
+      const originalMessages = [...batcher.pendingMessages];
+      const failures: TaskMessage[] = [];
+      for (const msg of batcher.pendingMessages) {
+        try {
+          addTaskMessage(taskId, msg);
+        } catch (err) {
+          logger.error(`Error persisting message for task ${taskId}:`, err);
+          failures.push(msg);
+        }
+      }
+
+      batcher.pendingMessages = failures;
+
+      const successfulMessages = originalMessages.filter((msg) => !failures.includes(msg));
+      if (successfulMessages.length > 0) {
+        try {
+          forwardToRenderer('task:update:batch', {
+            taskId,
+            messages: successfulMessages,
+          });
+        } catch (err) {
+          logger.error(`Error forwarding messages for task ${taskId}:`, err);
+        }
+      }
+
+      if (batcher.pendingMessages.length > 0) {
+        if (batcher.timeout) {
+          clearTimeout(batcher.timeout);
+        }
+        batcher.timeout = setTimeout(() => {
+          flushAndCleanupBatcher(taskId);
+        }, MESSAGE_BATCH_DELAY_MS);
+      } else if (batcher.timeout) {
         clearTimeout(batcher.timeout);
         batcher.timeout = null;
       }
@@ -88,7 +119,7 @@ export function queueMessage(
   }
 
   batcher.timeout = setTimeout(() => {
-    batcher.flush();
+    flushAndCleanupBatcher(taskId);
   }, MESSAGE_BATCH_DELAY_MS);
 }
 
@@ -102,6 +133,8 @@ export function flushAndCleanupBatcher(taskId: string): void {
   const batcher = messageBatchers.get(taskId);
   if (batcher) {
     batcher.flush();
-    messageBatchers.delete(taskId);
+    if (batcher.pendingMessages.length === 0) {
+      messageBatchers.delete(taskId);
+    }
   }
 }

@@ -36,7 +36,14 @@ export function emitFrameCapture(
   width?: number,
   height?: number,
 ): void {
-  sendToRenderer('browser:frame', { taskId, pageName, data, width, height, timestamp: Date.now() });
+  sendToRenderer('browser:frame', {
+    taskId,
+    pageName,
+    frame: data,
+    width,
+    height,
+    timestamp: Date.now(),
+  });
 }
 
 export function emitNavigationEvent(taskId: string, pageName: string, url: string): void {
@@ -48,7 +55,9 @@ export async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> 
   const timer = setTimeout(() => controller.abort(), COMMAND_TIMEOUT_MS);
   try {
     const res = await fetch(url, { ...init, signal: controller.signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status} from ${url}`);
+    }
     return (await res.json()) as T;
   } finally {
     clearTimeout(timer);
@@ -79,4 +88,35 @@ export async function resolveBrowserWsEndpoint(): Promise<string> {
     throw new Error('CDP endpoint missing webSocketDebuggerUrl');
   }
   return info.webSocketDebuggerUrl;
+}
+/**
+ * Auto-start a preview when the dev-browser server is already running with an active session.
+ * Called opportunistically from the task lifecycle.
+ * Contributed by dhruvawani17 (PR #489) for ENG-695.
+ *
+ * @param taskId - The task ID to start the preview for
+ * @param startBrowserPreviewStream - Callback to start the preview stream
+ */
+export async function autoStartScreencast(
+  taskId: string,
+  startBrowserPreviewStream: (taskId: string, pageName: string) => Promise<void>,
+): Promise<void> {
+  try {
+    const data = await fetchJson<{ pages: string[] }>(
+      `http://${DEV_BROWSER_HOST}:${DEV_BROWSER_PORT}/pages`,
+    ).catch(() => null);
+
+    if (!data?.pages) {
+      return;
+    }
+    const taskPrefix = `${taskId}-`;
+    const taskPages = data.pages.filter((p: string) => p.startsWith(taskPrefix));
+
+    if (taskPages.length > 0) {
+      const pageName = taskPages[0].substring(taskPrefix.length);
+      await startBrowserPreviewStream(taskId, pageName);
+    }
+  } catch {
+    // Server not ready yet — will be triggered later via IPC
+  }
 }

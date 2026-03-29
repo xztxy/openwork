@@ -84,7 +84,6 @@ const isQuittingRef = {
     isQuitting = v;
   },
 };
-
 function createWindow() {
   mainWindow = createMainWindow({ ROUTER_URL, WEB_DIST });
 }

@@ -54,7 +54,9 @@ export function createProxyRequestHandler(
     let aborted = false;
 
     req.on('data', (chunk) => {
-      if (aborted) return;
+      if (aborted) {
+        return;
+      }
       totalSize += chunk.length;
       if (totalSize > MAX_REQUEST_SIZE) {
         aborted = true;
@@ -68,7 +70,9 @@ export function createProxyRequestHandler(
     });
 
     req.on('end', () => {
-      if (aborted) return;
+      if (aborted) {
+        return;
+      }
       const rawBody = Buffer.concat(chunks);
       const contentType = req.headers['content-type'];
       const contentEncoding = req.headers['content-encoding'];
@@ -100,7 +104,9 @@ export function createProxyRequestHandler(
         const responseChunks: Buffer[] = [];
         proxyRes.on('data', (chunk: Buffer) => {
           responseChunks.push(chunk);
-          res.write(chunk);
+          if (!res.writableEnded && !res.destroyed) {
+            res.write(chunk);
+          }
         });
         proxyRes.on('end', () => {
           res.end();
@@ -115,21 +121,23 @@ export function createProxyRequestHandler(
         });
         proxyRes.on('error', (err) => {
           log.error(`[Moonshot Proxy] Response stream error: ${err}`);
-          res.end();
+          if (!res.headersSent) {
+            res.end();
+          }
         });
       });
       proxy.on('error', (error) => {
         log.error(`[Moonshot Proxy] Request error: ${error}`);
         if (!res.headersSent) {
           res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              error: 'Moonshot proxy request failed',
+              details: error.message,
+              hint: 'Check your Moonshot API key and network connectivity',
+            }),
+          );
         }
-        res.end(
-          JSON.stringify({
-            error: 'Moonshot proxy request failed',
-            details: error.message,
-            hint: 'Check your Moonshot API key and network connectivity',
-          }),
-        );
       });
       if (body.length > 0) {
         proxy.write(body);
@@ -141,8 +149,10 @@ export function createProxyRequestHandler(
       log.error(`[Moonshot Proxy] Incoming request error: ${error}`);
       if (!res.headersSent) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid request', details: error.message }));
+      } else {
+        res.destroy();
       }
-      res.end(JSON.stringify({ error: 'Invalid request', details: error.message }));
     });
   };
 }
