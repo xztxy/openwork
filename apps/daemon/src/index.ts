@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   DaemonRpcServer,
   getSocketPath,
+  getPidFilePath,
   acquirePidLock,
   installCrashHandlers,
   type PidLockHandle,
@@ -69,8 +70,12 @@ async function main(): Promise<void> {
 
   console.log('[Daemon] Starting...');
 
-  // 1. Acquire PID lock (atomic, with stale detection)
-  pidLock = acquirePidLock();
+  // Resolve dataDir early — all identity files (socket, PID, DB) derive from it.
+  const dataDir = args.dataDir;
+
+  // 1. Acquire PID lock scoped to dataDir (atomic, with stale detection)
+  const pidPath = getPidFilePath(dataDir);
+  pidLock = acquirePidLock(pidPath);
   console.log(`[Daemon] PID lock acquired: ${pidLock.pidPath} (pid=${process.pid})`);
 
   // 2. Generate per-session auth token for HTTP APIs
@@ -78,7 +83,7 @@ async function main(): Promise<void> {
 
   // 3. Initialize storage (use shared data dir if provided, enabling shared DB with desktop)
   const storageService = new StorageService();
-  const storage = storageService.initialize(args.dataDir);
+  const storage = storageService.initialize(dataDir);
 
   // 4. Crash recovery: mark stale running tasks as failed
   const allTasks = storage.getTasks();
@@ -90,7 +95,7 @@ async function main(): Promise<void> {
   }
 
   // 5. Create services
-  const userDataPath = args.dataDir || path.join(homedir(), '.accomplish');
+  const userDataPath = dataDir || path.join(homedir(), '.accomplish');
   const mcpToolsPath =
     process.env.MCP_TOOLS_PATH ||
     path.resolve(__dirname, '..', '..', '..', 'packages', 'agent-core', 'mcp-tools');
@@ -106,9 +111,10 @@ async function main(): Promise<void> {
   const permissionService = new PermissionService(authToken);
   const thoughtStreamService = new ThoughtStreamService(authToken);
 
-  // 6. Create RPC server (moved before init calls to avoid TDZ)
+  // 6. Create RPC server — socket path derived from dataDir for profile isolation
+  const socketPath = args.socketPath || getSocketPath(dataDir);
   const rpc = new DaemonRpcServer({
-    socketPath: args.socketPath,
+    socketPath,
     onConnection: (clientId) => console.log(`[Daemon] Client connected: ${clientId}`),
     onDisconnection: (clientId) => console.log(`[Daemon] Client disconnected: ${clientId}`),
   });
@@ -292,7 +298,6 @@ async function main(): Promise<void> {
     process.env.ACCOMPLISH_THOUGHT_STREAM_PORT = String(thoughtPort);
   }
 
-  const socketPath = args.socketPath || getSocketPath();
   console.log(`[Daemon] Listening on ${socketPath}`);
 
   // 12. Graceful shutdown with drain phase

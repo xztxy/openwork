@@ -3,18 +3,24 @@ import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { createStorage, type StorageAPI } from '@accomplish_ai/agent-core';
 
-const DEFAULT_DATA_DIR = join(homedir(), '.accomplish');
+const DEV_DEFAULT_DATA_DIR = join(homedir(), '.accomplish');
 
 export class StorageService {
   private storage: StorageAPI | null = null;
 
+  /**
+   * Initialize storage.
+   *
+   * @param dataDir — Data directory. Required in production (passed via --data-dir).
+   *                   In dev mode (no --data-dir), falls back to `~/.accomplish`.
+   */
   initialize(dataDir?: string): StorageAPI {
-    const dir = dataDir || DEFAULT_DATA_DIR;
+    const dir = dataDir || DEV_DEFAULT_DATA_DIR;
     mkdirSync(dir, { recursive: true, mode: 0o700 });
 
-    // Use the same database name as the desktop app.
-    // When --data-dir points to Electron's userData, this shares the same DB.
-    // In standalone mode (no --data-dir), uses accomplish-dev.db in ~/.accomplish.
+    // Use the same database name as the desktop app when --data-dir is
+    // explicitly provided (shared DB). In standalone dev mode, use the
+    // dev database name to avoid conflicts with the packaged app.
     const dbName = dataDir ? 'accomplish.db' : 'accomplish-dev.db';
     const databasePath = join(dir, dbName);
 
