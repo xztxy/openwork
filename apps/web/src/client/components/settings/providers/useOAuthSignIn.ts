@@ -136,10 +136,7 @@ export function useOAuthSignIn({
       if (abortController.signal.aborted || attemptId !== signInAttemptRef.current) return;
       setError(err instanceof Error ? err.message : t('status.signInFailed'));
     } finally {
-      if (!pollStarted && (abortController.signal.aborted || attemptId !== signInAttemptRef.current)) {
-        return;
-      }
-      if (!pollStarted) {
+      if (!pollStarted && !abortController.signal.aborted && attemptId === signInAttemptRef.current) {
         setSigningIn(false);
       }
     }
