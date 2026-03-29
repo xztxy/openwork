@@ -9,24 +9,19 @@ import { createLogger } from '../lib/logger';
 const logger = createLogger('Execution');
 import { MAX_FILES } from '../lib/fileUtils';
 import { springs } from '../lib/animations';
-import { FAVORITABLE_STATUSES } from '../lib/task-utils';
 import {
   hasAnyReadyProvider,
   getOAuthProviderDisplayName,
   PROMPT_DEFAULT_MAX_LENGTH,
 } from '@accomplish_ai/agent-core/common';
 import { Button } from '@/components/ui/button';
-import { StarButton } from '@/components/ui/StarButton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card } from '@/components/ui/card';
 import {
   XCircle,
   ArrowBendDownLeft,
-  ArrowLeft,
-  CheckCircle,
   WarningCircle,
   Clock,
-  Square,
   Download,
   CaretDown,
 } from '@phosphor-icons/react';
@@ -46,6 +41,8 @@ import { PermissionDialog } from '../components/execution/PermissionDialog';
 import { DebugPanel, type DebugLogEntry } from '../components/execution/DebugPanel';
 import type { FileAttachmentInfo } from '@accomplish_ai/agent-core/common';
 import { getAttachmentIcon } from '../lib/attachments';
+import { ExecutionCompleteFooter } from './execution/ExecutionCompleteFooter';
+import { ExecutionHeader } from './execution/ExecutionHeader';
 
 function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): T {
   let timeoutId: ReturnType<typeof setTimeout>;
@@ -53,81 +50,6 @@ function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): T 
     clearTimeout(timeoutId);
     timeoutId = setTimeout(() => fn(...args), ms);
   }) as T;
-}
-
-function ExecutionCompleteFooter({
-  taskId,
-  onStartNewTask,
-}: {
-  taskId: string;
-  onStartNewTask: () => void;
-}) {
-  const { t: tExecution } = useTranslation('execution');
-  const { currentTask, favorites, loadFavorites, addFavorite, removeFavorite } = useTaskStore();
-  const favoritesList = Array.isArray(favorites) ? favorites : [];
-  const isFavorited = favoritesList.some((f) => f.taskId === taskId);
-
-  useEffect(() => {
-    if (typeof loadFavorites === 'function') {
-      loadFavorites();
-    }
-  }, [loadFavorites]);
-
-  const handleToggleFavorite = useCallback(async () => {
-    if (isFavorited) {
-      await removeFavorite(taskId);
-    } else {
-      await addFavorite(taskId);
-    }
-  }, [taskId, isFavorited, addFavorite, removeFavorite]);
-
-  const rawStatus = currentTask?.status ?? '';
-  const statusLabelKey = rawStatus === 'interrupted' ? 'status.stopped' : `status.${rawStatus}`;
-  const statusLabel = rawStatus ? tExecution(statusLabelKey) : '';
-  const canFavorite = FAVORITABLE_STATUSES.includes(rawStatus);
-
-  const failedErrorMessage =
-    currentTask?.status === 'failed' ? (currentTask.result?.error ?? null) : null;
-
-  // Only show the alert when the error contains actionable detail from the classifier.
-  // We check for the debug-panel fallback suffix rather than comparing to a localized
-  // string, making this locale-independent.
-  const showFailedAlert =
-    failedErrorMessage !== null &&
-    failedErrorMessage.length > 0 &&
-    !failedErrorMessage.includes('Check the debug panel for details');
-
-  return (
-    <div className="flex-shrink-0 border-t border-border bg-card/50 px-6 py-4 flex flex-col items-center gap-3">
-      <p className="text-sm text-muted-foreground">
-        {tExecution('taskStatus', { status: statusLabel })}
-      </p>
-      {showFailedAlert && (
-        <Alert
-          variant="destructive"
-          className="py-2 px-3 flex items-center gap-2 [&>svg]:static [&>svg~*]:pl-0 max-w-md w-full"
-        >
-          <WarningCircle className="h-4 w-4 shrink-0" />
-          <AlertDescription className="text-xs leading-tight">
-            {failedErrorMessage}
-          </AlertDescription>
-        </Alert>
-      )}
-      <div className="flex items-center gap-2">
-        {canFavorite && (
-          <StarButton
-            isFavorite={isFavorited}
-            onToggle={() => void handleToggleFavorite()}
-            size="md"
-            data-testid="favorite-toggle"
-          />
-        )}
-        <Button onClick={onStartNewTask} data-testid="start-new-task">
-          {tExecution('startNewTask')}
-        </Button>
-      </div>
-    </div>
-  );
 }
 
 export function ExecutionPage() {
@@ -715,60 +637,6 @@ export function ExecutionPage() {
     );
   }
 
-  const getStatusBadge = () => {
-    switch (currentTask.status) {
-      case 'queued':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-600 shrink-0">
-            <Clock className="h-3 w-3" />
-            {t('status.queued')}
-          </span>
-        );
-      case 'running':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 dark:bg-primary/5 shrink-0">
-            <span className="animate-shimmer bg-gradient-to-r from-primary via-primary/50 to-primary dark:from-primary/70 dark:via-primary/30 dark:to-primary/70 bg-[length:200%_100%] bg-clip-text text-transparent">
-              {t('status.running')}
-            </span>
-          </span>
-        );
-      case 'completed':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-600 shrink-0">
-            <CheckCircle className="h-3 w-3" />
-            {t('status.completed')}
-          </span>
-        );
-      case 'failed':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-destructive/10 text-destructive shrink-0">
-            <XCircle className="h-3 w-3" />
-            {t('status.failed')}
-          </span>
-        );
-      case 'cancelled':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground shrink-0">
-            <XCircle className="h-3 w-3" />
-            {t('status.cancelled')}
-          </span>
-        );
-      case 'interrupted':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-600 shrink-0">
-            <Square className="h-3 w-3" />
-            {t('status.stopped')}
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground shrink-0">
-            {currentTask.status}
-          </span>
-        );
-    }
-  };
-
   return (
     <>
       <SettingsDialog
@@ -779,27 +647,7 @@ export function ExecutionPage() {
       />
 
       <div className="h-full flex flex-col bg-background relative">
-        {/* Task header */}
-        <div className="flex-shrink-0 border-b border-border bg-card/50 px-6 py-4">
-          <div className="flex items-center justify-between max-w-4xl mx-auto">
-            <div className="flex items-center gap-4 min-w-0 flex-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate('/')}
-                className="shrink-0 no-drag"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <h1 className="text-base font-medium text-foreground truncate min-w-0">
-                  {currentTask.prompt}
-                </h1>
-                <span data-testid="execution-status-badge">{getStatusBadge()}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ExecutionHeader prompt={currentTask.prompt} status={currentTask.status} />
 
         {/* Browser installation modal */}
         <AnimatePresence>
