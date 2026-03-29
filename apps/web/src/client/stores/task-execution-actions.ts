@@ -168,16 +168,28 @@ export function createTaskExecutionActions(set: SetFn, get: GetFn) {
           message: 'UI cancel task',
           context: { taskId: currentTask.id },
         });
-        await accomplish.cancelTask(currentTask.id);
-        if (!hasTaskStateToken(get(), taskStateToken)) {
-          return;
+        try {
+          await accomplish.cancelTask(currentTask.id);
+          if (!hasTaskStateToken(get(), taskStateToken)) {
+            return;
+          }
+          set((state) => ({
+            currentTask: state.currentTask ? { ...state.currentTask, status: 'cancelled' } : null,
+            tasks: state.tasks.map((t) =>
+              t.id === currentTask.id ? { ...t, status: 'cancelled' as TaskStatus } : t,
+            ),
+          }));
+        } catch (err) {
+          if (!hasTaskStateToken(get(), taskStateToken)) {
+            return;
+          }
+          set({ error: err instanceof Error ? err.message : 'Failed to cancel task' });
+          void accomplish.logEvent({
+            level: 'error',
+            message: 'UI cancel task failed',
+            context: { taskId: currentTask.id, error: err instanceof Error ? err.message : String(err) },
+          });
         }
-        set((state) => ({
-          currentTask: state.currentTask ? { ...state.currentTask, status: 'cancelled' } : null,
-          tasks: state.tasks.map((t) =>
-            t.id === currentTask.id ? { ...t, status: 'cancelled' as TaskStatus } : t,
-          ),
-        }));
       }
     },
 
@@ -190,7 +202,16 @@ export function createTaskExecutionActions(set: SetFn, get: GetFn) {
           message: 'UI interrupt task',
           context: { taskId: currentTask.id },
         });
-        await accomplish.interruptTask(currentTask.id);
+        try {
+          await accomplish.interruptTask(currentTask.id);
+        } catch (err) {
+          set({ error: err instanceof Error ? err.message : 'Failed to interrupt task' });
+          void accomplish.logEvent({
+            level: 'error',
+            message: 'UI interrupt task failed',
+            context: { taskId: currentTask.id, error: err instanceof Error ? err.message : String(err) },
+          });
+        }
       }
     },
 

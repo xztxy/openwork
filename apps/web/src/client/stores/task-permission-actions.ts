@@ -25,6 +25,8 @@ export function createTaskPermissionActions(set: SetFn, get: GetFn) {
     respondToPermission: async (response: PermissionResponse) => {
       const accomplish = getAccomplish();
       const taskStateToken = get()._taskStateToken;
+      // Save the requestId before the await to detect if a newer request arrived
+      const requestId = response.requestId;
       void accomplish.logEvent({
         level: 'info',
         message: 'UI permission response',
@@ -35,6 +37,11 @@ export function createTaskPermissionActions(set: SetFn, get: GetFn) {
         return;
       }
       set((state) => {
+        const existingRequest = state.permissionRequests[response.taskId];
+        // Only clear if the stored request still matches the one we responded to
+        if (!existingRequest || existingRequest.id !== requestId) {
+          return state;
+        }
         const { [response.taskId]: _, ...rest } = state.permissionRequests;
         return { permissionRequests: rest };
       });

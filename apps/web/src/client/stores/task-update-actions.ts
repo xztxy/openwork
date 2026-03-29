@@ -60,17 +60,22 @@ export function createTaskUpdateActions(set: SetFn, _get: GetFn) {
         }
         if (newStatus) {
           const finalStatus = newStatus;
-          updatedTasks = state.tasks.map((t) =>
-            t.id === event.taskId
-              ? {
-                  ...t,
-                  status: finalStatus,
-                  ...(isCurrentTask && updatedCurrentTask
-                    ? { messages: updatedCurrentTask.messages }
-                    : {}),
-                }
-              : t,
-          );
+          updatedTasks = state.tasks.map((t) => {
+            if (t.id !== event.taskId) return t;
+            const taskUpdate: Partial<typeof t> = { status: finalStatus };
+            if (isCurrentTask && updatedCurrentTask) {
+              // Keep tasks array in sync with currentTask for terminal fields
+              taskUpdate.messages = updatedCurrentTask.messages;
+              if ('result' in updatedCurrentTask) taskUpdate.result = updatedCurrentTask.result;
+              if ('sessionId' in updatedCurrentTask && updatedCurrentTask.sessionId != null) {
+                taskUpdate.sessionId = updatedCurrentTask.sessionId;
+              }
+              if ('completedAt' in updatedCurrentTask && updatedCurrentTask.completedAt != null) {
+                taskUpdate.completedAt = updatedCurrentTask.completedAt;
+              }
+            }
+            return { ...t, ...taskUpdate };
+          });
         }
         let shouldClearTodos = false;
         if (
@@ -80,10 +85,16 @@ export function createTaskUpdateActions(set: SetFn, _get: GetFn) {
           const isInterrupted = event.type === 'complete' && event.result?.status === 'interrupted';
           shouldClearTodos = !isInterrupted;
         }
+        // Only clear isLoading when the event is for the currently active task
+        // Also clear isLoading when the task transitions out of 'queued'
+        const wasQueued = state.currentTask?.id === event.taskId && state.currentTask?.status === 'queued';
+        const shouldClearLoading =
+          isCurrentTask &&
+          (newStatus !== null || wasQueued);
         return {
           currentTask: updatedCurrentTask,
           tasks: updatedTasks,
-          isLoading: false,
+          ...(shouldClearLoading ? { isLoading: false } : {}),
           ...(shouldClearTodos ? { todos: [], todosTaskId: null } : {}),
         };
       });
@@ -100,11 +111,16 @@ export function createTaskUpdateActions(set: SetFn, _get: GetFn) {
         if (!state.currentTask || state.currentTask.id !== event.taskId) {
           return state;
         }
+        const updatedMessages = [...state.currentTask.messages, ...event.messages];
         const updatedTask = {
           ...state.currentTask,
-          messages: [...state.currentTask.messages, ...event.messages],
+          messages: updatedMessages,
         };
-        return { currentTask: updatedTask, isLoading: false };
+        // Keep tasks array in sync with currentTask batch messages
+        const updatedTasks = state.tasks.map((t) =>
+          t.id === event.taskId ? { ...t, messages: updatedMessages } : t,
+        );
+        return { currentTask: updatedTask, tasks: updatedTasks, isLoading: false };
       });
     },
 
