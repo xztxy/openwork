@@ -197,6 +197,7 @@ export function createTaskExecutionActions(set: SetFn, get: GetFn) {
       const accomplish = getAccomplish();
       const { currentTask } = get();
       if (currentTask && currentTask.status === 'running') {
+        const taskStateToken = get()._taskStateToken;
         void accomplish.logEvent({
           level: 'info',
           message: 'UI interrupt task',
@@ -205,6 +206,9 @@ export function createTaskExecutionActions(set: SetFn, get: GetFn) {
         try {
           await accomplish.interruptTask(currentTask.id);
         } catch (err) {
+          if (!hasTaskStateToken(get(), taskStateToken)) {
+            return;
+          }
           set({ error: err instanceof Error ? err.message : 'Failed to interrupt task' });
           void accomplish.logEvent({
             level: 'error',
