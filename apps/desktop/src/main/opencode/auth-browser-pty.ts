@@ -47,6 +47,17 @@ export function spawnOAuthPty({
   safeCwd,
 }: OpenCodeCommandContext): pty.IPty {
   const allArgs = [...baseArgs, 'auth', 'login'];
+
+  if (process.platform === 'win32') {
+    return pty.spawn(command, allArgs, {
+      name: 'xterm-256color',
+      cols: 120,
+      rows: 30,
+      cwd: safeCwd,
+      env,
+    });
+  }
+
   const quoted = [command, ...allArgs].map((arg) => quoteForShell(arg)).join(' ');
   const shellCmd = getPlatformShell(app.isPackaged);
   const shellArgs = getShellArgs(quoted);

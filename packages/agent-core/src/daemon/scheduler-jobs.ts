@@ -25,12 +25,12 @@ export function parseCronField(field: string, min: number, max: number): number[
     if (part.includes('-')) {
       const rangeParts = part.split('-');
       if (rangeParts.length !== 2) {
-        throw new Error(`Invalid cron range token: "${part}"`);
+        continue;
       }
       const start = Number(rangeParts[0]);
       const end = Number(rangeParts[1]);
       if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start < min || end > max) {
-        throw new Error(`Invalid cron range: "${part}" (must be between ${min} and ${max})`);
+        continue;
       }
       for (let i = Math.floor(start); i <= Math.floor(end); i++) {
         values.push(i);
@@ -38,7 +38,7 @@ export function parseCronField(field: string, min: number, max: number): number[
     } else {
       const val = Number(part);
       if (!Number.isFinite(val) || val < min || val > max) {
-        throw new Error(`Invalid cron value: "${part}" (must be finite integer between ${min} and ${max})`);
+        continue;
       }
       values.push(Math.floor(val));
     }
@@ -130,7 +130,7 @@ export function validateCronExpression(cron: string): void {
 
   for (let i = 0; i < 5; i++) {
     const field = parts[i];
-    if (field === '*') continue;
+    if (field === '*') { continue; }
     const values = parseCronField(field, CRON_FIELD_RANGES[i][0], CRON_FIELD_RANGES[i][1]);
     if (values.length === 0) {
       throw new Error(

@@ -113,6 +113,9 @@ export async function buildEnvironment(taskId: string): Promise<NodeJS.ProcessEn
         const userDataPath = app.getPath('userData');
         vertexServiceAccountKeyPath = path.join(userDataPath, VERTEX_SA_KEY_FILENAME);
         fs.writeFileSync(vertexServiceAccountKeyPath, parsed.serviceAccountJson, { mode: 0o600 });
+        if (process.platform !== 'win32') {
+          fs.chmodSync(vertexServiceAccountKeyPath, 0o600);
+        }
       }
     } catch {
       logOC('WARN', '[OpenCode CLI] Failed to parse Vertex credentials');

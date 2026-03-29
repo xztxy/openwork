@@ -46,9 +46,23 @@ export function resolveTaskIdFromRequest(
   return { taskId: trimmed };
 }
 
-/** Set CORS headers for local-only API servers. */
-export function setCorsHeaders(res: import('http').ServerResponse): void {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+/** Trusted origins for local-only API servers. */
+const TRUSTED_ORIGINS = new Set([
+  'accomplish://app',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+]);
+
+/** Set CORS headers for local-only API servers, restricting to known trusted origins. */
+export function setCorsHeaders(
+  res: import('http').ServerResponse,
+  req: import('http').IncomingMessage,
+): void {
+  const origin = req.headers.origin;
+  if (origin !== undefined && TRUSTED_ORIGINS.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 }

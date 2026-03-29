@@ -27,7 +27,7 @@ export function startQuestionApiServer(
   getActiveTaskId: () => string | null,
 ): http.Server {
   const server = http.createServer(async (req, res) => {
-    setCorsHeaders(res);
+    setCorsHeaders(res, req);
 
     if (req.method === 'OPTIONS') {
       res.writeHead(200);

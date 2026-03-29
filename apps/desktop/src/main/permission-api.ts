@@ -57,7 +57,7 @@ export function resolveQuestion(requestId: string, response: QuestionResponseDat
 /** Create and start the HTTP server for permission requests */
 export function startPermissionApiServer(): http.Server {
   const server = http.createServer(async (req, res) => {
-    setCorsHeaders(res);
+    setCorsHeaders(res, req);
 
     if (req.method === 'OPTIONS') {
       res.writeHead(200);

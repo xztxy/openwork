@@ -69,14 +69,16 @@ function forwardRequest(
     log.error('[Azure Foundry Proxy] Request error:', { error: error.message });
     if (!res.headersSent) {
       res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          error: 'Azure Foundry proxy request failed',
+          details: error.message,
+          hint: 'Check your Azure endpoint URL and network connectivity',
+        }),
+      );
+    } else {
+      res.end();
     }
-    res.end(
-      JSON.stringify({
-        error: 'Azure Foundry proxy request failed',
-        details: error.message,
-        hint: 'Check your Azure endpoint URL and network connectivity',
-      }),
-    );
   });
 
   if (body.length > 0) {
@@ -134,18 +136,23 @@ function proxyRequest(req: http.IncomingMessage, res: http.ServerResponse): void
     log.error('[Azure Foundry Proxy] Incoming request error:', { error: error.message });
     if (!res.headersSent) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid request', details: error.message }));
+    } else {
+      res.end();
     }
-    res.end(JSON.stringify({ error: 'Invalid request', details: error.message }));
   });
 }
 
 async function startProxyServer(): Promise<void> {
   server = http.createServer(proxyRequest);
   return new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(
-      () => reject(new Error('Azure Foundry proxy server startup timeout')),
-      5000,
-    );
+    const timeout = setTimeout(() => {
+      if (server) {
+        server.close();
+        server = null;
+      }
+      reject(new Error('Azure Foundry proxy server startup timeout'));
+    }, 5000);
     server!.once('error', (error: NodeJS.ErrnoException) => {
       clearTimeout(timeout);
       server = null;

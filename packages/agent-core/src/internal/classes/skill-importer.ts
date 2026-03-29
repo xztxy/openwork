@@ -7,11 +7,12 @@ import {
   parseFrontmatter,
   generateId,
   sanitizeSkillName,
+  normalizeSkillSlug,
   isPathWithinDirectory,
   scanDirectory,
 } from './skill-parser.js';
 
-export { scanDirectory };
+export { scanDirectory, normalizeSkillSlug };
 
 const log = createConsoleLogger({ prefix: 'SkillsManager' });
 

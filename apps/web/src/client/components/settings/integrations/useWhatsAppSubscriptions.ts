@@ -72,7 +72,7 @@ export function useWhatsAppSubscriptions({
         }
         void fetchConfig();
       }
-      if (status === 'disconnected' || status === 'logged_out') {
+      if (nextStatus === 'disconnected' || nextStatus === 'logged_out') {
         setQrCode(null);
         setConnecting(false);
         if (qrTimerRef.current) {

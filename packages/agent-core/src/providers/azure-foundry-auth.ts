@@ -67,6 +67,17 @@ export interface AzureAuthHeaderError {
 
 export type AzureAuthHeaderOutcome = AzureAuthHeaderResult | AzureAuthHeaderError;
 
+/** Shared helper: fetch an Entra ID token and build the Authorization header. */
+async function getEntraAuthHeader(): Promise<
+  { success: false; error: string } | { success: true; authValue: string }
+> {
+  const tokenResult = await getAzureEntraToken();
+  if (!tokenResult.success) {
+    return { success: false, error: tokenResult.error };
+  }
+  return { success: true, authValue: `Bearer ${tokenResult.token}` };
+}
+
 /**
  * Build Authorization headers for an Azure Foundry API request.
  * Returns the headers dict and the raw auth value for reuse.
@@ -80,13 +91,12 @@ export async function buildAzureAuthHeaders(
   };
 
   if (authType === 'entra-id') {
-    const tokenResult = await getAzureEntraToken();
-    if (!tokenResult.success) {
-      return { success: false, error: tokenResult.error };
+    const entraResult = await getEntraAuthHeader();
+    if (!entraResult.success) {
+      return { success: false, error: entraResult.error };
     }
-    const authValue = `Bearer ${tokenResult.token}`;
-    headers['Authorization'] = authValue;
-    return { success: true, headers, authValue };
+    headers['Authorization'] = entraResult.authValue;
+    return { success: true, headers, authValue: entraResult.authValue };
   }
 
   // api-key auth
@@ -118,7 +128,7 @@ export async function buildTestAuthHeaders(
   };
 
   if (authType === 'api-key') {
-    if (!apiKey) {
+    if (!apiKey || !apiKey.trim()) {
       return { success: false, error: 'API key is required for API key authentication' };
     }
     headers['api-key'] = apiKey;
@@ -126,10 +136,10 @@ export async function buildTestAuthHeaders(
   }
 
   // entra-id
-  const tokenResult = await getAzureEntraToken();
-  if (!tokenResult.success) {
-    return { success: false, error: tokenResult.error };
+  const entraResult = await getEntraAuthHeader();
+  if (!entraResult.success) {
+    return { success: false, error: entraResult.error };
   }
-  headers['Authorization'] = `Bearer ${tokenResult.token}`;
+  headers['Authorization'] = entraResult.authValue;
   return { success: true, headers };
 }

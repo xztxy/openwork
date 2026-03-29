@@ -6,7 +6,6 @@
  */
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { EventEmitter } from 'node:events';
 import {
   buildCliArgs as coreBuildCliArgs,
   buildOpenCodeEnvironment,
@@ -17,7 +16,6 @@ import {
   syncApiKeysToOpenCodeAuth,
   getOpenCodeAuthPath,
   getBundledNodePaths,
-  mapResultToStatus,
   DEV_BROWSER_PORT,
   type TaskConfig,
   type StorageAPI,
@@ -25,11 +23,6 @@ import {
   type CliResolverConfig,
   type BrowserServerConfig,
   type BedrockCredentials,
-  type TaskCallbacks,
-  type TaskMessage,
-  type TaskResult,
-  type TaskStatus,
-  type TaskManagerAPI,
 } from '@accomplish_ai/agent-core';
 
 export interface TaskConfigBuilderOptions {
@@ -161,47 +154,4 @@ export function getBrowserServerConfig(opts: TaskConfigBuilderOptions): BrowserS
   };
 }
 
-export function createTaskCallbacks(
-  taskId: string,
-  emitter: EventEmitter,
-  storage: StorageAPI,
-  taskManager: TaskManagerAPI,
-): TaskCallbacks {
-  return {
-    onBatchedMessages: (messages: TaskMessage[]) => {
-      emitter.emit('message', { taskId, messages });
-      for (const msg of messages) {
-        storage.addTaskMessage(taskId, msg);
-      }
-    },
-    onProgress: (progress) => {
-      emitter.emit('progress', { taskId, ...progress });
-    },
-    onPermissionRequest: (request) => {
-      emitter.emit('permission', request);
-    },
-    onComplete: (result: TaskResult) => {
-      emitter.emit('complete', { taskId, result });
-      const taskStatus = mapResultToStatus(result);
-      storage.updateTaskStatus(taskId, taskStatus, new Date().toISOString());
-      const sessionId = result.sessionId || taskManager.getSessionId(taskId);
-      if (sessionId) {
-        storage.updateTaskSessionId(taskId, sessionId);
-      }
-      if (result.status === 'success') {
-        storage.clearTodosForTask(taskId);
-      }
-    },
-    onError: (error: Error) => {
-      emitter.emit('error', { taskId, error: error.message });
-      storage.updateTaskStatus(taskId, 'failed', new Date().toISOString());
-    },
-    onStatusChange: (status: TaskStatus) => {
-      emitter.emit('statusChange', { taskId, status });
-      storage.updateTaskStatus(taskId, status, new Date().toISOString());
-    },
-    onTodoUpdate: (todos) => {
-      storage.saveTodosForTask(taskId, todos);
-    },
-  };
-}
+export { createTaskCallbacks } from './task-callbacks.js';
