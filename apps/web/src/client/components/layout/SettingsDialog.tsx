@@ -13,7 +13,7 @@ import { GeneralTab } from '@/components/settings/GeneralTab';
 import { SandboxSection } from '@/components/settings/SandboxSection';
 import { ConnectorsPanel } from '@/components/settings/connectors';
 import { IntegrationsPanel } from '@/components/settings/integrations';
-import { DaemonPanel } from '@/components/settings/DaemonPanel';
+
 import { CloudBrowsersPanel } from '@/components/settings/CloudBrowsersPanel';
 import { cn } from '@/lib/utils';
 import logoImage from '/assets/logo-1.png';
@@ -194,11 +194,6 @@ export function SettingsDialog({
               {s.activeTab === 'connectors' && (
                 <div className="space-y-6">
                   <ConnectorsPanel />
-                </div>
-              )}
-              {s.activeTab === 'daemon' && (
-                <div className="space-y-6">
-                  <DaemonPanel />
                 </div>
               )}
               {s.activeTab === 'browsers' && (

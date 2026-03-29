@@ -557,6 +557,16 @@ interface AccomplishAPI {
   setRunInBackground(enabled: boolean): Promise<void>;
   getDaemonSocketPath(): Promise<string>;
 
+  // Daemon control
+  daemonPing(): Promise<{ status: string; uptime: number }>;
+  daemonRestart(): Promise<{ success: boolean }>;
+  daemonStop(): Promise<{ success: boolean }>;
+  daemonStart(): Promise<{ success: boolean }>;
+
+  // Close behavior
+  getCloseBehavior(): Promise<string>;
+  setCloseBehavior(behavior: string): Promise<void>;
+
   // Sandbox configuration
   getSandboxConfig(): Promise<{
     mode: 'disabled' | 'native' | 'docker';

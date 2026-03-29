@@ -4,7 +4,6 @@ import {
   Microphone,
   Info,
   Plugs,
-  Robot,
   FolderSimple,
   Globe,
   ChatCircle,
@@ -16,7 +15,6 @@ export type SettingsTabId =
   | 'voice'
   | 'skills'
   | 'connectors'
-  | 'daemon'
   | 'browsers'
   | 'workspaces'
   | 'integrations'
@@ -27,7 +25,6 @@ export const SETTINGS_TABS = [
   { id: 'providers' as const, labelKey: 'tabs.providers', icon: Key },
   { id: 'skills' as const, labelKey: 'tabs.skills', icon: Lightning },
   { id: 'connectors' as const, labelKey: 'tabs.connectors', icon: Plugs },
-  { id: 'daemon' as const, labelKey: 'tabs.daemon', icon: Robot },
   { id: 'browsers' as const, labelKey: 'tabs.browsers', icon: Globe },
   { id: 'workspaces' as const, labelKey: 'tabs.workspaces', icon: FolderSimple },
   { id: 'integrations' as const, labelKey: 'tabs.integrations', icon: ChatCircle },
