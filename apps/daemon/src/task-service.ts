@@ -150,7 +150,7 @@ export class TaskService extends EventEmitter {
     };
     task.messages = [initialUserMessage];
 
-    this.storage.saveTask(task);
+    this.storage.saveTask(task, params.workspaceId);
 
     generateTaskSummary(validatedConfig.prompt, (provider) => this.storage.getApiKey(provider))
       .then((summary) => {
@@ -232,8 +232,8 @@ export class TaskService extends EventEmitter {
     return task;
   }
 
-  listTasks(): Task[] {
-    return this.storage.getTasks() as Task[];
+  listTasks(workspaceId?: string): Task[] {
+    return this.storage.getTasks(workspaceId) as Task[];
   }
 
   getTaskStatus(params: {

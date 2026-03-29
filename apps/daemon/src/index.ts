@@ -166,7 +166,13 @@ async function main(): Promise<void> {
   );
   rpc.registerMethod(
     'task.list',
-    safeHandler(() => Promise.resolve(taskService.listTasks())),
+    safeHandler((params) => {
+      const workspaceId =
+        params && typeof params === 'object' && 'workspaceId' in params
+          ? (params as { workspaceId?: string }).workspaceId
+          : undefined;
+      return Promise.resolve(taskService.listTasks(workspaceId));
+    }),
   );
   rpc.registerMethod(
     'task.status',
