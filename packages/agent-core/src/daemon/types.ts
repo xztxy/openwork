@@ -56,6 +56,9 @@ export interface TaskStartParams {
   workingDirectory?: string;
   workspaceId?: string;
   attachments?: import('../common/types/task.js').FileAttachmentInfo[];
+  allowedTools?: string[];
+  systemPromptAppend?: string;
+  outputSchema?: object;
 }
 
 export interface TaskStopParams {

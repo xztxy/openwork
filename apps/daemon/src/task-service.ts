@@ -116,6 +116,9 @@ export class TaskService extends EventEmitter {
     workingDirectory?: string;
     workspaceId?: string;
     attachments?: FileAttachmentInfo[];
+    allowedTools?: string[];
+    systemPromptAppend?: string;
+    outputSchema?: object;
   }): Promise<Task> {
     const taskId = params.taskId || createTaskId();
 
@@ -129,6 +132,9 @@ export class TaskService extends EventEmitter {
       sessionId: params.sessionId,
       workingDirectory: params.workingDirectory,
       files: params.attachments,
+      allowedTools: params.allowedTools,
+      systemPromptAppend: params.systemPromptAppend,
+      outputSchema: params.outputSchema,
     };
 
     const validatedConfig = validateTaskConfig(config);

@@ -83,6 +83,9 @@ export interface TaskStartParams {
   workingDirectory?: string;
   workspaceId?: string;
   attachments?: FileAttachmentInfo[];
+  allowedTools?: string[];
+  systemPromptAppend?: string;
+  outputSchema?: object;
 }
 
 /** Parameters for task.cancel / task.interrupt */
@@ -102,9 +105,8 @@ export interface TaskSendResponseParams {
 }
 
 /** Parameters for permission.respond */
-export interface PermissionRespondParams {
-  response: PermissionResponse;
-}
+/** Flat permission response — matches permissionResponseSchema validation. */
+export type PermissionRespondParams = PermissionResponse;
 
 /** Parameters for session.resume */
 export interface SessionResumeParams {

@@ -55,14 +55,21 @@ export function registerTaskHandlers(): void {
       return mockTask;
     }
 
-    // Proxy to daemon via RPC
+    // Sanitize attachments at the IPC boundary (same as session:resume)
+    const sanitizedAttachments = sanitizeAttachments(config.files as unknown[] | undefined);
+
+    // Proxy to daemon via RPC — forward ALL TaskConfig fields
     const client = getDaemonClient();
     const task = await client.call('task.start', {
       prompt: config.prompt,
       taskId,
       workspaceId: workspaceManager.getActiveWorkspace() ?? undefined,
       workingDirectory: config.workingDirectory,
-      attachments: config.files,
+      allowedTools: config.allowedTools,
+      systemPromptAppend: config.systemPromptAppend,
+      outputSchema: config.outputSchema,
+      sessionId: config.sessionId,
+      attachments: sanitizedAttachments,
     });
 
     return task;
@@ -194,7 +201,18 @@ export function registerTaskHandlers(): void {
     'permission:respond',
     async (_event: IpcMainInvokeEvent, response: Record<string, unknown>) => {
       const client = getDaemonClient();
-      await client.call('permission.respond', response as never);
+      // Type is now flat PermissionResponse (requestId, taskId, decision, ...)
+      await client.call(
+        'permission.respond',
+        response as {
+          requestId: string;
+          taskId: string;
+          decision: 'allow' | 'deny';
+          message?: string;
+          selectedOptions?: string[];
+          customText?: string;
+        },
+      );
     },
   );
 }
