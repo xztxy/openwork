@@ -23,16 +23,29 @@ export function parseCronField(field: string, min: number, max: number): number[
 
   for (const part of parts) {
     if (part.includes('-')) {
-      const [start, end] = part.split('-').map(Number);
-      for (let i = start; i <= end; i++) {
+      const rangeParts = part.split('-');
+      if (rangeParts.length !== 2) {
+        throw new Error(`Invalid cron range token: "${part}"`);
+      }
+      const start = Number(rangeParts[0]);
+      const end = Number(rangeParts[1]);
+      if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start < min || end > max) {
+        throw new Error(`Invalid cron range: "${part}" (must be between ${min} and ${max})`);
+      }
+      for (let i = Math.floor(start); i <= Math.floor(end); i++) {
         values.push(i);
       }
     } else {
-      values.push(Number(part));
+      const val = Number(part);
+      if (!Number.isFinite(val) || val < min || val > max) {
+        throw new Error(`Invalid cron value: "${part}" (must be finite integer between ${min} and ${max})`);
+      }
+      values.push(Math.floor(val));
     }
   }
 
-  return values.filter((v) => v >= min && v <= max);
+  // Deduplicate and sort, since ranges might overlap (e.g. "1,1-3")
+  return Array.from(new Set(values)).sort((a, b) => a - b);
 }
 
 /**

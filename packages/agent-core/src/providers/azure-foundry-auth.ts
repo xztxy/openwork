@@ -37,7 +37,7 @@ export async function postAzureChatCompletionWithRetry(
   }
 
   // Some deployments don't support max_completion_tokens — retry with max_tokens
-  const errorData = await response.json().catch(() => ({}));
+  const errorData = await response.clone().json().catch(() => ({}));
   const errorMessage = (errorData as { error?: { message?: string } })?.error?.message || '';
 
   if (errorMessage.includes('max_completion_tokens')) {

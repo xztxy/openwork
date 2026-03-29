@@ -31,7 +31,7 @@ export async function getServiceAccountAccessToken(key: ServiceAccountKey): Prom
   const payload = {
     iss: key.client_email,
     scope: 'https://www.googleapis.com/auth/cloud-platform',
-    aud: key.token_uri || 'https://oauth2.googleapis.com/token',
+    aud: 'https://oauth2.googleapis.com/token',
     iat: now,
     exp: now + 3600,
   };
@@ -45,7 +45,7 @@ export async function getServiceAccountAccessToken(key: ServiceAccountKey): Prom
   const signature = signer.sign(key.private_key, 'base64url');
   const jwt = `${unsigned}.${signature}`;
 
-  const tokenUri = key.token_uri || 'https://oauth2.googleapis.com/token';
+  const tokenUri = 'https://oauth2.googleapis.com/token';
   const response = await fetch(tokenUri, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

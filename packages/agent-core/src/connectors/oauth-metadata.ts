@@ -78,7 +78,7 @@ export async function discoverOAuthProtectedResourceMetadata(
   }
 
   const authenticateHeader = response.headers.get('www-authenticate');
-  const metadataUrlMatch = authenticateHeader?.match(/resource_metadata="([^"]+)"/i);
+  const metadataUrlMatch = authenticateHeader?.match(/\bresource_metadata\s*=\s*"([^"]+)"/i);
   const metadataUrl = metadataUrlMatch?.[1];
 
   let metadataResponse: Response | undefined;
@@ -103,7 +103,7 @@ export async function discoverOAuthProtectedResourceMetadata(
   }
 
   if (!metadataResponse || !metadataResponse.ok) {
-    const wellKnownUrl = new URL('/.well-known/oauth-protected-resource', serverUrl).toString();
+    const wellKnownUrl = new URL('./.well-known/oauth-protected-resource', serverUrl).toString();
     try {
       metadataResponse = await fetchWithTimeout(wellKnownUrl, {
         method: 'GET',
