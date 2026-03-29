@@ -567,6 +567,10 @@ interface AccomplishAPI {
   getCloseBehavior(): Promise<string>;
   setCloseBehavior(behavior: string): Promise<void>;
 
+  // Daemon connection events
+  onDaemonDisconnected(callback: () => void): () => void;
+  onDaemonReconnected(callback: () => void): () => void;
+
   // Sandbox configuration
   getSandboxConfig(): Promise<{
     mode: 'disabled' | 'native' | 'docker';

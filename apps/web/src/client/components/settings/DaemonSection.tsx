@@ -1,8 +1,11 @@
 /**
  * DaemonSection — Settings UI for daemon monitoring and control.
  *
- * Shows daemon status (running/stopped/reconnecting), uptime, active tasks,
- * control buttons (start/stop/restart), and close-button behavior setting.
+ * Merged from the standalone DaemonPanel. Includes:
+ * - Status monitor (running/stopped/reconnecting) with uptime and last ping
+ * - Control buttons (start/stop/restart)
+ * - Close-button behavior setting with double confirmation
+ * - Socket path display with copy button
  *
  * Rendered inside the General settings tab.
  */
@@ -21,11 +24,6 @@ import {
 import { Button } from '@/components/ui/button';
 
 type DaemonStatus = 'running' | 'stopped' | 'reconnecting' | 'unknown';
-
-interface PingResult {
-  status: string;
-  uptime: number;
-}
 
 function formatUptime(ms: number): string {
   if (ms <= 0) {
@@ -57,6 +55,7 @@ export function DaemonSection() {
   const [lastPing, setLastPing] = useState<Date | null>(null);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [closeBehavior, setCloseBehavior] = useState<string>('keep-daemon');
+  const [socketPath, setSocketPath] = useState<string | null>(null);
   const [showWarning, setShowWarning] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -64,7 +63,7 @@ export function DaemonSection() {
   // Poll daemon status
   const pollStatus = useCallback(async () => {
     try {
-      const result: PingResult = await accomplish.daemonPing();
+      const result = await accomplish.daemonPing();
       if (result.status === 'ok') {
         setStatus('running');
         setUptime(result.uptime);
@@ -89,13 +88,31 @@ export function DaemonSection() {
     };
   }, [pollStatus]);
 
-  // Load close behavior
+  // Load settings
   useEffect(() => {
     accomplish
       .getCloseBehavior()
       .then(setCloseBehavior)
       .catch(() => {});
+    accomplish
+      .getDaemonSocketPath()
+      .then(setSocketPath)
+      .catch(() => {});
   }, [accomplish]);
+
+  // Listen for daemon connection events (disconnected/reconnected)
+  useEffect(() => {
+    const unsubDisconnect = accomplish.onDaemonDisconnected(() => {
+      setStatus('reconnecting');
+    });
+    const unsubReconnect = accomplish.onDaemonReconnected(() => {
+      void pollStatus();
+    });
+    return () => {
+      unsubDisconnect();
+      unsubReconnect();
+    };
+  }, [accomplish, pollStatus]);
 
   // Control actions
   const handleRestart = async () => {
@@ -132,10 +149,8 @@ export function DaemonSection() {
   // Close behavior change with double confirmation
   const handleCloseBehaviorChange = () => {
     if (closeBehavior === 'keep-daemon') {
-      // Switching TO stop-daemon — need confirmation
       setShowWarning(true);
     } else {
-      // Switching back to keep-daemon — no confirmation needed
       void accomplish.setCloseBehavior('keep-daemon');
       setCloseBehavior('keep-daemon');
     }
@@ -159,23 +174,16 @@ export function DaemonSection() {
         ? 'bg-yellow-500'
         : 'bg-red-500';
 
-  const statusLabel =
-    status === 'running'
-      ? 'Running'
-      : status === 'reconnecting'
-        ? 'Reconnecting...'
-        : status === 'stopped'
-          ? 'Stopped'
-          : 'Unknown';
+  const statusLabel = t(`daemon.status.${status}`, status);
 
   return (
     <>
+      <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-3">
+        {t('daemon.title')}
+      </h4>
+
       {/* Status Monitor */}
       <div className="rounded-lg border border-border bg-card p-5">
-        <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-3">
-          {t('daemon.status', 'Background Daemon')}
-        </h4>
-
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className={`h-2.5 w-2.5 rounded-full ${statusDot}`} />
@@ -183,10 +191,13 @@ export function DaemonSection() {
               <div className="font-medium text-foreground text-sm">{statusLabel}</div>
               {status === 'running' && (
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Uptime: {formatUptime(uptime)}
+                  {t('daemon.status.uptime', { uptime: formatUptime(uptime) })}
                   {lastPing && (
                     <span className="ml-2">
-                      · Last ping: {Math.round((Date.now() - lastPing.getTime()) / 1000)}s ago
+                      ·{' '}
+                      {t('daemon.status.lastPing', {
+                        seconds: Math.round((Date.now() - lastPing.getTime()) / 1000),
+                      })}
                     </span>
                   )}
                 </p>
@@ -203,7 +214,9 @@ export function DaemonSection() {
                   onClick={handleRestart}
                   disabled={actionInProgress !== null}
                 >
-                  {actionInProgress === 'restart' ? 'Restarting...' : 'Restart'}
+                  {actionInProgress === 'restart'
+                    ? t('daemon.controls.restarting')
+                    : t('daemon.controls.restart')}
                 </Button>
                 <Button
                   variant="outline"
@@ -211,7 +224,9 @@ export function DaemonSection() {
                   onClick={handleStop}
                   disabled={actionInProgress !== null}
                 >
-                  {actionInProgress === 'stop' ? 'Stopping...' : 'Stop'}
+                  {actionInProgress === 'stop'
+                    ? t('daemon.controls.stopping')
+                    : t('daemon.controls.stop')}
                 </Button>
               </>
             ) : (
@@ -221,7 +236,9 @@ export function DaemonSection() {
                 onClick={handleStart}
                 disabled={actionInProgress !== null}
               >
-                {actionInProgress === 'start' ? 'Starting...' : 'Start Daemon'}
+                {actionInProgress === 'start'
+                  ? t('daemon.controls.starting')
+                  : t('daemon.controls.start')}
               </Button>
             )}
           </div>
@@ -233,18 +250,12 @@ export function DaemonSection() {
         <div className="flex items-center justify-between">
           <div className="flex-1">
             <div className="font-medium text-foreground text-sm">
-              {t('daemon.closeBehavior.label', 'Window Close Behavior')}
+              {t('daemon.closeBehavior.label')}
             </div>
             <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
               {closeBehavior === 'keep-daemon'
-                ? t(
-                    'daemon.closeBehavior.keepDescription',
-                    'Closing the window hides it to the system tray. The daemon keeps running and tasks continue in the background.',
-                  )
-                : t(
-                    'daemon.closeBehavior.stopDescription',
-                    'Closing the window stops the daemon and quits the app. Running tasks will be terminated.',
-                  )}
+                ? t('daemon.closeBehavior.keepDescription')
+                : t('daemon.closeBehavior.stopDescription')}
             </p>
           </div>
           <div className="ml-4">
@@ -266,11 +277,43 @@ export function DaemonSection() {
         </div>
         {closeBehavior === 'stop-daemon' && (
           <div className="mt-3 rounded-md bg-destructive/10 border border-destructive/20 p-3">
-            <p className="text-xs text-destructive">
-              Background features (scheduled tasks, external integrations) will not work when the
-              window is closed.
-            </p>
+            <p className="text-xs text-destructive">{t('daemon.closeBehavior.warning')}</p>
           </div>
+        )}
+      </div>
+
+      {/* Socket Path */}
+      <div className="rounded-lg border border-border bg-card p-5">
+        <div className="font-medium text-foreground text-sm">{t('daemon.socket.title')}</div>
+        <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
+          {t('daemon.socket.description')}
+        </p>
+
+        {socketPath ? (
+          <div className="mt-3">
+            <label className="block text-xs font-medium text-muted-foreground mb-1">
+              {t('daemon.socket.pathLabel')}
+            </label>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 min-w-0 rounded-md bg-muted px-3 py-2 text-xs font-mono text-foreground break-all overflow-hidden text-ellipsis">
+                {socketPath}
+              </code>
+              <button
+                type="button"
+                onClick={() => {
+                  void navigator.clipboard.writeText(socketPath).catch(() => {});
+                }}
+                className="flex-shrink-0 rounded-md border border-border bg-background px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                title={t('daemon.socket.copy')}
+              >
+                {t('daemon.socket.copy')}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-3 text-xs text-muted-foreground italic">
+            {t('daemon.socket.pathUnavailable')}
+          </p>
         )}
       </div>
 
@@ -278,18 +321,15 @@ export function DaemonSection() {
       <Dialog open={showWarning} onOpenChange={setShowWarning}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Disable Background Mode?</DialogTitle>
-            <DialogDescription>
-              This will terminate any running tasks when you close the window. Background features
-              like scheduled tasks and external integrations will stop working.
-            </DialogDescription>
+            <DialogTitle>{t('daemon.warningDialog.title')}</DialogTitle>
+            <DialogDescription>{t('daemon.warningDialog.description')}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowWarning(false)}>
-              Cancel
+              {t('daemon.warningDialog.cancel')}
             </Button>
             <Button variant="destructive" onClick={handleWarningConfirm}>
-              Continue
+              {t('daemon.warningDialog.continue')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -299,18 +339,15 @@ export function DaemonSection() {
       <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Are you sure?</DialogTitle>
-            <DialogDescription>
-              Tasks in progress will be lost when you close the window. This is not recommended for
-              most users.
-            </DialogDescription>
+            <DialogTitle>{t('daemon.confirmDialog.title')}</DialogTitle>
+            <DialogDescription>{t('daemon.confirmDialog.description')}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowConfirm(false)}>
-              Cancel
+              {t('daemon.confirmDialog.cancel')}
             </Button>
             <Button variant="destructive" onClick={handleFinalConfirm}>
-              Confirm
+              {t('daemon.confirmDialog.confirm')}
             </Button>
           </DialogFooter>
         </DialogContent>

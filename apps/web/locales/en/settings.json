@@ -264,6 +264,50 @@
       "description": "Show OS notifications when tasks complete while the app is in the background."
     }
   },
+  "daemon": {
+    "title": "Background Daemon",
+    "status": {
+      "running": "Running",
+      "stopped": "Stopped",
+      "reconnecting": "Reconnecting...",
+      "unknown": "Unknown",
+      "uptime": "Uptime: {{uptime}}",
+      "lastPing": "Last ping: {{seconds}}s ago"
+    },
+    "controls": {
+      "restart": "Restart",
+      "restarting": "Restarting...",
+      "stop": "Stop",
+      "stopping": "Stopping...",
+      "start": "Start Daemon",
+      "starting": "Starting..."
+    },
+    "closeBehavior": {
+      "label": "Window Close Behavior",
+      "keepDescription": "Closing the window hides it to the system tray. The daemon keeps running and tasks continue in the background.",
+      "stopDescription": "Closing the window stops the daemon and quits the app. Running tasks will be terminated.",
+      "warning": "Background features (scheduled tasks, external integrations) will not work when the window is closed."
+    },
+    "warningDialog": {
+      "title": "Disable Background Mode?",
+      "description": "This will terminate any running tasks when you close the window. Background features like scheduled tasks and external integrations will stop working.",
+      "cancel": "Cancel",
+      "continue": "Continue"
+    },
+    "confirmDialog": {
+      "title": "Are you sure?",
+      "description": "Tasks in progress will be lost when you close the window. This is not recommended for most users.",
+      "cancel": "Cancel",
+      "confirm": "Confirm"
+    },
+    "socket": {
+      "title": "Daemon Socket",
+      "description": "External clients (CLI tools, integrations, scheduled jobs) can send tasks via the local daemon socket using JSON-RPC 2.0.",
+      "pathLabel": "Socket Path",
+      "pathUnavailable": "Socket path unavailable.",
+      "copy": "Copy"
+    }
+  },
   "appearance": {
     "title": "Theme",
     "description": "Choose how Accomplish looks. Select System to match your operating system setting.",

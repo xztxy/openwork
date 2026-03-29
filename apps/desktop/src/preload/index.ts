@@ -609,6 +609,18 @@ const accomplishAPI = {
   setCloseBehavior: (behavior: string): Promise<void> =>
     ipcRenderer.invoke('daemon:set-close-behavior', behavior),
 
+  // Daemon connection events
+  onDaemonDisconnected: (callback: () => void): (() => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('daemon:disconnected', listener);
+    return () => ipcRenderer.removeListener('daemon:disconnected', listener);
+  },
+  onDaemonReconnected: (callback: () => void): (() => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('daemon:reconnected', listener);
+    return () => ipcRenderer.removeListener('daemon:reconnected', listener);
+  },
+
   // Favorites
   addFavorite: (taskId: string): Promise<void> => ipcRenderer.invoke('favorites:add', taskId),
   removeFavorite: (taskId: string): Promise<void> => ipcRenderer.invoke('favorites:remove', taskId),
