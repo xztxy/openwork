@@ -306,10 +306,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     }
 
     if (this.options.onBeforeStart) {
-      const result = await this.options.onBeforeStart();
-      if (result) {
-        this.externalEnv = result;
-      }
+      this.externalEnv = (await this.options.onBeforeStart()) || {};
     }
 
     const cliArgs = await this.options.buildCliArgs(config);

@@ -22,32 +22,29 @@ export function parseCronField(field: string, min: number, max: number): number[
   const parts = field.split(',');
 
   for (const part of parts) {
-    if (part.includes('-')) {
+    if (/^\d+-\d+$/.test(part)) {
       const rangeParts = part.split('-');
-      if (rangeParts.length !== 2) {
-        continue;
+      const start = parseInt(rangeParts[0], 10);
+      const end = parseInt(rangeParts[1], 10);
+      if (start > end || start < min || end > max) {
+        return [];
       }
-      const start = Number(rangeParts[0]);
-      const end = Number(rangeParts[1]);
-      if (
-        !Number.isFinite(start) ||
-        !Number.isFinite(end) ||
-        start > end ||
-        start < min ||
-        end > max
-      ) {
-        continue;
-      }
-      for (let i = Math.floor(start); i <= Math.floor(end); i++) {
+      for (let i = start; i <= end; i++) {
         values.push(i);
       }
-    } else {
-      const val = Number(part);
-      if (!Number.isFinite(val) || val < min || val > max) {
-        continue;
+    } else if (/^\d+$/.test(part)) {
+      const val = parseInt(part, 10);
+      if (val < min || val > max) {
+        return [];
       }
-      values.push(Math.floor(val));
+      values.push(val);
+    } else {
+      return [];
     }
+  }
+
+  if (values.length === 0) {
+    return [];
   }
 
   // Deduplicate and sort, since ranges might overlap (e.g. "1,1-3")

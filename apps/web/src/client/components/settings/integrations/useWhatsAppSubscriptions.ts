@@ -11,12 +11,6 @@ interface UseWhatsAppSubscriptionsOptions {
   accomplish: {
     onWhatsAppQR: (cb: (qr: string) => void) => () => void;
     onWhatsAppStatus: (cb: (status: string) => void) => () => void;
-    getWhatsAppConfig: () => Promise<{
-      enabled?: boolean;
-      status: string;
-      phoneNumber?: string;
-      lastConnectedAt?: number;
-    } | null>;
   };
   qrTimerRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>;
   connectTimeoutRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;

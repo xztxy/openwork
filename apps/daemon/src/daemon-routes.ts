@@ -105,8 +105,11 @@ export function registerRpcMethods(services: RouteServices): void {
   );
   rpc.registerMethod(
     'task.delete',
-    safeHandler((params) => {
+    safeHandler(async (params) => {
       const validated = validate(taskIdSchema, params);
+      if (taskService.hasActiveTask(validated.taskId)) {
+        await taskService.stopTask({ taskId: validated.taskId });
+      }
       storage.deleteTask(validated.taskId);
       return Promise.resolve();
     }),
@@ -114,6 +117,9 @@ export function registerRpcMethods(services: RouteServices): void {
   rpc.registerMethod(
     'task.clearHistory',
     safeHandler(() => {
+      if (taskService.getActiveTaskCount() > 0) {
+        throw new Error('Cannot clear history while tasks are active or queued');
+      }
       storage.clearHistory();
       return Promise.resolve();
     }),

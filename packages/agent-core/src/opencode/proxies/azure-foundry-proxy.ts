@@ -59,6 +59,10 @@ function forwardRequest(
 
   const headers = { ...req.headers } as Record<string, string | string[] | undefined>;
   delete headers.host;
+  HOP_BY_HOP_HEADERS.forEach((header) => {
+    delete headers[header];
+  });
+
   if (body.length !== rawBody.length) {
     headers['content-length'] = String(body.length);
   }
@@ -162,18 +166,14 @@ function proxyRequest(req: http.IncomingMessage, res: http.ServerResponse): void
 }
 
 async function startProxyServer(): Promise<void> {
-  server = http.createServer(proxyRequest);
+  const newServer = http.createServer(proxyRequest);
   return new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
-      if (server) {
-        server.close();
-        server = null;
-      }
+      newServer.close();
       reject(new Error('Azure Foundry proxy server startup timeout'));
     }, 5000);
-    server!.once('error', (error: NodeJS.ErrnoException) => {
+    newServer.once('error', (error: NodeJS.ErrnoException) => {
       clearTimeout(timeout);
-      server = null;
       reject(
         error.code === 'EADDRINUSE'
           ? new Error(
@@ -182,9 +182,10 @@ async function startProxyServer(): Promise<void> {
           : error,
       );
     });
-    server!.listen(AZURE_FOUNDRY_PROXY_PORT, '127.0.0.1', () => {
+    newServer.listen(AZURE_FOUNDRY_PROXY_PORT, '127.0.0.1', () => {
       clearTimeout(timeout);
       log.info(`[Azure Foundry Proxy] Listening on port ${AZURE_FOUNDRY_PROXY_PORT}`);
+      server = newServer;
       resolve();
     });
   });

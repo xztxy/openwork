@@ -38,6 +38,7 @@ export function drainProtocolUrlQueue(win: BrowserWindow): void {
     win.webContents.once('did-finish-load', () => drainProtocolUrlQueue(win));
     return;
   }
+
   while (protocolUrlQueue.length > 0) {
     const url = protocolUrlQueue.shift();
     if (url) {
@@ -47,12 +48,13 @@ export function drainProtocolUrlQueue(win: BrowserWindow): void {
 }
 
 function enqueueProtocolUrl(url: string, getMainWindow: WindowGetter): void {
+  protocolUrlQueue.push(url);
   const win = getMainWindow();
-  if (win && !win.isDestroyed() && isRendererReady(win)) {
-    dispatchProtocolUrl(win, url);
-  } else {
-    protocolUrlQueue.push(url);
-    if (win && !win.isDestroyed()) {
+
+  if (win && !win.isDestroyed()) {
+    if (isRendererReady(win)) {
+      drainProtocolUrlQueue(win);
+    } else {
       win.webContents.once('did-finish-load', () => drainProtocolUrlQueue(win));
     }
   }

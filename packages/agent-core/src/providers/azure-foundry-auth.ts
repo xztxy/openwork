@@ -130,10 +130,11 @@ export async function buildTestAuthHeaders(
   };
 
   if (authType === 'api-key') {
-    if (!apiKey || !apiKey.trim()) {
+    const trimmedKey = apiKey?.trim();
+    if (!trimmedKey) {
       return { success: false, error: 'API key is required for API key authentication' };
     }
-    headers['api-key'] = apiKey.trim();
+    headers['api-key'] = trimmedKey;
     return { success: true, headers };
   }
 

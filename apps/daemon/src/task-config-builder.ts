@@ -16,17 +16,12 @@ import {
   syncApiKeysToOpenCodeAuth,
   getOpenCodeAuthPath,
   getBundledNodePaths,
-  ensureDevBrowserServer,
-  generateTaskSummary,
-  DEV_BROWSER_PORT,
-  logger,
+  BedrockCredentials,
   type TaskConfig,
   type StorageAPI,
   type EnvironmentConfig,
   type CliResolverConfig,
-  type BrowserServerConfig,
-  type BedrockCredentials,
-  type TaskCallbacks,
+  type ProviderId,
 } from '@accomplish_ai/agent-core';
 
 export interface TaskConfigBuilderOptions {
@@ -92,8 +87,17 @@ export async function buildEnvironment(
 }
 
 export async function buildCliArgs(config: TaskConfig, storage: StorageAPI): Promise<string[]> {
-  const activeModel = storage.getActiveProviderModel();
-  const selectedModel = activeModel || storage.getSelectedModel();
+  let selectedModel;
+  if (config.modelId) {
+    selectedModel = {
+      provider: (config.provider as ProviderId) || ('unknown' as ProviderId),
+      model: config.modelId,
+    };
+  } else {
+    const activeModel = storage.getActiveProviderModel();
+    selectedModel = activeModel || storage.getSelectedModel();
+  }
+
   return coreBuildCliArgs({
     prompt: config.prompt,
     sessionId: config.sessionId,
@@ -159,48 +163,5 @@ export async function onBeforeStart(
     },
   };
 }
-
-export function getBrowserServerConfig(opts: TaskConfigBuilderOptions): BrowserServerConfig {
-  return {
-    mcpToolsPath: opts.mcpToolsPath,
-    bundledNodeBinPath: getBundledNodeBinPath(opts),
-    devBrowserPort: DEV_BROWSER_PORT,
-  };
-}
-
-export function createOnBeforeTaskStart(
-  opts: TaskConfigBuilderOptions,
-): (callbacks: TaskCallbacks, isFirst: boolean) => Promise<void> {
-  return async (callbacks, isFirst) => {
-    const browserConfig = getBrowserServerConfig(opts);
-    if (!browserConfig.mcpToolsPath) {
-      return;
-    }
-    if (isFirst) {
-      callbacks.onProgress({
-        stage: 'browser',
-        message: 'Preparing browser...',
-        isFirstTask: isFirst,
-      });
-    }
-    await ensureDevBrowserServer(browserConfig, callbacks.onProgress);
-  };
-}
-
-export function runTaskSummaryGeneration(
-  taskId: string,
-  prompt: string,
-  storage: StorageAPI,
-  emitSummary: (summary: string) => void,
-): void {
-  generateTaskSummary(prompt, (provider: string) => storage.getApiKey(provider))
-    .then((summary: string) => {
-      storage.updateTaskSummary(taskId, summary);
-      emitSummary(summary);
-    })
-    .catch((err: unknown) => {
-      logger.warn('[TaskService] Failed to generate task summary', { err, taskId });
-    });
-}
-
+export * from './task-service-helpers.js';
 export { createTaskCallbacks } from './task-callbacks.js';
