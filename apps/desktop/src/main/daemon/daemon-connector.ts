@@ -226,10 +226,22 @@ async function reconnectWithBackoff(): Promise<void> {
   let delay = RECONNECT_INITIAL_MS;
 
   for (let attempt = 1; attempt <= RECONNECT_MAX_ATTEMPTS; attempt++) {
+    // Check suppression on EVERY iteration — not just at entry
+    if (reconnectSuppressed) {
+      log('INFO', '[DaemonConnector] Reconnect loop cancelled (suppressed)');
+      return;
+    }
+
     onStateChange?.('reconnecting');
     log('INFO', `[DaemonConnector] Reconnect attempt ${attempt}/${RECONNECT_MAX_ATTEMPTS}...`);
 
     await sleep(delay);
+
+    if (reconnectSuppressed) {
+      log('INFO', '[DaemonConnector] Reconnect loop cancelled after delay (suppressed)');
+      return;
+    }
+
     const dataDir = getDataDir();
     const client = await tryConnect(dataDir);
 
@@ -242,6 +254,12 @@ async function reconnectWithBackoff(): Promise<void> {
     }
 
     delay = Math.min(delay * 2, RECONNECT_MAX_MS);
+  }
+
+  // Check one final time before spawning
+  if (reconnectSuppressed) {
+    log('INFO', '[DaemonConnector] Reconnect spawn cancelled (suppressed)');
+    return;
   }
 
   // All retries failed — try spawning a new daemon

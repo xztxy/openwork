@@ -102,17 +102,21 @@ export function registerSettingsHandlers(): void {
     // Suppress auto-reconnect during intentional restart
     suppressReconnect();
     try {
-      const client = getDaemonClient();
-      await client.call('daemon.shutdown');
-    } catch {
-      // Daemon may already be down — that's fine
+      try {
+        const client = getDaemonClient();
+        await client.call('daemon.shutdown');
+      } catch {
+        // Daemon may already be down — that's fine
+      }
+      shutdownDaemon();
+      // Wait briefly for daemon to exit
+      await new Promise((r) => setTimeout(r, 1000));
+      await bootstrapDaemon();
+      return { success: true };
+    } finally {
+      // Always re-enable reconnect — even if bootstrap fails
+      enableReconnect();
     }
-    shutdownDaemon();
-    // Wait briefly for daemon to exit
-    await new Promise((r) => setTimeout(r, 1000));
-    await bootstrapDaemon();
-    enableReconnect();
-    return { success: true };
   });
 
   handle('daemon:stop', async () => {
