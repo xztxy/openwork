@@ -101,7 +101,7 @@ export function DaemonPanel() {
           <p className="text-xs font-medium text-muted-foreground">Example: Send a task via CLI</p>
           <pre className="overflow-x-auto max-w-full rounded-md bg-muted px-3 py-2 text-xs font-mono text-foreground whitespace-pre-wrap break-all">
             {navigator.platform?.startsWith('Win')
-              ? `echo {"jsonrpc":"2.0","id":1,"method":"task.start","params":{"prompt":"List files"}} | npx json-rpc-pipe "\\\\.\\pipe\\accomplish-daemon"`
+              ? `echo {"jsonrpc":"2.0","id":1,"method":"task.start","params":{"prompt":"List files"}} | npx json-rpc-pipe "${socketPath ?? '\\\\.\\pipe\\accomplish-daemon'}"`
               : `echo '{"jsonrpc":"2.0","id":1,"method":"task.start","params":{"prompt":"List files in /tmp"}}' | nc -U "${socketPath ?? '/path/to/daemon.sock'}"`}
           </pre>
         </div>
@@ -112,7 +112,7 @@ export function DaemonPanel() {
           </p>
           <pre className="overflow-x-auto max-w-full rounded-md bg-muted px-3 py-2 text-xs font-mono text-foreground whitespace-pre-wrap break-all">
             {navigator.platform?.startsWith('Win')
-              ? `echo {"jsonrpc":"2.0","id":1,"method":"task.schedule","params":{"cron":"0 9 * * 1-5","prompt":"Check email and summarize"}} | npx json-rpc-pipe "\\\\.\\pipe\\accomplish-daemon"`
+              ? `echo {"jsonrpc":"2.0","id":1,"method":"task.schedule","params":{"cron":"0 9 * * 1-5","prompt":"Check email and summarize"}} | npx json-rpc-pipe "${socketPath ?? '\\\\.\\pipe\\accomplish-daemon'}"`
               : `echo '{"jsonrpc":"2.0","id":1,"method":"task.schedule","params":{"cron":"0 9 * * 1-5","prompt":"Check email and summarize"}}' | nc -U "${socketPath ?? '/path/to/daemon.sock'}"`}
           </pre>
         </div>

@@ -1,5 +1,5 @@
 // Settings handlers are split into focused sub-modules for maintainability.
-import { BrowserWindow, nativeTheme } from 'electron';
+import { app, BrowserWindow, nativeTheme } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import { getStorage } from '../../store/storage';
 import { handle } from './utils';
@@ -79,7 +79,8 @@ export function registerSettingsHandlers(): void {
 
   handle('daemon:get-socket-path', async () => {
     const { getSocketPath } = await import('@accomplish_ai/agent-core');
-    return getSocketPath();
+    // Pass Electron's userData so the reported path matches the daemon's actual identity.
+    return getSocketPath(app.getPath('userData'));
   });
 
   registerCloudBrowserHandlers(handle);

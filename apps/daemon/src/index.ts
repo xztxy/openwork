@@ -68,10 +68,22 @@ async function main(): Promise<void> {
 
   installCrashHandlers();
 
-  console.log('[Daemon] Starting...');
-
   // Resolve dataDir early — all identity files (socket, PID, DB) derive from it.
+  // In production (packaged app), --data-dir is required to prevent the daemon from
+  // silently using the wrong profile. Dev mode falls back to ~/.accomplish.
   const dataDir = args.dataDir;
+  const isDev = process.env.NODE_ENV === 'development' || !process.env.ACCOMPLISH_IS_PACKAGED;
+  if (!dataDir && !isDev) {
+    console.error(
+      '[Daemon] Error: --data-dir is required in production mode.\n' +
+        'The daemon must know which data directory to use so it shares the same\n' +
+        'database, socket, and PID file as the desktop app.\n\n' +
+        'Usage: node daemon/index.js --data-dir /path/to/userData',
+    );
+    process.exit(1);
+  }
+
+  console.log(`[Daemon] Starting... (dataDir=${dataDir ?? '~/.accomplish (dev default)'})`);
 
   // 1. Acquire PID lock scoped to dataDir (atomic, with stale detection)
   const pidPath = getPidFilePath(dataDir);
