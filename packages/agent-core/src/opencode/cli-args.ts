@@ -3,12 +3,13 @@
  * Extracted from config-generator.ts.
  */
 import { ACCOMPLISH_AGENT_NAME } from './config-generator.js';
+import type { ProviderId } from '../common/types/providerSettings.js';
 
 export interface BuildCliArgsOptions {
   prompt: string;
   sessionId?: string;
   selectedModel?: {
-    provider: string;
+    provider: ProviderId;
     model: string;
   } | null;
 }

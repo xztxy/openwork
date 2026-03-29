@@ -1,9 +1,10 @@
+import type { TaskStatus } from '@accomplish_ai/agent-core';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { Button } from '@/components/ui/button';
-import { XCircle, ArrowLeft, CheckCircle, Clock, Square } from '@phosphor-icons/react';
+import { XCircle, ArrowLeft, CheckCircle, Clock, Square, Hourglass } from '@phosphor-icons/react';
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status }: { status: TaskStatus }) {
   const { t } = useTranslation('execution');
 
   switch (status) {
@@ -50,6 +51,20 @@ function StatusBadge({ status }: { status: string }) {
           {t('status.stopped')}
         </span>
       );
+    case 'pending':
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground shrink-0">
+          <Hourglass className="h-3 w-3" />
+          {t('status.pending')}
+        </span>
+      );
+    case 'waiting_permission':
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-600 shrink-0">
+          <Hourglass className="h-3 w-3" />
+          {t('status.waiting_permission')}
+        </span>
+      );
     default:
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground shrink-0">
@@ -59,7 +74,7 @@ function StatusBadge({ status }: { status: string }) {
   }
 }
 
-export function ExecutionHeader({ prompt, status }: { prompt: string; status: string }) {
+export function ExecutionHeader({ prompt, status }: { prompt: string; status: TaskStatus }) {
   const navigate = useNavigate();
 
   return (
@@ -70,6 +85,7 @@ export function ExecutionHeader({ prompt, status }: { prompt: string; status: st
             variant="ghost"
             size="icon"
             onClick={() => navigate('/')}
+            aria-label="Back"
             className="shrink-0 no-drag"
           >
             <ArrowLeft className="h-4 w-4" />

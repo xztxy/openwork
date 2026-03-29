@@ -1,12 +1,10 @@
 import { useTranslation } from 'react-i18next';
-import { XCircle, ArrowBendDownLeft, WarningCircle } from '@phosphor-icons/react';
+import { WarningCircle } from '@phosphor-icons/react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ModelIndicator } from '../../components/ui/ModelIndicator';
-import { SpeechInputButton } from '../../components/ui/SpeechInputButton';
-import { PlusMenu } from '../../components/landing/PlusMenu';
 import { SlashCommandPopover } from '../../components/landing/SlashCommandPopover';
+import { FollowUpToolbar } from './FollowUpToolbar';
+import { DragOverlay, AttachmentList } from './FollowUpAttachments';
 import type { FileAttachmentInfo } from '@accomplish_ai/agent-core/common';
-import { getAttachmentIcon } from '../../lib/attachments';
 import type { useSpeechInput } from '../../hooks/useSpeechInput';
 import type { useSlashCommand } from '../../hooks/useSlashCommand';
 import type { Task } from '@accomplish_ai/agent-core/common';
@@ -92,26 +90,7 @@ export function FollowUpInput(props: FollowUpInputProps) {
       }}
       onDrop={handleDrop}
     >
-      {isDragging && (
-        <div
-          className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-primary"
-          onDragOver={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            e.dataTransfer.dropEffect = 'copy';
-          }}
-          onDragLeave={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setIsDragging(false);
-          }}
-          onDrop={handleDrop}
-        >
-          <div className="text-primary font-medium flex items-center gap-2 pointer-events-none">
-            Drop files to attach
-          </div>
-        </div>
-      )}
+      {isDragging && <DragOverlay setIsDragging={setIsDragging} handleDrop={handleDrop} />}
       <div className="max-w-4xl mx-auto space-y-2">
         {speechInput.error && (
           <Alert
@@ -134,27 +113,7 @@ export function FollowUpInput(props: FollowUpInputProps) {
           </Alert>
         )}
         <div className="rounded-xl border border-border bg-background shadow-sm transition-all duration-200 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring">
-          {attachments.length > 0 && (
-            <div className="px-4 pt-4 pb-1 flex gap-2 overflow-x-auto items-center">
-              {attachments.map((file) => (
-                <div
-                  key={file.id}
-                  className="flex items-center gap-2 px-2.5 py-1.5 bg-muted/50 border border-border rounded-md shrink-0 max-w-[200px]"
-                  title={file.name}
-                >
-                  {getAttachmentIcon(file.type)}
-                  <span className="text-xs font-medium truncate">{file.name}</span>
-                  <button
-                    onClick={() => removeAttachment(file.id)}
-                    aria-label={`Remove attachment ${file.name}`}
-                    className="text-muted-foreground hover:text-foreground shrink-0 ml-1 rounded-full p-0.5 hover:bg-muted"
-                  >
-                    <XCircle className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+          <AttachmentList attachments={attachments} removeAttachment={removeAttachment} />
           <div className="px-4 pt-3 pb-2 relative">
             <textarea
               ref={followUpInputRef}
@@ -209,48 +168,20 @@ export function FollowUpInput(props: FollowUpInputProps) {
               onDismiss={slashCommand.dismiss}
             />
           </div>
-          <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-border/50">
-            <PlusMenu
-              onSkillSelect={(command) => {
-                setFollowUp(`${command} ${followUp}`.trim());
-                setTimeout(() => followUpInputRef.current?.focus(), 0);
-              }}
-              onAttachFiles={handlePickFiles}
-              onOpenSettings={onOpenSettings}
-              disabled={isLoading || speechInput.isRecording}
-            />
-            <div className="flex items-center gap-2">
-              <ModelIndicator isRunning={false} onOpenSettings={onOpenModelSettings} />
-              <div className="w-px h-6 bg-border flex-shrink-0" />
-              <SpeechInputButton
-                isRecording={speechInput.isRecording}
-                isTranscribing={speechInput.isTranscribing}
-                recordingDuration={speechInput.recordingDuration}
-                error={speechInput.error}
-                isConfigured={speechInput.isConfigured}
-                disabled={isLoading}
-                onStartRecording={() => speechInput.startRecording()}
-                onStopRecording={() => speechInput.stopRecording()}
-                onRetry={() => speechInput.retry()}
-                onOpenSettings={onOpenSpeechSettings}
-                size="md"
-              />
-              <button
-                type="button"
-                onClick={handleFollowUp}
-                disabled={
-                  (!followUp.trim() && attachments.length === 0) ||
-                  isLoading ||
-                  speechInput.isRecording ||
-                  isFollowUpOverLimit
-                }
-                className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                title={tCommon('buttons.send')}
-              >
-                <ArrowBendDownLeft className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
+          <FollowUpToolbar
+            followUp={followUp}
+            setFollowUp={setFollowUp}
+            attachments={attachments}
+            isLoading={isLoading}
+            isFollowUpOverLimit={isFollowUpOverLimit}
+            speechInput={speechInput}
+            followUpInputRef={followUpInputRef}
+            handleFollowUp={handleFollowUp}
+            handlePickFiles={handlePickFiles}
+            onOpenSettings={onOpenSettings}
+            onOpenModelSettings={onOpenModelSettings}
+            onOpenSpeechSettings={onOpenSpeechSettings}
+          />
         </div>
       </div>
     </div>

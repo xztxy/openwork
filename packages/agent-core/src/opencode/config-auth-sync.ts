@@ -53,8 +53,19 @@ export async function syncApiKeysToOpenCodeAuth(
   let updated = false;
 
   for (const [internalId, authId] of Object.entries(AUTH_KEY_MAPPING)) {
+    if (!(internalId in apiKeys)) {
+      // Provider not mentioned in this sync call — skip it
+      continue;
+    }
     const key = apiKeys[internalId];
-    if (key && (!auth[authId] || auth[authId].key !== key)) {
+    if (key == null) {
+      // Explicit null/undefined → remove from auth.json
+      if (auth[authId]) {
+        delete auth[authId];
+        updated = true;
+        log.info(`[OpenCode Auth] Removed ${internalId} API key`);
+      }
+    } else if (!auth[authId] || auth[authId].key !== key) {
       auth[authId] = { type: 'api', key };
       updated = true;
       log.info(`[OpenCode Auth] Synced ${internalId} API key`);

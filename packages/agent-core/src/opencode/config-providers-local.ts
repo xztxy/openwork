@@ -18,8 +18,8 @@ export async function buildOllamaConfig(ctx: ProviderBuildContext): Promise<Prov
     const ollamaModelInfo = ollamaProvider.availableModels?.find(
       (m) => m.id === ollamaProvider.selectedModelId || m.id === modelId,
     );
-    const ollamaSupportsTools =
-      (ollamaModelInfo as { toolSupport?: string })?.toolSupport === 'supported';
+    const toolSupport = (ollamaModelInfo as { toolSupport?: string } | undefined)?.toolSupport;
+    const ollamaSupportsTools = toolSupport === 'supported' || toolSupport === undefined;
     log.info(
       `[OpenCode Config Builder] Ollama configured: ${modelId} (tools: ${ollamaSupportsTools})`,
     );
@@ -94,7 +94,7 @@ export async function buildLMStudioConfig(ctx: ProviderBuildContext): Promise<Pr
           models: { [modelId]: { name: modelId, tools: supportsTools } },
         },
       ],
-      enableToAdd: [],
+      enableToAdd: ['lmstudio'],
     };
   }
 
@@ -117,7 +117,7 @@ export async function buildLMStudioConfig(ctx: ProviderBuildContext): Promise<Pr
           models,
         },
       ],
-      enableToAdd: [],
+      enableToAdd: ['lmstudio'],
     };
   }
   return { configs: [], enableToAdd: [] };

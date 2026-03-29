@@ -130,7 +130,7 @@ export function buildMcpServers(options: BuildMcpServersOptions): Record<string,
       }
       if (browserConfig.cdpHeaders) {
         for (const [key, value] of Object.entries(browserConfig.cdpHeaders)) {
-          if (key === 'X-CDP-Secret') {
+          if (key.toLowerCase() === 'x-cdp-secret') {
             browserEnv.CDP_SECRET = value;
           }
         }

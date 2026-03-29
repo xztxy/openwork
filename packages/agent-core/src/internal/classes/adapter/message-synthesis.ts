@@ -24,7 +24,10 @@ export function buildPlanMessage(
     : '';
   const skillsSection = input.skills?.length ? `\n\n**Skills:** ${input.skills.join(', ')}` : '';
   const goalSection = input.goal ? `**Goal:** ${input.goal}\n\n` : '';
-  const planText = `**Plan:**\n\n${goalSection}**Steps:**\n${input.steps?.map((s, i) => `${i + 1}. ${s}`).join('\n') ?? ''}${verificationSection}${skillsSection}`;
+  const stepsSection = input.steps?.length
+    ? `**Steps:**\n${input.steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}`
+    : '';
+  const planText = `**Plan:**\n\n${goalSection}${stepsSection}${verificationSection}${skillsSection}`;
 
   return {
     type: 'text',
