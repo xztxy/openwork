@@ -1,4 +1,4 @@
-// apps/desktop/src/renderer/components/settings/providers/AzureFoundryProviderForm.tsx
+// apps/web/src/client/components/settings/providers/AzureFoundryProviderForm.tsx
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

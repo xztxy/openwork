@@ -1,4 +1,4 @@
-// apps/desktop/src/renderer/components/settings/providers/LiteLLMProviderForm.tsx
+// apps/web/src/client/components/settings/providers/LiteLLMProviderForm.tsx
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

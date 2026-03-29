@@ -4,9 +4,7 @@ import {
   createTaskManager,
   createTaskId,
   createMessageId,
-  generateTaskSummary,
   validateTaskConfig,
-  ensureDevBrowserServer,
   getModelDisplayName,
   type TaskManagerAPI,
   type TaskCallbacks,
@@ -23,27 +21,14 @@ import {
   buildCliArgs,
   isCliAvailable,
   onBeforeStart,
-  getBrowserServerConfig,
+  createOnBeforeTaskStart,
   createTaskCallbacks,
+  runTaskSummaryGeneration,
 } from './task-config-builder.js';
 
-export interface TaskServiceEvents {
-  progress: [data: { taskId: string; stage: string; message?: string }];
-  message: [data: { taskId: string; messages: TaskMessage[] }];
-  complete: [data: { taskId: string }];
-  error: [data: { taskId: string; error: string }];
-  permission: [data: unknown];
-  statusChange: [data: { taskId: string; status: TaskStatus }];
-  summary: [data: { taskId: string; summary: string }];
-}
+import { type TaskServiceEvents, type TaskServiceOptions } from './task-service-events.js';
 
-export interface TaskServiceOptions {
-  userDataPath: string;
-  mcpToolsPath: string;
-  isPackaged?: boolean;
-  resourcesPath?: string;
-  appPath?: string;
-}
+export type { TaskServiceEvents, TaskServiceOptions };
 
 export class TaskService extends EventEmitter {
   private taskManager: TaskManagerAPI;
@@ -54,8 +39,7 @@ export class TaskService extends EventEmitter {
     super();
     this.storage = storage;
     this.opts = {
-      userDataPath: options.userDataPath,
-      mcpToolsPath: options.mcpToolsPath,
+      ...options,
       isPackaged: options.isPackaged ?? false,
       resourcesPath: options.resourcesPath ?? '',
       appPath: options.appPath ?? '',
@@ -75,20 +59,7 @@ export class TaskService extends EventEmitter {
       defaultWorkingDirectory: homedir(),
       maxConcurrentTasks: 10,
       isCliAvailable: () => isCliAvailable(this.opts),
-      onBeforeTaskStart: async (callbacks, isFirst) => {
-        const browserConfig = getBrowserServerConfig(this.opts);
-        if (!browserConfig.mcpToolsPath) {
-          return;
-        }
-        if (isFirst) {
-          callbacks.onProgress({
-            stage: 'browser',
-            message: 'Preparing browser...',
-            isFirstTask: isFirst,
-          });
-        }
-        await ensureDevBrowserServer(browserConfig, callbacks.onProgress);
-      },
+      onBeforeTaskStart: createOnBeforeTaskStart(this.opts),
     });
   }
 
@@ -110,17 +81,11 @@ export class TaskService extends EventEmitter {
     const validatedConfig = validateTaskConfig(config);
     const activeModel = this.storage.getActiveProviderModel();
     const selectedModel = activeModel || this.storage.getSelectedModel();
-    if (selectedModel?.model) {
+    if (selectedModel?.model && !validatedConfig.modelId) {
       validatedConfig.modelId = selectedModel.model;
     }
 
-    const callbacks: TaskCallbacks = createTaskCallbacks(
-      taskId,
-      this,
-      this.storage,
-      this.taskManager,
-    );
-    const task = await this.taskManager.startTask(taskId, validatedConfig, callbacks);
+    const task = await this._runTask(taskId, validatedConfig);
 
     const initialUserMessage: TaskMessage = {
       id: createMessageId(),
@@ -131,14 +96,9 @@ export class TaskService extends EventEmitter {
     task.messages = [initialUserMessage];
     this.storage.saveTask(task);
 
-    generateTaskSummary(validatedConfig.prompt, (provider) => this.storage.getApiKey(provider))
-      .then((summary) => {
-        this.storage.updateTaskSummary(taskId, summary);
-        this.emit('summary', { taskId, summary });
-      })
-      .catch((err) => {
-        console.warn('[TaskService] Failed to generate task summary:', err);
-      });
+    runTaskSummaryGeneration(taskId, validatedConfig.prompt, this.storage, (summary) => {
+      this.emit('summary', { taskId, summary });
+    });
 
     return task;
   }
@@ -183,22 +143,27 @@ export class TaskService extends EventEmitter {
 
     const activeModel = this.storage.getActiveProviderModel();
     const selectedModel = activeModel || this.storage.getSelectedModel();
+    const task = await this._runTask(taskId, {
+      prompt,
+      sessionId,
+      taskId,
+      modelId: selectedModel?.model,
+    });
+
+    if (existingTaskId) {
+      this.storage.updateTaskStatus(existingTaskId, task.status, new Date().toISOString());
+    }
+    return task;
+  }
+
+  private async _runTask(taskId: string, config: TaskConfig): Promise<Task> {
     const callbacks: TaskCallbacks = createTaskCallbacks(
       taskId,
       this,
       this.storage,
       this.taskManager,
     );
-    const task = await this.taskManager.startTask(
-      taskId,
-      { prompt, sessionId, taskId, modelId: selectedModel?.model },
-      callbacks,
-    );
-
-    if (existingTaskId) {
-      this.storage.updateTaskStatus(existingTaskId, task.status, new Date().toISOString());
-    }
-    return task;
+    return this.taskManager.startTask(taskId, config, callbacks);
   }
 
   listTasks(): Task[] {
