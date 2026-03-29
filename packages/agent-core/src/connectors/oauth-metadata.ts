@@ -78,28 +78,50 @@ export async function discoverOAuthProtectedResourceMetadata(
   }
 
   const authenticateHeader = response.headers.get('www-authenticate');
-  if (!authenticateHeader) {
-    throw new Error(
-      `OAuth protected resource response from ${serverUrl} did not include WWW-Authenticate`,
-    );
-  }
-
-  const metadataUrlMatch = authenticateHeader.match(/resource_metadata="([^"]+)"/i);
+  const metadataUrlMatch = authenticateHeader?.match(/resource_metadata="([^"]+)"/i);
   const metadataUrl = metadataUrlMatch?.[1];
-  if (!metadataUrl) {
-    throw new Error(
-      `OAuth protected resource response from ${serverUrl} did not advertise resource_metadata`,
-    );
+
+  let metadataResponse: Response | undefined;
+  let lastError: Error | undefined;
+
+  if (metadataUrl) {
+    try {
+      metadataResponse = await fetchWithTimeout(metadataUrl, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+      if (!metadataResponse.ok) {
+        lastError = new Error(
+          `HTTP ${metadataResponse.status} ${metadataResponse.statusText} from header url`,
+        );
+        metadataResponse = undefined;
+      }
+    } catch (err: unknown) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      metadataResponse = undefined;
+    }
   }
 
-  const metadataResponse = await fetchWithTimeout(metadataUrl, {
-    method: 'GET',
-    headers: { Accept: 'application/json' },
-  });
+  if (!metadataResponse || !metadataResponse.ok) {
+    const wellKnownUrl = new URL('/.well-known/oauth-protected-resource', serverUrl).toString();
+    try {
+      metadataResponse = await fetchWithTimeout(wellKnownUrl, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+      if (!metadataResponse.ok) {
+        lastError = new Error(
+          `HTTP ${metadataResponse.status} ${metadataResponse.statusText} from well-known url`,
+        );
+      }
+    } catch (err: unknown) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+    }
+  }
 
-  if (!metadataResponse.ok) {
+  if (!metadataResponse || !metadataResponse.ok) {
     throw new Error(
-      `Failed to discover protected resource metadata from ${metadataUrl}: ${metadataResponse.status} ${metadataResponse.statusText}`,
+      `Failed to discover protected resource metadata for ${serverUrl}: ${lastError?.message || 'Unknown error'}`,
     );
   }
 
