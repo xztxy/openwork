@@ -7,13 +7,14 @@ interface AppSettingsUiRow {
   theme: string;
   run_in_background: number;
   notifications_enabled: number;
+  close_behavior: string;
 }
 
 function getUiRow(): AppSettingsUiRow {
   const db = getDatabase();
   return db
     .prepare(
-      'SELECT debug_mode, onboarding_complete, theme, run_in_background, notifications_enabled FROM app_settings WHERE id = 1',
+      'SELECT debug_mode, onboarding_complete, theme, run_in_background, notifications_enabled, close_behavior FROM app_settings WHERE id = 1',
     )
     .get() as AppSettingsUiRow;
 }
@@ -77,9 +78,7 @@ export type CloseBehavior = 'keep-daemon' | 'stop-daemon';
 
 export function getCloseBehavior(): CloseBehavior {
   const row = getUiRow();
-  // close_behavior column added in v021 migration; cast through unknown for safety
-  const value = (row as unknown as { close_behavior?: string }).close_behavior;
-  if (value === 'stop-daemon') {
+  if (row.close_behavior === 'stop-daemon') {
     return 'stop-daemon';
   }
   return 'keep-daemon';

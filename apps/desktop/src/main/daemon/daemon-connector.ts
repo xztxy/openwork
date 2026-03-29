@@ -162,8 +162,26 @@ export async function ensureDaemonRunning(): Promise<DaemonClient> {
 export type ConnectionStateHandler = (state: 'connected' | 'disconnected' | 'reconnecting') => void;
 
 let reconnecting = false;
+let reconnectSuppressed = false;
 let onStateChange: ConnectionStateHandler | null = null;
 let onClientReplaced: ((client: DaemonClient) => void) | null = null;
+
+/**
+ * Suppress automatic reconnection. Call before explicit daemon stop/restart
+ * to prevent the reconnect monitor from fighting the intentional disconnect.
+ */
+export function suppressReconnect(): void {
+  reconnectSuppressed = true;
+  log('INFO', '[DaemonConnector] Reconnection suppressed');
+}
+
+/**
+ * Re-enable automatic reconnection after explicit stop/restart completes.
+ */
+export function enableReconnect(): void {
+  reconnectSuppressed = false;
+  log('INFO', '[DaemonConnector] Reconnection re-enabled');
+}
 
 /**
  * Register handlers for reconnection lifecycle events.
@@ -188,7 +206,7 @@ export function setupDisconnectHandler(
   transport: Awaited<ReturnType<typeof createSocketTransport>>,
 ): void {
   transport.onDisconnect(() => {
-    if (reconnecting) {
+    if (reconnecting || reconnectSuppressed) {
       return;
     }
     reconnecting = true;

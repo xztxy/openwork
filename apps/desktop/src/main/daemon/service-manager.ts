@@ -55,13 +55,26 @@ export function enableAutoStart(): void {
     return;
   }
 
-  // Windows: use Electron's built-in API (starts Electron hidden, which spawns daemon on boot)
-  app.setLoginItemSettings({
-    openAtLogin: true,
-    openAsHidden: true,
-  });
-
-  logD('INFO', '[ServiceManager] Auto-start enabled via Electron login item');
+  // Windows: create a startup shortcut for the daemon binary.
+  // Use Electron login item API with path/args pointing to bundled Node.js + daemon.
+  if (app.isPackaged) {
+    const nodePath = getDaemonNodePath();
+    const entryPath = getDaemonEntryPath();
+    const dataDir = getDataDir();
+    app.setLoginItemSettings({
+      openAtLogin: true,
+      path: nodePath,
+      args: [entryPath, '--data-dir', dataDir],
+    });
+    logD('INFO', '[ServiceManager] Auto-start enabled: daemon binary via login item');
+  } else {
+    // Dev mode: start Electron hidden (which spawns daemon on boot)
+    app.setLoginItemSettings({
+      openAtLogin: true,
+      openAsHidden: true,
+    });
+    logD('INFO', '[ServiceManager] Auto-start enabled: Electron hidden (dev mode)');
+  }
 }
 
 /** Unregister the daemon from auto-starting on login. */
@@ -77,7 +90,7 @@ export function disableAutoStart(): void {
     return;
   }
 
-  // Windows
+  // Windows: disable login item (works for both packaged daemon path and dev Electron path)
   app.setLoginItemSettings({ openAtLogin: false });
   logD('INFO', '[ServiceManager] Auto-start disabled');
 }
