@@ -90,6 +90,11 @@ export interface TaskIdParams {
   taskId: string;
 }
 
+/** Parameters for task.list (optional workspace filter) */
+export interface TaskListParams {
+  workspaceId?: string;
+}
+
 /** Parameters for task.sendResponse */
 export interface TaskSendResponseParams {
   taskId: string;
@@ -188,7 +193,7 @@ export interface DaemonMethodMap {
   'task.cancel': { params: TaskIdParams; result: void };
   'task.interrupt': { params: TaskIdParams; result: void };
   'task.sendResponse': { params: TaskSendResponseParams; result: void };
-  'task.list': { params: undefined; result: Task[] };
+  'task.list': { params: TaskListParams | undefined; result: Task[] };
   'task.get': { params: TaskIdParams; result: Task | null };
   'task.delete': { params: StorageDeleteTaskParams; result: void };
   'task.clearHistory': { params: undefined; result: void };
