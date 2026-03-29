@@ -3,18 +3,14 @@ import {
   type TaskConfig,
   type Task,
   type TaskStatus,
-  type TaskUpdateEvent,
-  type PermissionRequest,
-  type PermissionResponse,
-  type TaskMessage,
 } from '@accomplish_ai/agent-core/common';
 import { getAccomplish } from '../lib/accomplish';
 import type { TaskState } from './taskStore';
 import { hasTaskStateToken } from './task-state-helpers';
-
+import { createTaskPermissionActions } from './task-permission-actions';
+import { createTaskUpdateActions } from './task-update-actions';
 type SetFn = (partial: Partial<TaskState> | ((state: TaskState) => Partial<TaskState>)) => void;
 type GetFn = () => TaskState;
-
 /** Task execution slice: startTask, sendFollowUp, cancelTask, interruptTask, permission handling. */
 export function createTaskExecutionActions(set: SetFn, get: GetFn) {
   return {
@@ -93,13 +89,13 @@ export function createTaskExecutionActions(set: SetFn, get: GetFn) {
         });
         return false;
       }
-      const userMessage: TaskMessage = {
+      const userMessage = {
         id: createMessageId(),
-        type: 'user',
+        type: 'user' as const,
         content: message,
         timestamp: new Date().toISOString(),
         attachments: attachments
-          ? attachments.map((a) => ({ type: 'json', data: 'placeholder', label: a.name }))
+          ? attachments.map((a) => ({ type: 'json' as const, data: 'placeholder', label: a.name }))
           : undefined,
       };
       const taskId = currentTask.id;
@@ -162,7 +158,6 @@ export function createTaskExecutionActions(set: SetFn, get: GetFn) {
         return false;
       }
     },
-
     cancelTask: async () => {
       const accomplish = getAccomplish();
       const { currentTask } = get();
@@ -199,151 +194,7 @@ export function createTaskExecutionActions(set: SetFn, get: GetFn) {
       }
     },
 
-    setPermissionRequest: (request: PermissionRequest) => {
-      set((state) => ({
-        permissionRequests: { ...state.permissionRequests, [request.taskId]: request },
-      }));
-    },
-
-    clearPermissionRequest: (taskId: string) => {
-      set((state) => {
-        const { [taskId]: _, ...rest } = state.permissionRequests;
-        return { permissionRequests: rest };
-      });
-    },
-
-    respondToPermission: async (response: PermissionResponse) => {
-      const accomplish = getAccomplish();
-      const taskStateToken = get()._taskStateToken;
-      void accomplish.logEvent({
-        level: 'info',
-        message: 'UI permission response',
-        context: { ...response },
-      });
-      await accomplish.respondToPermission(response);
-      if (!hasTaskStateToken(get(), taskStateToken)) {
-        return;
-      }
-      set((state) => {
-        const { [response.taskId]: _, ...rest } = state.permissionRequests;
-        return { permissionRequests: rest };
-      });
-    },
-
-    addTaskUpdate: (event: TaskUpdateEvent) => {
-      const accomplish = getAccomplish();
-      void accomplish.logEvent({
-        level: 'debug',
-        message: 'UI task update received',
-        context: { ...event },
-      });
-      set((state) => {
-        const isCurrentTask = state.currentTask?.id === event.taskId;
-        let updatedCurrentTask = state.currentTask;
-        let updatedTasks = state.tasks;
-        let newStatus: TaskStatus | null = null;
-        if (event.type === 'message' && event.message && isCurrentTask && state.currentTask) {
-          updatedCurrentTask = {
-            ...state.currentTask,
-            messages: [...state.currentTask.messages, event.message],
-          };
-        }
-        if (event.type === 'complete' && event.result) {
-          if (event.result.status === 'success') {
-            newStatus = 'completed';
-          } else if (event.result.status === 'interrupted') {
-            newStatus = 'interrupted';
-          } else {
-            newStatus = 'failed';
-          }
-          if (isCurrentTask && state.currentTask) {
-            updatedCurrentTask = {
-              ...state.currentTask,
-              status: newStatus,
-              result: event.result,
-              completedAt: newStatus === 'interrupted' ? undefined : new Date().toISOString(),
-              sessionId: event.result.sessionId || state.currentTask.sessionId,
-            };
-          }
-        }
-        if (event.type === 'error') {
-          newStatus = 'failed';
-          if (isCurrentTask && state.currentTask) {
-            updatedCurrentTask = {
-              ...state.currentTask,
-              status: newStatus,
-              result: { status: 'error', error: event.error },
-            };
-          }
-        }
-        if (newStatus) {
-          const finalStatus = newStatus;
-          updatedTasks = state.tasks.map((t) =>
-            t.id === event.taskId
-              ? {
-                  ...t,
-                  status: finalStatus,
-                  ...(isCurrentTask && updatedCurrentTask
-                    ? { messages: updatedCurrentTask.messages }
-                    : {}),
-                }
-              : t,
-          );
-        }
-        let shouldClearTodos = false;
-        if (
-          (event.type === 'complete' || event.type === 'error') &&
-          state.todosTaskId === event.taskId
-        ) {
-          const isInterrupted = event.type === 'complete' && event.result?.status === 'interrupted';
-          shouldClearTodos = !isInterrupted;
-        }
-        return {
-          currentTask: updatedCurrentTask,
-          tasks: updatedTasks,
-          isLoading: false,
-          ...(shouldClearTodos ? { todos: [], todosTaskId: null } : {}),
-        };
-      });
-    },
-
-    addTaskUpdateBatch: (event: { taskId: string; messages: TaskMessage[] }) => {
-      const accomplish = getAccomplish();
-      void accomplish.logEvent({
-        level: 'debug',
-        message: 'UI task batch update received',
-        context: { taskId: event.taskId, messageCount: event.messages.length },
-      });
-      set((state) => {
-        if (!state.currentTask || state.currentTask.id !== event.taskId) {
-          return state;
-        }
-        const updatedTask = {
-          ...state.currentTask,
-          messages: [...state.currentTask.messages, ...event.messages],
-        };
-        return { currentTask: updatedTask, isLoading: false };
-      });
-    },
-
-    updateTaskStatus: (taskId: string, status: TaskStatus) => {
-      set((state) => ({
-        tasks: state.tasks.map((task) =>
-          task.id === taskId ? { ...task, status, updatedAt: new Date().toISOString() } : task,
-        ),
-        currentTask:
-          state.currentTask?.id === taskId
-            ? { ...state.currentTask, status, updatedAt: new Date().toISOString() }
-            : state.currentTask,
-      }));
-    },
-
-    setTaskSummary: (taskId: string, summary: string) => {
-      set((state) => ({
-        tasks: state.tasks.map((task) => (task.id === taskId ? { ...task, summary } : task)),
-        currentTask:
-          state.currentTask?.id === taskId ? { ...state.currentTask, summary } : state.currentTask,
-      }));
-    },
+    ...createTaskPermissionActions(set, get),
+    ...createTaskUpdateActions(set, get),
   };
 }
