@@ -8,7 +8,7 @@
  */
 
 import type {
-  TaskConfig,
+  FileAttachmentInfo,
   Task,
   TaskMessage,
   TaskProgress,
@@ -76,8 +76,13 @@ export const JSON_RPC_ERRORS = {
 
 /** Parameters for task.start */
 export interface TaskStartParams {
-  taskId: string;
-  config: TaskConfig;
+  prompt: string;
+  taskId?: string;
+  modelId?: string;
+  sessionId?: string;
+  workingDirectory?: string;
+  workspaceId?: string;
+  attachments?: FileAttachmentInfo[];
 }
 
 /** Parameters for task.cancel / task.interrupt */
@@ -101,6 +106,8 @@ export interface SessionResumeParams {
   sessionId: string;
   prompt: string;
   existingTaskId?: string;
+  workspaceId?: string;
+  attachments?: import('./task.js').FileAttachmentInfo[];
 }
 
 /** Parameters for storage.saveTask */

@@ -23,6 +23,7 @@ import {
   type TaskManagerAPI,
   type TaskCallbacks,
   type TaskConfig,
+  type FileAttachmentInfo,
   type Task,
   type TaskMessage,
   type TaskResult,
@@ -60,8 +61,12 @@ export class TaskService extends EventEmitter {
   private isPackaged: boolean;
   private resourcesPath: string;
   private appPath: string;
-  /** Active workspace ID — set from task.start params for knowledge note injection */
-  private activeWorkspaceId: string | undefined;
+  /**
+   * Per-task context for config resolution. Keyed by taskId.
+   * Avoids a mutable global that would race under concurrent tasks.
+   * Cleaned up in onComplete/onError callbacks.
+   */
+  private taskContextMap = new Map<string, { workspaceId?: string }>();
   constructor(storage: StorageAPI, options: TaskServiceOptions) {
     super();
     this.storage = storage;
@@ -109,19 +114,20 @@ export class TaskService extends EventEmitter {
     sessionId?: string;
     workingDirectory?: string;
     workspaceId?: string;
-    attachments?: Array<{ name: string; path: string; size: number; mimeType?: string }>;
+    attachments?: FileAttachmentInfo[];
   }): Promise<Task> {
-    // Track active workspace for config resolution (knowledge notes)
-    if (params.workspaceId) {
-      this.activeWorkspaceId = params.workspaceId;
-    }
     const taskId = params.taskId || createTaskId();
+
+    // Store per-task context for config resolution (workspace, etc.)
+    this.taskContextMap.set(taskId, { workspaceId: params.workspaceId });
+
     const config: TaskConfig = {
       prompt: params.prompt,
       taskId,
       modelId: params.modelId,
       sessionId: params.sessionId,
       workingDirectory: params.workingDirectory,
+      files: params.attachments,
     };
 
     const validatedConfig = validateTaskConfig(config);
@@ -183,9 +189,14 @@ export class TaskService extends EventEmitter {
     sessionId: string;
     prompt: string;
     existingTaskId?: string;
+    workspaceId?: string;
+    attachments?: FileAttachmentInfo[];
   }): Promise<Task> {
     const { sessionId, prompt, existingTaskId } = params;
     const taskId = existingTaskId || createTaskId();
+
+    // Store per-task context for config resolution
+    this.taskContextMap.set(taskId, { workspaceId: params.workspaceId });
 
     if (existingTaskId) {
       const userMessage: TaskMessage = {
@@ -276,6 +287,7 @@ export class TaskService extends EventEmitter {
       },
 
       onComplete: (result: TaskResult) => {
+        this.taskContextMap.delete(taskId);
         this.emit('complete', { taskId, result });
 
         const taskStatus = mapResultToStatus(result);
@@ -292,6 +304,7 @@ export class TaskService extends EventEmitter {
       },
 
       onError: (error: Error) => {
+        this.taskContextMap.delete(taskId);
         this.emit('error', { taskId, error: error.message });
         this.storage.updateTaskStatus(taskId, 'failed', new Date().toISOString());
       },
@@ -321,6 +334,10 @@ export class TaskService extends EventEmitter {
   }
 
   private async buildEnvironment(taskId: string): Promise<NodeJS.ProcessEnv> {
+    // Resolve per-task config (workspace-aware, concurrent-safe via taskContextMap)
+    const taskContext = this.taskContextMap.get(taskId);
+    await this.resolveAndWriteConfig(taskContext?.workspaceId);
+
     const env: NodeJS.ProcessEnv = { ...process.env };
 
     const apiKeys = await this.storage.getAllApiKeys();
@@ -383,17 +400,25 @@ export class TaskService extends EventEmitter {
     return paths?.binDir;
   }
 
+  /**
+   * Called once per adapter startup (before buildEnvironment).
+   * Only handles API key sync — config resolution is in buildEnvironment
+   * which has the taskId for per-task workspace context.
+   */
   private async onBeforeStart(): Promise<void> {
-    // Sync API keys to OpenCode auth file
     const authPath = getOpenCodeAuthPath();
     const apiKeys = await this.storage.getAllApiKeys();
     await syncApiKeysToOpenCodeAuth(authPath, apiKeys);
+  }
 
-    // Resolve skills from DB (daemon has no SkillsManager, reads directly)
+  /**
+   * Resolve full task config and write opencode.json.
+   * Called from buildEnvironment(taskId) so workspace context is per-task.
+   */
+  private async resolveAndWriteConfig(workspaceId?: string): Promise<void> {
     const { getEnabledSkills } = await import('@accomplish_ai/agent-core');
     const skills = getEnabledSkills();
 
-    // Use shared "one brain" config resolution
     const { configOptions } = await resolveTaskConfig({
       storage: this.storage,
       platform: process.platform,
@@ -410,14 +435,13 @@ export class TaskService extends EventEmitter {
         : undefined,
       authToken: process.env.ACCOMPLISH_DAEMON_AUTH_TOKEN,
       skills,
-      workspaceId: this.activeWorkspaceId,
+      workspaceId,
       log: (level, msg, data) => {
         console.warn(`[TaskService] [${level}] ${msg}`, data ?? '');
       },
     });
 
     const result = generateConfig(configOptions);
-
     process.env.OPENCODE_CONFIG = result.configPath;
     process.env.OPENCODE_CONFIG_DIR = path.dirname(result.configPath);
   }

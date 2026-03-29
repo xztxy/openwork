@@ -54,6 +54,8 @@ export interface TaskStartParams {
   modelId?: string;
   sessionId?: string;
   workingDirectory?: string;
+  workspaceId?: string;
+  attachments?: import('../common/types/task.js').FileAttachmentInfo[];
 }
 
 export interface TaskStopParams {
