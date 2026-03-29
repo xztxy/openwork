@@ -6,8 +6,6 @@ import {
   buildProviderConfigs,
   syncApiKeysToOpenCodeAuth as coreSyncApiKeysToOpenCodeAuth,
   getOpenCodeAuthPath,
-  isTokenExpired,
-  refreshAccessToken,
   PERMISSION_API_PORT,
   QUESTION_API_PORT,
 } from '@accomplish_ai/agent-core';
@@ -19,6 +17,7 @@ import { getBundledNodePaths } from '../utils/bundled-node';
 import { skillsManager } from '../skills';
 import { getLogCollector } from '../logging';
 import * as workspaceManager from '../store/workspaceManager';
+import { resolveEnabledConnectors } from './config-connectors';
 
 function logOC(level: 'INFO' | 'WARN' | 'ERROR', msg: string, data?: Record<string, unknown>) {
   try {
@@ -100,58 +99,11 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
 
   const enabledSkills = await skillsManager.getEnabled();
 
-  // Fetch enabled connectors with valid tokens
-  const storage = getStorage();
-  const enabledConnectors = storage.getEnabledConnectors();
-  const connectors: Array<{ id: string; name: string; url: string; accessToken: string }> = [];
-
-  for (const connector of enabledConnectors) {
-    if (connector.status !== 'connected') continue;
-
-    let tokens = storage.getConnectorTokens(connector.id);
-    if (!tokens?.accessToken) {
-      logOC('WARN', `[Connectors] Missing access token for ${connector.name}`);
-      storage.setConnectorStatus(connector.id, 'error');
-      continue;
-    }
-
-    // Refresh token if expired
-    if (isTokenExpired(tokens)) {
-      if (tokens.refreshToken && connector.oauthMetadata && connector.clientRegistration) {
-        try {
-          tokens = await refreshAccessToken({
-            tokenEndpoint: connector.oauthMetadata.tokenEndpoint,
-            refreshToken: tokens.refreshToken,
-            clientId: connector.clientRegistration.clientId,
-            clientSecret: connector.clientRegistration.clientSecret,
-          });
-          storage.storeConnectorTokens(connector.id, tokens);
-        } catch (err) {
-          logOC('WARN', `[Connectors] Token refresh failed for ${connector.name}`, {
-            err: String(err),
-          });
-          storage.setConnectorStatus(connector.id, 'error');
-          continue;
-        }
-      } else {
-        logOC(
-          'WARN',
-          `[Connectors] Access token expired for ${connector.name} and cannot be refreshed`,
-        );
-        storage.setConnectorStatus(connector.id, 'error');
-        continue;
-      }
-    }
-
-    connectors.push({
-      id: connector.id,
-      name: connector.name,
-      url: connector.url,
-      accessToken: tokens.accessToken,
-    });
-  }
+  // Fetch enabled connectors with valid (possibly refreshed) tokens
+  const connectors = await resolveEnabledConnectors();
 
   // Build browser config from cloud browser settings
+  const storage = getStorage();
   const cloudBrowserConfig = storage.getCloudBrowserConfig();
   let browserConfig: BrowserConfig | undefined;
   if (cloudBrowserConfig?.activeProvider) {

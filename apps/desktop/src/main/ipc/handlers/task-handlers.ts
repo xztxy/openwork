@@ -7,14 +7,12 @@ import {
   isScreencastActive,
 } from '../../services/browserPreview';
 import {
-  sanitizeString,
   generateTaskSummary,
   validateTaskConfig,
   createTaskId,
   createMessageId,
   type TaskConfig,
   type TaskMessage,
-  type FileAttachmentInfo,
 } from '@accomplish_ai/agent-core';
 import { getApiKey } from '../../store/secureStorage';
 import { getStorage } from '../../store/storage';
@@ -30,7 +28,7 @@ import { createTaskCallbacks } from '../../ipc/task-callbacks';
 import { handle, assertTrustedWindow } from './utils';
 import { getLogCollector } from '../../logging';
 import { registerPermissionHandlers } from './permission-ipc';
-import { sanitizeAttachments } from './attachment-utils';
+import { registerSessionHandlers } from './session-handlers';
 
 export function registerTaskHandlers(): void {
   const storage = getStorage();
@@ -184,67 +182,5 @@ export function registerTaskHandlers(): void {
     return storage.getTodosForTask(taskId);
   });
 
-  handle(
-    'session:resume',
-    async (
-      event: IpcMainInvokeEvent,
-      sessionId: string,
-      prompt: string,
-      existingTaskId?: string,
-      attachments?: FileAttachmentInfo[],
-    ) => {
-      const window = assertTrustedWindow(BrowserWindow.fromWebContents(event.sender));
-      const sender = event.sender;
-      const validatedSessionId = sanitizeString(sessionId, 'sessionId', 128);
-      const validatedPrompt = sanitizeString(prompt, 'prompt');
-      const validatedExistingTaskId = existingTaskId
-        ? sanitizeString(existingTaskId, 'taskId', 128)
-        : undefined;
-
-      if (!isMockTaskEventsEnabled() && !storage.hasReadyProvider()) {
-        throw new Error(
-          'No provider is ready. Please connect a provider and select a model in Settings.',
-        );
-      }
-
-      await ensurePermissionApiInitialized(window, () => taskManager.getActiveTaskId());
-
-      const taskId = validatedExistingTaskId || createTaskId();
-      const sanitizedAttachments = sanitizeAttachments(attachments as unknown[] | undefined);
-
-      const activeModelForResume = storage.getActiveProviderModel();
-      const selectedModelForResume = activeModelForResume || storage.getSelectedModel();
-      const callbacks = createTaskCallbacks({ taskId, window, sender });
-
-      const userMessage: TaskMessage = {
-        id: createMessageId(),
-        type: 'user',
-        content: validatedPrompt,
-        timestamp: new Date().toISOString(),
-      };
-
-      const task = await taskManager.startTask(
-        taskId,
-        {
-          prompt: validatedPrompt,
-          sessionId: validatedSessionId,
-          taskId,
-          modelId: selectedModelForResume?.model,
-          files: sanitizedAttachments,
-        },
-        callbacks,
-      );
-
-      if (validatedExistingTaskId) {
-        storage.addTaskMessage(validatedExistingTaskId, userMessage);
-        storage.updateTaskStatus(validatedExistingTaskId, task.status, new Date().toISOString());
-      } else {
-        // New task created by session:resume — persist it so it appears in task history.
-        task.messages = [userMessage];
-        storage.saveTask(task, workspaceManager.getActiveWorkspace());
-      }
-
-      return task;
-    },
-  );
+  registerSessionHandlers();
 }

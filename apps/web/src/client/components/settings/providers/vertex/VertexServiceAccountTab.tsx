@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { VERTEX_LOCATIONS } from './locations';
+import { VertexJsonUploadZone } from './VertexJsonUploadZone';
 
 interface VertexServiceAccountTabProps {
   serviceAccountJson: string;
@@ -124,50 +125,24 @@ export function VertexServiceAccountTab({
         />
       ) : (
         <>
-          <div
+          <VertexJsonUploadZone
+            serviceAccountJson={serviceAccountJson}
+            fileName={fileName}
+            clientEmail={clientEmail}
+            isDragOver={isDragOver}
             onDragOver={(e) => {
               e.preventDefault();
               setIsDragOver(true);
             }}
             onDragLeave={() => setIsDragOver(false)}
             onDrop={handleDrop}
-            className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors ${
-              isDragOver
-                ? 'border-provider-accent bg-provider-accent/5'
-                : serviceAccountJson
-                  ? 'border-provider-accent/50 bg-provider-accent/5'
-                  : 'border-muted-foreground/30 hover:border-muted-foreground/50'
-            }`}
-          >
-            {serviceAccountJson && fileName ? (
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">{fileName}</p>
-                {clientEmail && <p className="text-xs text-muted-foreground">{clientEmail}</p>}
-                <button
-                  type="button"
-                  onClick={() => {
-                    onJsonChange('');
-                    setFileName(null);
-                    setClientEmail(null);
-                  }}
-                  className="text-xs text-muted-foreground hover:text-foreground"
-                >
-                  {t('vertex.remove')}
-                </button>
-              </div>
-            ) : (
-              <>
-                <p className="text-sm text-muted-foreground mb-2">{t('vertex.dropJsonHere')}</p>
-                <button
-                  type="button"
-                  onClick={handleBrowse}
-                  className="text-sm font-medium text-provider-accent hover:text-provider-accent-text"
-                >
-                  {t('vertex.browseFiles')}
-                </button>
-              </>
-            )}
-          </div>
+            onBrowse={handleBrowse}
+            onRemove={() => {
+              onJsonChange('');
+              setFileName(null);
+              setClientEmail(null);
+            }}
+          />
           <input
             ref={fileInputRef}
             type="file"

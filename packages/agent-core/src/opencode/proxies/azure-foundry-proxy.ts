@@ -1,6 +1,14 @@
 import http from 'http';
 import https from 'https';
 import { createConsoleLogger } from '../../utils/logging.js';
+import {
+  normalizeBaseUrl,
+  transformRequestBody,
+  isValidRequestPath,
+  shouldTransformBody,
+} from './azure-foundry-proxy-transform.js';
+
+export { transformRequestBody } from './azure-foundry-proxy-transform.js';
 
 const log = createConsoleLogger({ prefix: 'AzureFoundryProxy' });
 
@@ -16,89 +24,78 @@ export interface AzureFoundryProxyInfo {
   port: number;
 }
 
-function normalizeBaseUrl(url: string): string {
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-      throw new Error(`Invalid protocol: ${parsed.protocol}. Only http and https are supported.`);
-    }
-    return parsed.origin + parsed.pathname.replace(/\/$/, '');
-  } catch (error) {
-    if (error instanceof TypeError) {
-      throw new Error(`Invalid URL format: ${url}`);
-    }
-    throw error;
-  }
-}
-
 function getProxyBaseUrl(): string {
   return `http://127.0.0.1:${AZURE_FOUNDRY_PROXY_PORT}`;
 }
 
-function shouldTransformBody(contentType: string | undefined): boolean {
-  return !!contentType && contentType.toLowerCase().includes('application/json');
+function sendJson(res: http.ServerResponse, status: number, body: object): void {
+  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(body));
 }
 
-export function transformRequestBody(body: Buffer): Buffer {
-  const text = body.toString('utf8');
-  try {
-    const parsed = JSON.parse(text) as Record<string, unknown>;
-    let modified = false;
+function forwardRequest(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  rawBody: Buffer,
+  targetUrl: URL,
+): void {
+  const isHttps = targetUrl.protocol === 'https:';
+  const body =
+    rawBody.length > 0 && shouldTransformBody(req.headers['content-type'])
+      ? transformRequestBody(rawBody)
+      : rawBody;
 
-    if ('reasoning_effort' in parsed) {
-      log.info('[Azure Foundry Proxy] Stripping unsupported reasoning_effort parameter');
-      delete parsed.reasoning_effort;
-      modified = true;
-    }
-
-    if ('max_tokens' in parsed) {
-      if (!('max_completion_tokens' in parsed)) {
-        log.info('[Azure Foundry Proxy] Converting max_tokens to max_completion_tokens');
-        parsed.max_completion_tokens = parsed.max_tokens;
-      }
-      delete parsed.max_tokens;
-      modified = true;
-    }
-
-    if (modified) {
-      return Buffer.from(JSON.stringify(parsed), 'utf8');
-    }
-  } catch {
-    return body;
+  const headers = { ...req.headers } as Record<string, string | string[] | undefined>;
+  delete headers.host;
+  if (body.length !== rawBody.length) {
+    headers['content-length'] = String(body.length);
   }
-  return body;
-}
 
-function isValidRequestPath(path: string): boolean {
-  if (path === '/health') return true;
-  if (path.startsWith('/openai/')) return true;
-  if (
-    path.startsWith('/chat/') ||
-    path.startsWith('/completions') ||
-    path.startsWith('/embeddings')
-  )
-    return true;
-  if (path === '/models' || path.startsWith('/models/')) return true;
-  return false;
+  const proxy = (isHttps ? https : http).request(
+    {
+      method: req.method,
+      headers,
+      hostname: targetUrl.hostname,
+      port: targetUrl.port || (isHttps ? 443 : 80),
+      path: `${targetUrl.pathname}${targetUrl.search}`,
+    },
+    (proxyRes) => {
+      res.writeHead(proxyRes.statusCode || 500, proxyRes.headers);
+      proxyRes.pipe(res);
+    },
+  );
+
+  proxy.on('error', (error) => {
+    log.error('[Azure Foundry Proxy] Request error:', { error: error.message });
+    if (!res.headersSent) {
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+    }
+    res.end(
+      JSON.stringify({
+        error: 'Azure Foundry proxy request failed',
+        details: error.message,
+        hint: 'Check your Azure endpoint URL and network connectivity',
+      }),
+    );
+  });
+
+  if (body.length > 0) {
+    proxy.write(body);
+  }
+  proxy.end();
 }
 
 function proxyRequest(req: http.IncomingMessage, res: http.ServerResponse): void {
   if (req.url === '/health') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(
-      JSON.stringify({ status: 'ok', target: targetBaseUrl, port: AZURE_FOUNDRY_PROXY_PORT }),
-    );
+    sendJson(res, 200, { status: 'ok', target: targetBaseUrl, port: AZURE_FOUNDRY_PROXY_PORT });
     return;
   }
 
   if (!targetBaseUrl) {
-    res.writeHead(503, { 'Content-Type': 'application/json' });
-    res.end(
-      JSON.stringify({
-        error: 'Azure Foundry proxy target not configured',
-        hint: 'Configure Azure AI Foundry endpoint in Settings > Providers',
-      }),
-    );
+    sendJson(res, 503, {
+      error: 'Azure Foundry proxy target not configured',
+      hint: 'Configure Azure AI Foundry endpoint in Settings > Providers',
+    });
     return;
   }
 
@@ -106,29 +103,22 @@ function proxyRequest(req: http.IncomingMessage, res: http.ServerResponse): void
 
   if (!isValidRequestPath(url.pathname)) {
     log.warn(`[Azure Foundry Proxy] Rejected invalid path: ${url.pathname}`);
-    res.writeHead(403, { 'Content-Type': 'application/json' });
-    res.end(
-      JSON.stringify({ error: 'Invalid request path. Only Azure OpenAI API paths are allowed.' }),
-    );
+    sendJson(res, 403, { error: 'Invalid request path. Only Azure OpenAI API paths are allowed.' });
     return;
   }
 
   const targetUrl = new URL(`${targetBaseUrl}${url.pathname}${url.search}`);
-  const isHttps = targetUrl.protocol === 'https:';
-
   const chunks: Buffer[] = [];
   let totalSize = 0;
   let aborted = false;
 
   req.on('data', (chunk) => {
     if (aborted) return;
-
     totalSize += chunk.length;
     if (totalSize > MAX_REQUEST_SIZE) {
       aborted = true;
       log.warn(`[Azure Foundry Proxy] Request exceeded size limit: ${totalSize} bytes`);
-      res.writeHead(413, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Request too large. Maximum size is 10MB.' }));
+      sendJson(res, 413, { error: 'Request too large. Maximum size is 10MB.' });
       req.destroy();
       return;
     }
@@ -137,59 +127,11 @@ function proxyRequest(req: http.IncomingMessage, res: http.ServerResponse): void
 
   req.on('end', () => {
     if (aborted) return;
-
-    const rawBody = Buffer.concat(chunks);
-    const contentType = req.headers['content-type'];
-    const body =
-      rawBody.length > 0 && shouldTransformBody(contentType)
-        ? transformRequestBody(rawBody)
-        : rawBody;
-
-    const headers = { ...req.headers } as Record<string, string | string[] | undefined>;
-    delete headers.host;
-    if (body.length !== rawBody.length) {
-      headers['content-length'] = String(body.length);
-    }
-
-    const requestOptions: http.RequestOptions = {
-      method: req.method,
-      headers,
-      hostname: targetUrl.hostname,
-      port: targetUrl.port || (isHttps ? 443 : 80),
-      path: `${targetUrl.pathname}${targetUrl.search}`,
-    };
-
-    const proxy = (isHttps ? https : http).request(requestOptions, (proxyRes) => {
-      res.writeHead(proxyRes.statusCode || 500, proxyRes.headers);
-      proxyRes.pipe(res);
-    });
-
-    proxy.on('error', (error) => {
-      log.error('[Azure Foundry Proxy] Request error:', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      if (!res.headersSent) {
-        res.writeHead(502, { 'Content-Type': 'application/json' });
-      }
-      res.end(
-        JSON.stringify({
-          error: 'Azure Foundry proxy request failed',
-          details: error.message,
-          hint: 'Check your Azure endpoint URL and network connectivity',
-        }),
-      );
-    });
-
-    if (body.length > 0) {
-      proxy.write(body);
-    }
-    proxy.end();
+    forwardRequest(req, res, Buffer.concat(chunks), targetUrl);
   });
 
   req.on('error', (error) => {
-    log.error('[Azure Foundry Proxy] Incoming request error:', {
-      error: error instanceof Error ? error.message : String(error),
-    });
+    log.error('[Azure Foundry Proxy] Incoming request error:', { error: error.message });
     if (!res.headersSent) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
     }
@@ -197,40 +139,37 @@ function proxyRequest(req: http.IncomingMessage, res: http.ServerResponse): void
   });
 }
 
+async function startProxyServer(): Promise<void> {
+  server = http.createServer(proxyRequest);
+  return new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error('Azure Foundry proxy server startup timeout')),
+      5000,
+    );
+    server!.once('error', (error: NodeJS.ErrnoException) => {
+      clearTimeout(timeout);
+      server = null;
+      reject(
+        error.code === 'EADDRINUSE'
+          ? new Error(
+              `Port ${AZURE_FOUNDRY_PROXY_PORT} is already in use. Please close other applications using this port or restart the app.`,
+            )
+          : error,
+      );
+    });
+    server!.listen(AZURE_FOUNDRY_PROXY_PORT, '127.0.0.1', () => {
+      clearTimeout(timeout);
+      log.info(`[Azure Foundry Proxy] Listening on port ${AZURE_FOUNDRY_PROXY_PORT}`);
+      resolve();
+    });
+  });
+}
+
 export async function ensureAzureFoundryProxy(baseURL: string): Promise<AzureFoundryProxyInfo> {
   targetBaseUrl = normalizeBaseUrl(baseURL);
-
   if (!server) {
-    server = http.createServer(proxyRequest);
-
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Azure Foundry proxy server startup timeout'));
-      }, 5000);
-
-      server!.once('error', (error: NodeJS.ErrnoException) => {
-        clearTimeout(timeout);
-        server = null;
-        if (error.code === 'EADDRINUSE') {
-          reject(
-            new Error(
-              `Port ${AZURE_FOUNDRY_PROXY_PORT} is already in use. ` +
-                'Please close other applications using this port or restart the app.',
-            ),
-          );
-        } else {
-          reject(error);
-        }
-      });
-
-      server!.listen(AZURE_FOUNDRY_PROXY_PORT, '127.0.0.1', () => {
-        clearTimeout(timeout);
-        log.info(`[Azure Foundry Proxy] Listening on port ${AZURE_FOUNDRY_PROXY_PORT}`);
-        resolve();
-      });
-    });
+    await startProxyServer();
   }
-
   return {
     baseURL: getProxyBaseUrl(),
     targetBaseURL: targetBaseUrl,
@@ -242,7 +181,6 @@ export async function stopAzureFoundryProxy(): Promise<void> {
   if (!server) {
     return;
   }
-
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
       log.warn('[Azure Foundry Proxy] Shutdown timeout, forcing close');
@@ -250,7 +188,6 @@ export async function stopAzureFoundryProxy(): Promise<void> {
       targetBaseUrl = null;
       resolve();
     }, 3000);
-
     server!.close((err) => {
       clearTimeout(timeout);
       if (err && (err as NodeJS.ErrnoException).code !== 'ERR_SERVER_NOT_RUNNING') {
@@ -263,7 +200,6 @@ export async function stopAzureFoundryProxy(): Promise<void> {
         resolve();
       }
     });
-
     server = null;
     targetBaseUrl = null;
   });
