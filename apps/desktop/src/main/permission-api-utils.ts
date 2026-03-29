@@ -59,9 +59,9 @@ export function setCorsHeaders(
   req: import('http').IncomingMessage,
 ): void {
   const origin = req.headers.origin;
+  res.setHeader('Vary', 'Origin');
   if (origin !== undefined && TRUSTED_ORIGINS.has(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin');
   }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');

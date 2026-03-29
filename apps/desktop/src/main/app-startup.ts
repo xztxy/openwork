@@ -21,6 +21,7 @@ import { startHuggingFaceServer } from './providers/huggingface-local';
 import { createTray } from './tray';
 import { bootstrapDaemon } from './daemon-bootstrap';
 import { registerIPCHandlers } from './ipc/handlers';
+import { drainProtocolUrlQueue } from './protocol-handlers';
 
 function logMain(level: 'INFO' | 'WARN' | 'ERROR', msg: string, data?: Record<string, unknown>) {
   try {
@@ -159,6 +160,9 @@ export async function startApp(
 
     createTray(mainWindow);
     logMain('INFO', '[Main] System tray created');
+
+    // Drain any protocol URLs that arrived before the window was created
+    drainProtocolUrlQueue(mainWindow);
   }
 
   app.on('activate', () => {

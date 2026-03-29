@@ -31,8 +31,7 @@ export function normalizeSkillSlug(name: string): string {
     .replace(/[/\\]/g, '-') // forward/back-slash → dash
     .replace(/[^a-z0-9-]/g, '-') // everything else disallowed → dash
     .replace(/-+/g, '-') // collapse consecutive dashes
-    .replace(/^-|-$/g, '') // strip leading/trailing dashes
-    .trim();
+    .replace(/^-|-$/g, ''); // strip leading/trailing dashes
 }
 
 export function generateId(name: string, source: SkillSource): string {

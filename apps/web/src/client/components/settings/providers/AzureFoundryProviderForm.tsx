@@ -1,5 +1,3 @@
-// apps/web/src/client/components/settings/providers/AzureFoundryProviderForm.tsx
-
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getAccomplish } from '@/lib/accomplish';

@@ -10,6 +10,7 @@ import {
   permissionResponseSchema,
   resumeSessionSchema,
   validate,
+  logger,
 } from '@accomplish_ai/agent-core';
 import { z } from 'zod';
 import { homedir } from 'node:os';
@@ -147,7 +148,7 @@ export function registerRpcMethods(services: RouteServices): void {
         }
       }
       if (requestId) {
-        console.warn(`[Daemon] Permission response for unmatched requestId: ${requestId}`);
+        logger.warn(`[Daemon] Permission response for unmatched requestId: ${requestId}`);
         return Promise.reject(new Error(`No pending permission request with id: ${requestId}`));
       }
       if (!taskService.hasActiveTask(taskId)) {

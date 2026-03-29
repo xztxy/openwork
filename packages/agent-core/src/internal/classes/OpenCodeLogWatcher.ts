@@ -176,6 +176,8 @@ export class OpenCodeLogWatcher extends EventEmitter<LogWatcherEvents> {
           raw: line,
           ...errorInfo,
           errorName: errorInfo.errorName || 'UnknownError',
+          message: errorInfo.message || 'Unknown error occurred',
+          statusCode: errorInfo.statusCode || 500,
         };
 
         log.info(`[LogWatcher] Detected error: ${error.errorName} ${error.message}`);

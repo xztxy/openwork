@@ -1,5 +1,3 @@
-// apps/web/src/client/components/settings/providers/OpenRouterProviderForm.tsx
-
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence, motion } from 'framer-motion';

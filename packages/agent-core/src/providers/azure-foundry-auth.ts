@@ -102,7 +102,6 @@ export async function buildAzureAuthHeaders(
     return { success: true, headers, authValue: entraResult.authValue };
   }
 
-  // api-key auth
   if (!apiKey) {
     return { success: false, error: 'API key is required for api-key authentication' };
   }
@@ -134,11 +133,10 @@ export async function buildTestAuthHeaders(
     if (!apiKey || !apiKey.trim()) {
       return { success: false, error: 'API key is required for API key authentication' };
     }
-    headers['api-key'] = apiKey;
+    headers['api-key'] = apiKey.trim();
     return { success: true, headers };
   }
 
-  // entra-id
   const entraResult = await getEntraAuthHeader();
   if (!entraResult.success) {
     return { success: false, error: entraResult.error };

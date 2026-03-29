@@ -19,6 +19,7 @@ import {
   ensureDevBrowserServer,
   generateTaskSummary,
   DEV_BROWSER_PORT,
+  logger,
   type TaskConfig,
   type StorageAPI,
   type EnvironmentConfig,
@@ -198,7 +199,7 @@ export function runTaskSummaryGeneration(
       emitSummary(summary);
     })
     .catch((err: unknown) => {
-      console.warn('[TaskService] Failed to generate task summary:', err);
+      logger.warn('[TaskService] Failed to generate task summary', { err, taskId });
     });
 }
 
