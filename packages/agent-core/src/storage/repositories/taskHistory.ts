@@ -1,111 +1,17 @@
-import type { Task, TaskMessage, TaskStatus, TaskAttachment } from '../../common/types/task.js';
-import type { TodoItem } from '../../common/types/todo.js';
+import type { Task, TaskMessage, TaskStatus } from '../../common/types/task.js';
 import { getDatabase } from '../database.js';
+import { rowToTask, getMessagesForTask } from './task-row-mapper.js';
+import type { TaskRow, StoredTask } from './task-row-mapper.js';
 
-export interface StoredTask {
-  id: string;
-  prompt: string;
-  summary?: string;
-  status: TaskStatus;
-  messages: TaskMessage[];
-  sessionId?: string;
-  createdAt: string;
-  startedAt?: string;
-  completedAt?: string;
-}
+export type { StoredTask } from './task-row-mapper.js';
 
-interface TaskRow {
-  id: string;
-  prompt: string;
-  summary: string | null;
-  status: string;
-  session_id: string | null;
-  created_at: string;
-  started_at: string | null;
-  completed_at: string | null;
-}
+// Todo functions
+export { getTodosForTask, saveTodosForTask, clearTodosForTask } from './task-todos.js';
 
-interface MessageRow {
-  id: string;
-  task_id: string;
-  type: string;
-  content: string;
-  tool_name: string | null;
-  tool_input: string | null;
-  timestamp: string;
-  sort_order: number;
-}
-
-interface AttachmentRow {
-  id: number;
-  message_id: string;
-  type: string;
-  data: string;
-  label: string | null;
-}
-
-interface TodoRow {
-  id: number;
-  task_id: string;
-  todo_id: string;
-  content: string;
-  status: string;
-  priority: string;
-  sort_order: number;
-}
+// Re-export for internal use by other modules
+export { getMessagesForTask };
 
 const MAX_HISTORY_ITEMS = 100;
-
-function getMessagesForTask(taskId: string): TaskMessage[] {
-  const db = getDatabase();
-
-  const messageRows = db
-    .prepare('SELECT * FROM task_messages WHERE task_id = ? ORDER BY sort_order ASC')
-    .all(taskId) as MessageRow[];
-
-  const messages: TaskMessage[] = [];
-
-  for (const row of messageRows) {
-    const attachmentRows = db
-      .prepare('SELECT * FROM task_attachments WHERE message_id = ?')
-      .all(row.id) as AttachmentRow[];
-
-    const attachments: TaskAttachment[] | undefined =
-      attachmentRows.length > 0
-        ? attachmentRows.map((a) => ({
-            type: a.type as 'screenshot' | 'json',
-            data: a.data,
-            label: a.label || undefined,
-          }))
-        : undefined;
-
-    messages.push({
-      id: row.id,
-      type: row.type as TaskMessage['type'],
-      content: row.content,
-      toolName: row.tool_name || undefined,
-      toolInput: row.tool_input ? JSON.parse(row.tool_input) : undefined,
-      timestamp: row.timestamp,
-      attachments,
-    });
-  }
-
-  return messages;
-}
-
-function rowToTask(row: TaskRow): StoredTask {
-  return {
-    id: row.id,
-    prompt: row.prompt,
-    summary: row.summary || undefined,
-    status: row.status as TaskStatus,
-    sessionId: row.session_id || undefined,
-    createdAt: row.created_at,
-    startedAt: row.started_at || undefined,
-    completedAt: row.completed_at || undefined,
-    messages: getMessagesForTask(row.id),
-  };
-}
 
 export function getTasks(workspaceId?: string | null): StoredTask[] {
   const db = getDatabase();
@@ -282,40 +188,3 @@ export function clearTaskHistoryStore(): void {
 }
 
 export function flushPendingTasks(): void {}
-
-export function getTodosForTask(taskId: string): TodoItem[] {
-  const db = getDatabase();
-
-  const rows = db
-    .prepare('SELECT * FROM task_todos WHERE task_id = ? ORDER BY sort_order ASC')
-    .all(taskId) as TodoRow[];
-
-  return rows.map((row) => ({
-    id: row.todo_id,
-    content: row.content,
-    status: row.status as TodoItem['status'],
-    priority: row.priority as TodoItem['priority'],
-  }));
-}
-
-export function saveTodosForTask(taskId: string, todos: TodoItem[]): void {
-  const db = getDatabase();
-
-  db.transaction(() => {
-    db.prepare('DELETE FROM task_todos WHERE task_id = ?').run(taskId);
-
-    const insert = db.prepare(
-      `INSERT INTO task_todos (task_id, todo_id, content, status, priority, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    );
-
-    todos.forEach((todo, index) => {
-      insert.run(taskId, todo.id, todo.content, todo.status, todo.priority, index);
-    });
-  })();
-}
-
-export function clearTodosForTask(taskId: string): void {
-  const db = getDatabase();
-  db.prepare('DELETE FROM task_todos WHERE task_id = ?').run(taskId);
-}

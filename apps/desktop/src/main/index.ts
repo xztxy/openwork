@@ -1,14 +1,5 @@
 import { config } from 'dotenv';
-import {
-  app,
-  BrowserWindow,
-  shell,
-  ipcMain,
-  nativeImage,
-  dialog,
-  nativeTheme,
-  Menu,
-} from 'electron';
+import { app, BrowserWindow, shell, nativeImage, nativeTheme, Menu } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -20,29 +11,17 @@ if (process.platform === 'win32') {
   app.setAppUserModelId('ai.accomplish.desktop');
 }
 
-import { registerIPCHandlers } from './ipc/handlers';
-import { FutureSchemaError } from '@accomplish_ai/agent-core';
-import { initThoughtStreamApi, startThoughtStreamServer } from './thought-stream-api';
-import type { ProviderId } from '@accomplish_ai/agent-core';
-import { getTaskManager, disposeTaskManager, cleanupVertexServiceAccountKey } from './opencode';
-import { disposeWhatsAppService } from './services/whatsapp';
-import { stopAllBrowserPreviewStreams } from './services/browserPreview';
-import { oauthBrowserFlow } from './opencode/auth-browser';
-import { slackMcpOAuthFlow } from './opencode/slack-auth';
-import { migrateLegacyData } from './store/legacyMigration';
+import { getLogCollector, initializeLogCollector } from './logging';
+import { clearSecureStorage } from './store/secureStorage';
+import { resetStorageSingleton } from './store/storage';
+import { startApp } from './app-startup';
+import { shutdownApp } from './app-shutdown';
 import {
-  initializeStorage,
-  closeStorage,
-  getStorage,
-  resetStorageSingleton,
-} from './store/storage';
-import { getApiKey, clearSecureStorage } from './store/secureStorage';
-import * as workspaceManager from './store/workspaceManager';
-import { initializeLogCollector, shutdownLogCollector, getLogCollector } from './logging';
-import { skillsManager } from './skills';
-import { startHuggingFaceServer, stopHuggingFaceServer } from './providers/huggingface-local';
-import { createTray, destroyTray } from './tray';
-import { bootstrapDaemon, shutdownDaemon } from './daemon-bootstrap';
+  handleProtocolUrlFromArgs,
+  registerProtocolEventHandlers,
+  registerAppIpcHandlers,
+  handleSecondInstanceProtocolUrl,
+} from './protocol-handlers';
 
 function logMain(level: 'INFO' | 'WARN' | 'ERROR', msg: string, data?: Record<string, unknown>) {
   try {
@@ -73,9 +52,7 @@ if (process.env.CLEAN_START === '1') {
   } catch (err) {
     logMain('ERROR', '[Clean Mode] Failed to clear userData', { err: String(err) });
   }
-  // Clear secure storage first (while singleton still exists), then null the reference.
-  // Reversing this order would cause getStorage() to re-create the singleton.
-  clearSecureStorage();
+  clearSecureStorage(); // Clear before reset to avoid singleton re-creation
   resetStorageSingleton();
   logMain('INFO', '[Clean Mode] All singletons reset');
 }
@@ -83,25 +60,29 @@ if (process.env.CLEAN_START === '1') {
 app.setName('Accomplish');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 const envPath = app.isPackaged
   ? path.join(process.resourcesPath, '.env')
   : path.join(__dirname, '../../.env');
 config({ path: envPath });
 
 process.env.APP_ROOT = path.join(__dirname, '../..');
-
 export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron');
 
 const ROUTER_URL = process.env.ACCOMPLISH_ROUTER_URL;
-
-// In production, web's build output is packaged as an extraResource.
-const WEB_DIST = app.isPackaged
+const WEB_DIST = app.isPackaged // In production, web's build output is an extraResource.
   ? path.join(process.resourcesPath, 'web-ui')
   : path.join(process.env.APP_ROOT, '../web/dist/client');
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
+const isQuittingRef = {
+  get value() {
+    return isQuitting;
+  },
+  set value(v: boolean) {
+    isQuitting = v;
+  },
+};
 
 function getPreloadPath(): string {
   return path.join(__dirname, '../preload/index.cjs');
@@ -109,7 +90,6 @@ function getPreloadPath(): string {
 
 function createWindow() {
   logMain('INFO', '[Main] Creating main application window');
-
   const iconFile = process.platform === 'win32' ? 'icon.ico' : 'icon.png';
   const iconPath = app.isPackaged
     ? path.join(process.resourcesPath, iconFile)
@@ -144,25 +124,19 @@ function createWindow() {
     if (!params.misspelledWord) {
       return;
     }
-
-    const menuItems: Electron.MenuItemConstructorOptions[] = params.dictionarySuggestions.map(
-      (suggestion) => ({
-        label: suggestion,
-        click: () => mainWindow?.webContents.replaceMisspelling(suggestion),
-      }),
-    );
-
-    if (menuItems.length > 0) {
-      menuItems.push({ type: 'separator' });
-    }
-
-    menuItems.push({
-      label: 'Add to Dictionary',
-      click: () =>
-        mainWindow?.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord),
-    });
-
-    Menu.buildFromTemplate(menuItems).popup();
+    const items: Electron.MenuItemConstructorOptions[] = [
+      ...params.dictionarySuggestions.map((s) => ({
+        label: s,
+        click: () => mainWindow?.webContents.replaceMisspelling(s),
+      })),
+      ...(params.dictionarySuggestions.length > 0 ? [{ type: 'separator' as const }] : []),
+      {
+        label: 'Add to Dictionary',
+        click: () =>
+          mainWindow?.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+      },
+    ];
+    Menu.buildFromTemplate(items).popup();
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -175,23 +149,15 @@ function createWindow() {
   mainWindow.maximize();
 
   const isE2EMode = (global as Record<string, unknown>).E2E_SKIP_AUTH === true;
-  const isTestEnv = process.env.NODE_ENV === 'test';
-  if (!app.isPackaged && !isE2EMode && !isTestEnv) {
+  if (!app.isPackaged && !isE2EMode && process.env.NODE_ENV !== 'test') {
     mainWindow.webContents.openDevTools({ mode: 'right' });
   }
 
+  // dev mode needs 'unsafe-inline' for @vitejs/plugin-react HMR preamble (never distributed)
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-    // In dev mode, @vitejs/plugin-react injects an inline HMR preamble script that
-    // requires 'unsafe-inline'. This is safe since dev builds are never distributed.
     const scriptSrc = app.isPackaged ? "'self'" : "'self' 'unsafe-inline'";
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [
-          `default-src 'self' https:; script-src ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: ws: wss:; font-src 'self' https: data:; worker-src 'self' blob:`,
-        ],
-      },
-    });
+    const csp = `default-src 'self' https:; script-src ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: ws: wss:; font-src 'self' https: data:; worker-src 'self' blob:`;
+    callback({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [csp] } });
   });
 
   if (ROUTER_URL) {
@@ -206,26 +172,19 @@ function createWindow() {
 
 process.on('uncaughtException', (error) => {
   try {
-    const collector = getLogCollector();
-    if (collector?.log) {
-      collector.log('ERROR', 'main', `Uncaught exception: ${error.message}`, {
-        name: error.name,
-        stack: error.stack,
-      });
-    }
+    getLogCollector()?.log?.('ERROR', 'main', `Uncaught exception: ${error.message}`, {
+      name: error.name,
+      stack: error.stack,
+    });
   } catch {
-    // ignore - log collector may not be initialized
+    /* ignore */
   }
 });
-
 process.on('unhandledRejection', (reason) => {
   try {
-    const collector = getLogCollector();
-    if (collector?.log) {
-      collector.log('ERROR', 'main', 'Unhandled promise rejection', { reason });
-    }
+    getLogCollector()?.log?.('ERROR', 'main', 'Unhandled promise rejection', { reason });
   } catch {
-    // ignore - log collector may not be initialized
+    /* ignore */
   }
 });
 
@@ -245,186 +204,22 @@ if (!gotTheLock) {
 
   app.on('second-instance', (_event, commandLine) => {
     if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
       mainWindow.focus();
       logMain('INFO', '[Main] Focused existing instance after second-instance event');
-
-      if (process.platform === 'win32') {
-        const protocolUrl = commandLine.find((arg) => arg.startsWith('accomplish://'));
-        if (protocolUrl) {
-          logMain('INFO', `[Main] Received protocol URL from second-instance: ${protocolUrl}`);
-          if (protocolUrl.startsWith('accomplish://callback/mcp')) {
-            mainWindow.webContents.send('auth:mcp-callback', protocolUrl);
-          } else if (protocolUrl.startsWith('accomplish://callback')) {
-            mainWindow.webContents.send('auth:callback', protocolUrl);
-          }
-        }
-      }
+      handleSecondInstanceProtocolUrl(mainWindow, commandLine);
     }
   });
 
   app.whenReady().then(async () => {
-    logMain('INFO', `[Main] Electron app ready, version: ${app.getVersion()}`);
-
-    if (process.env.CLEAN_START !== '1') {
-      try {
-        const didMigrate = migrateLegacyData();
-        if (didMigrate) {
-          logMain('INFO', '[Main] Migrated data from legacy userData path');
-        }
-      } catch (err) {
-        logMain('ERROR', '[Main] Legacy data migration failed', { err: String(err) });
-      }
-    }
-
-    try {
-      initializeStorage();
-    } catch (err) {
-      if (err instanceof FutureSchemaError) {
-        await dialog.showMessageBox({
-          type: 'error',
-          title: 'Update Required',
-          message: `This data was created by a newer version of Accomplish (schema v${err.storedVersion}).`,
-          detail: `Your app supports up to schema v${err.appVersion}. Please update Accomplish to continue.`,
-          buttons: ['Quit'],
-        });
-        app.quit();
-        return;
-      }
-      throw err;
-    }
-
-    try {
-      workspaceManager.initialize();
-    } catch (err) {
-      logMain('ERROR', '[Main] Workspace initialization failed', { err: String(err) });
-      throw err;
-    }
-
-    try {
-      const storage = getStorage();
-      const settings = storage.getProviderSettings();
-      for (const [id, provider] of Object.entries(settings.connectedProviders)) {
-        const providerId = id as ProviderId;
-        const credType = provider?.credentials?.type;
-        if (!credType || credType === 'api_key') {
-          const key = getApiKey(providerId);
-          if (!key) {
-            logMain(
-              'WARN',
-              `[Main] Provider ${providerId} has api_key auth but key not found in secure storage`,
-            );
-            storage.removeConnectedProvider(providerId);
-            logMain('INFO', `[Main] Removed provider ${providerId} due to missing API key`);
-          }
-        }
-      }
-
-      // Auto-start HuggingFace local server if enabled
-      const hfConfig = storage.getHuggingFaceLocalConfig();
-      if (hfConfig?.enabled && hfConfig.selectedModelId) {
-        logMain(
-          'INFO',
-          `[Main] Auto-starting HuggingFace server for model: ${hfConfig.selectedModelId}`,
-        );
-        startHuggingFaceServer(hfConfig.selectedModelId)
-          .then((result) => {
-            if (!result.success) {
-              logMain('ERROR', '[Main] Failed to auto-start HuggingFace local server', {
-                error: result.error,
-              });
-            }
-          })
-          .catch((err: unknown) => {
-            logMain('ERROR', '[Main] Failed to auto-start HuggingFace local server (thrown)', {
-              err: String(err),
-            });
-          });
-      }
-    } catch (err) {
-      logMain('ERROR', '[Main] Provider validation failed', { err: String(err) });
-    }
-
-    await skillsManager.initialize();
-
-    if (process.platform === 'darwin' && app.dock) {
-      const iconPath = app.isPackaged
-        ? path.join(process.resourcesPath, 'icon.png')
-        : path.join(process.env.APP_ROOT!, 'resources', 'icon.png');
-      const icon = nativeImage.createFromPath(iconPath);
-      if (!icon.isEmpty()) {
-        app.dock.setIcon(icon);
-      }
-    }
-
-    // Must run before createWindow() so backgroundColor matches the theme
-    try {
-      const storage = getStorage();
-      nativeTheme.themeSource = storage.getTheme();
-    } catch {
-      // First launch or corrupt DB — nativeTheme stays 'system'
-    }
-
-    // Bootstrap the daemon RPC layer (child-process with in-process fallback)
-    const taskManager = getTaskManager();
-    const storage = getStorage();
-    await bootstrapDaemon({ taskManager, storage });
-    logMain('INFO', '[Main] Daemon bootstrapped');
-
-    registerIPCHandlers();
-    logMain('INFO', '[Main] IPC handlers registered');
-
-    createWindow();
-
-    if (mainWindow) {
-      initThoughtStreamApi(mainWindow);
-      startThoughtStreamServer();
-
-      // Intercept window close: hide to tray instead of quitting
-      mainWindow.on('close', (event) => {
-        if (!isQuitting) {
-          event.preventDefault();
-          mainWindow?.hide();
-          logMain('INFO', '[Main] Window hidden to tray');
-        }
-      });
-
-      createTray(mainWindow);
-      logMain('INFO', '[Main] System tray created');
-    }
-
-    app.on('activate', () => {
-      const windows = BrowserWindow.getAllWindows();
-      if (windows.length === 0) {
-        createWindow();
-        try {
-          const l = getLogCollector();
-          if (l?.logEnv) {
-            l.logEnv('INFO', '[Main] Application reactivated; recreated window');
-          }
-        } catch (_e) {
-          /* ignore */
-        }
-      } else {
-        windows[0].show();
-        windows[0].focus();
-        try {
-          const l = getLogCollector();
-          if (l?.logEnv) {
-            l.logEnv('INFO', '[Main] Application reactivated; showed existing window');
-          }
-        } catch (_e) {
-          /* ignore */
-        }
-      }
-    });
+    await startApp(createWindow, () => mainWindow, isQuittingRef);
   });
 }
 
+// With system tray, the app stays alive when all windows are closed.
 app.on('window-all-closed', () => {
-  // With system tray, the app stays alive when all windows are closed.
-  // On macOS this was already the default behavior.
-  // On Windows/Linux the tray keeps the app running.
   logMain('INFO', '[Main] All windows closed — app continues in system tray');
 });
 
@@ -434,89 +229,13 @@ app.on('before-quit', (event) => {
   }
   isQuitting = true;
   event.preventDefault();
-
   let logger: ReturnType<typeof getLogCollector> | null = null;
   try {
     logger = getLogCollector();
   } catch {
     /* logger may not be initialized on early quit paths */
   }
-
-  // Await async cleanup before quitting (Dev0907, PR #480, ENG-695)
-  void (async () => {
-    destroyTray();
-    shutdownDaemon();
-
-    const stopBrowserPreviews = stopAllBrowserPreviewStreams();
-    try {
-      await Promise.race([
-        stopBrowserPreviews,
-        new Promise<void>((_, reject) => {
-          const timeoutId = setTimeout(() => {
-            reject(new Error('Timed out stopping browser preview streams'));
-          }, 5000);
-          void stopBrowserPreviews.finally(() => clearTimeout(timeoutId));
-        }),
-      ]);
-    } catch (error: unknown) {
-      logger?.logEnv('ERROR', `[Main] Failed to stop browser preview streams: ${String(error)}`);
-    }
-    try {
-      disposeTaskManager(); // Also cleans up proxies internally
-    } catch (error: unknown) {
-      logger?.logEnv('ERROR', `[Main] Error during disposeTaskManager: ${String(error)}`);
-    }
-    // Dispose WhatsApp service (ENG-684) — best-effort, non-fatal
-    try {
-      disposeWhatsAppService();
-    } catch (error: unknown) {
-      logger?.logEnv('ERROR', `[Main] Error during disposeWhatsAppService: ${String(error)}`);
-    }
-    // Stop HuggingFace inference server so its port is released (ENG-687)
-    try {
-      await Promise.race([
-        stopHuggingFaceServer(),
-        new Promise<void>((_, reject) =>
-          setTimeout(() => reject(new Error('HuggingFace server stop timed out after 5s')), 5000),
-        ),
-      ]);
-    } catch (error: unknown) {
-      logger?.logEnv('ERROR', `[Main] Failed to stop HuggingFace server: ${String(error)}`);
-    }
-    try {
-      cleanupVertexServiceAccountKey();
-    } catch (error: unknown) {
-      logger?.logEnv(
-        'ERROR',
-        `[Main] Error during cleanupVertexServiceAccountKey: ${String(error)}`,
-      );
-    }
-    try {
-      oauthBrowserFlow.dispose();
-    } catch (error: unknown) {
-      logger?.logEnv('ERROR', `[Main] Error during oauthBrowserFlow.dispose: ${String(error)}`);
-    }
-    try {
-      slackMcpOAuthFlow.dispose();
-    } catch (error: unknown) {
-      logger?.logEnv('ERROR', `[Main] Error during slackMcpOAuthFlow.dispose: ${String(error)}`);
-    }
-    try {
-      workspaceManager.close();
-    } catch (error: unknown) {
-      logger?.logEnv('ERROR', `[Main] Error during workspaceManager.close: ${String(error)}`);
-    }
-    try {
-      closeStorage();
-    } catch (error: unknown) {
-      logger?.logEnv('ERROR', `[Main] Error during closeStorage: ${String(error)}`);
-    }
-    try {
-      shutdownLogCollector();
-    } finally {
-      app.quit();
-    }
-  })();
+  void shutdownApp(logger);
 });
 
 if (process.platform === 'win32' && !app.isPackaged) {
@@ -525,47 +244,6 @@ if (process.platform === 'win32' && !app.isPackaged) {
   app.setAsDefaultProtocolClient('accomplish');
 }
 
-function handleProtocolUrlFromArgs(): void {
-  if (process.platform === 'win32') {
-    const protocolUrl = process.argv.find((arg) => arg.startsWith('accomplish://'));
-    if (protocolUrl) {
-      app.whenReady().then(() => {
-        setTimeout(() => {
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            if (protocolUrl.startsWith('accomplish://callback/mcp')) {
-              mainWindow.webContents.send('auth:mcp-callback', protocolUrl);
-            } else if (protocolUrl.startsWith('accomplish://callback')) {
-              mainWindow.webContents.send('auth:callback', protocolUrl);
-            }
-          }
-        }, 1000);
-      });
-    }
-  }
-}
-
-handleProtocolUrlFromArgs();
-
-app.on('open-url', (event, url) => {
-  event.preventDefault();
-  if (url.startsWith('accomplish://callback/mcp')) {
-    mainWindow?.webContents?.send('auth:mcp-callback', url);
-  } else if (url.startsWith('accomplish://callback')) {
-    mainWindow?.webContents?.send('auth:callback', url);
-  }
-});
-
-ipcMain.handle('app:version', () => {
-  return app.getVersion();
-});
-
-ipcMain.handle('app:platform', () => {
-  return process.platform;
-});
-
-ipcMain.handle('app:is-e2e-mode', () => {
-  return (
-    (global as Record<string, unknown>).E2E_MOCK_TASK_EVENTS === true ||
-    process.env.E2E_MOCK_TASK_EVENTS === '1'
-  );
-});
+handleProtocolUrlFromArgs(() => mainWindow);
+registerProtocolEventHandlers(() => mainWindow);
+registerAppIpcHandlers();
