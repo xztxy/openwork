@@ -65,21 +65,6 @@ export function useExecutionActions(s: CoreState) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- s is a stable hook result reference
   }, [s.currentTask, s.isComplete, s.permissionRequest, s.showSettingsDialog, s.interruptTask]);
 
-  useEffect(() => {
-    if (!s.pendingSpeechFollowUpRef.current) {
-      return;
-    }
-    if (!s.canFollowUp || s.isLoading) {
-      return;
-    }
-    if (s.followUp !== s.pendingSpeechFollowUpRef.current) {
-      return;
-    }
-    s.pendingSpeechFollowUpRef.current = null;
-    void handleFollowUp();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [s.canFollowUp, s.followUp, s.isLoading, handleFollowUp]);
-
   const resumePausedTask = useCallback(
     async (message: string, _bypassAuthPauseQueue: boolean): Promise<boolean> => {
       const isE2EMode = await accomplish.isE2EMode();
@@ -121,6 +106,21 @@ export function useExecutionActions(s: CoreState) {
       s.setAttachments([]);
     }
   }, [accomplish, s]);
+
+  useEffect(() => {
+    if (!s.pendingSpeechFollowUpRef.current) {
+      return;
+    }
+    if (!s.canFollowUp || s.isLoading) {
+      return;
+    }
+    if (s.followUp !== s.pendingSpeechFollowUpRef.current) {
+      return;
+    }
+    s.pendingSpeechFollowUpRef.current = null;
+    void handleFollowUp();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.canFollowUp, s.followUp, s.isLoading, handleFollowUp]);
 
   const handleSettingsDialogClose = (open: boolean) => {
     s.setShowSettingsDialog(open);
