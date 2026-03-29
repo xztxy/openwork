@@ -175,9 +175,9 @@ export function useClassicProviderConnect({
         credentials: {
           type: 'api_key',
           keyPrefix:
-            trimmedKey.length > 40
-              ? trimmedKey.substring(0, 40) + '...'
-              : trimmedKey.substring(0, Math.min(trimmedKey.length, 20)) + '...',
+            trimmedKey.length > 20
+              ? trimmedKey.substring(0, 20) + '...'
+              : trimmedKey,
         } as ApiKeyCredentials,
         lastConnectedAt: new Date().toISOString(),
         ...(models ? { availableModels: models } : {}),

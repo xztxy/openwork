@@ -78,7 +78,7 @@ export function useExecutionActions(s: CoreState) {
     s.pendingSpeechFollowUpRef.current = null;
     void handleFollowUp();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [s.canFollowUp, s.followUp, s.isLoading]);
+  }, [s.canFollowUp, s.followUp, s.isLoading, handleFollowUp]);
 
   const resumePausedTask = useCallback(
     async (message: string, _bypassAuthPauseQueue: boolean): Promise<boolean> => {

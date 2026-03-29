@@ -23,7 +23,8 @@ export function buildPlanMessage(
     ? `\n\n**Verification:**\n${input.verification.map((v, i) => `${i + 1}. ${v}`).join('\n')}`
     : '';
   const skillsSection = input.skills?.length ? `\n\n**Skills:** ${input.skills.join(', ')}` : '';
-  const planText = `**Plan:**\n\n**Goal:** ${input.goal}\n\n**Steps:**\n${input.steps?.map((s, i) => `${i + 1}. ${s}`).join('\n') ?? ''}${verificationSection}${skillsSection}`;
+  const goalSection = input.goal ? `**Goal:** ${input.goal}\n\n` : '';
+  const planText = `**Plan:**\n\n${goalSection}**Steps:**\n${input.steps?.map((s, i) => `${i + 1}. ${s}`).join('\n') ?? ''}${verificationSection}${skillsSection}`;
 
   return {
     type: 'text',

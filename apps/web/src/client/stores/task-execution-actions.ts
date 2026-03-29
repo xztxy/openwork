@@ -214,12 +214,16 @@ export function createTaskExecutionActions(set: SetFn, get: GetFn) {
 
     respondToPermission: async (response: PermissionResponse) => {
       const accomplish = getAccomplish();
+      const taskStateToken = get()._taskStateToken;
       void accomplish.logEvent({
         level: 'info',
         message: 'UI permission response',
         context: { ...response },
       });
       await accomplish.respondToPermission(response);
+      if (!hasTaskStateToken(get(), taskStateToken)) {
+        return;
+      }
       set((state) => {
         const { [response.taskId]: _, ...rest } = state.permissionRequests;
         return { permissionRequests: rest };

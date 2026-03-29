@@ -175,12 +175,14 @@ export function useExecutionCore() {
   const canFollowUp = isComplete && (hasSession || currentTask?.status === 'interrupted');
   const isConnectorAuthPause =
     currentTask?.status === 'completed' && isAuthPause && pauseAction?.type === 'oauth-connect';
-  const taskActionLabel =
-    currentTask?.status === 'interrupted'
-      ? tCommon('buttons.continue')
-      : isConnectorAuthPause
-        ? pauseAction!.label
-        : tCommon('buttons.doneContinue');
+  let taskActionLabel: string;
+  if (currentTask?.status === 'interrupted') {
+    taskActionLabel = tCommon('buttons.continue');
+  } else if (isConnectorAuthPause) {
+    taskActionLabel = pauseAction!.label;
+  } else {
+    taskActionLabel = tCommon('buttons.doneContinue');
+  }
   const taskActionPendingLabel = isConnectorAuthPause ? pauseAction!.pendingLabel : undefined;
   const isFollowUpOverLimit = followUp.length > PROMPT_DEFAULT_MAX_LENGTH;
 

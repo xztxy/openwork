@@ -174,7 +174,14 @@ export function FollowUpInput(props: FollowUpInputProps) {
                 }
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  handleFollowUp();
+                  const isDisabled =
+                    (!followUp.trim() && attachments.length === 0) ||
+                    isLoading ||
+                    speechInput.isRecording ||
+                    isFollowUpOverLimit;
+                  if (!isDisabled) {
+                    handleFollowUp();
+                  }
                 }
               }}
               placeholder={
