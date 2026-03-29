@@ -146,8 +146,9 @@ export async function startApp(
     initThoughtStreamApi(mainWindow);
     startThoughtStreamServer();
 
-    // Forward daemon notifications to the renderer via IPC
-    registerNotificationForwarding(mainWindow);
+    // Forward daemon notifications to the renderer via IPC.
+    // Uses a dynamic getter so recreated windows (macOS activate) receive events.
+    registerNotificationForwarding(() => getMainWindow());
     logMain('INFO', '[Main] Daemon notification forwarding registered');
 
     mainWindow.on('close', (event) => {

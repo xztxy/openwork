@@ -46,9 +46,13 @@ export async function bootstrapDaemon(): Promise<DaemonClient> {
  * Maps daemon JSON-RPC notifications to Electron IPC channels that the
  * React UI (via preload contextBridge) already listens on.
  *
- * Must be called after both bootstrapDaemon() and window creation.
+ * Uses a dynamic window getter so that if the window is recreated (e.g.
+ * macOS `activate` event), notifications route to the current window
+ * without re-registering handlers.
+ *
+ * Must be called after bootstrapDaemon().
  */
-export function registerNotificationForwarding(mainWindow: BrowserWindow): void {
+export function registerNotificationForwarding(getWindow: () => BrowserWindow | null): void {
   let client: DaemonClient;
   try {
     client = getDaemonClient();
@@ -58,11 +62,12 @@ export function registerNotificationForwarding(mainWindow: BrowserWindow): void 
   }
 
   const forward = (channel: string, data: unknown): void => {
-    if (mainWindow.isDestroyed()) {
+    const win = getWindow();
+    if (!win || win.isDestroyed()) {
       return;
     }
     try {
-      mainWindow.webContents.send(channel, data);
+      win.webContents.send(channel, data);
     } catch {
       // Window torn down between check and send — safe to ignore
     }
