@@ -4,10 +4,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { SlashCommandPopover } from '../../components/landing/SlashCommandPopover';
 import { FollowUpToolbar } from './FollowUpToolbar';
 import { DragOverlay, AttachmentList } from './FollowUpAttachments';
-import type { FileAttachmentInfo } from '@accomplish_ai/agent-core/common';
+import type { FileAttachmentInfo, Task } from '@accomplish_ai/agent-core';
 import type { useSpeechInput } from '../../hooks/useSpeechInput';
 import type { useSlashCommand } from '../../hooks/useSlashCommand';
-import type { Task } from '@accomplish_ai/agent-core/common';
 
 interface FollowUpInputProps {
   followUp: string;
@@ -91,7 +90,7 @@ export function FollowUpInput(props: FollowUpInputProps) {
         e.preventDefault();
         e.stopPropagation();
         setDragCounter((prev) => {
-          const next = prev - 1;
+          const next = Math.max(prev - 1, 0);
           if (next === 0) {
             setIsDragging(false);
           }
