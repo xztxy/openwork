@@ -50,6 +50,9 @@ export function getCliCommand(opts: TaskConfigBuilderOptions): { command: string
   if (resolved) {
     return { command: resolved.cliPath, args: [] };
   }
+  if (process.platform === 'win32') {
+    throw new Error('Failed to resolve OpenCode CLI executable on Windows');
+  }
   return { command: 'opencode', args: [] };
 }
 

@@ -15,7 +15,8 @@ import { PermissionService } from './permission-service.js';
 import { ThoughtStreamService } from './thought-stream-service.js';
 import { HealthService, VERSION } from './health.js';
 import { parseArgs } from './cli.js';
-import { registerRpcMethods, registerTaskEventForwarding } from './daemon-routes.js';
+import { registerRpcMethods } from './daemon-routes.js';
+import { registerTaskEventForwarding } from './task-event-forwarding.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
