@@ -1,4 +1,5 @@
 import { XCircle } from '@phosphor-icons/react';
+import { useTranslation } from 'react-i18next';
 import type { FileAttachmentInfo } from '@accomplish_ai/agent-core/common';
 import { getAttachmentIcon } from '../../lib/attachments';
 
@@ -9,6 +10,7 @@ interface DragOverlayProps {
 
 /** Full-area drag-and-drop overlay shown while dragging files. */
 export function DragOverlay({ setIsDragging, handleDrop }: DragOverlayProps) {
+  const { t } = useTranslation('execution');
   return (
     <div
       className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-primary"
@@ -25,7 +27,7 @@ export function DragOverlay({ setIsDragging, handleDrop }: DragOverlayProps) {
       onDrop={handleDrop}
     >
       <div className="text-primary font-medium flex items-center gap-2 pointer-events-none">
-        Drop files to attach
+        {t('followUp.dropFilesToAttach')}
       </div>
     </div>
   );

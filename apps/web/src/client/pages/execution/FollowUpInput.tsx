@@ -60,6 +60,16 @@ export function FollowUpInput(props: FollowUpInputProps) {
     onOpenSpeechSettings,
   } = props;
 
+  const getPlaceholder = () => {
+    if (currentTask.status === 'interrupted') {
+      return hasSession ? t('followUp.interruptedPlaceholder') : t('followUp.noSessionPlaceholder');
+    }
+    if (currentTask.status === 'completed') {
+      return t('followUp.completedPlaceholder');
+    }
+    return t('followUp.defaultPlaceholder');
+  };
+
   return (
     <div
       className="flex-shrink-0 border-t border-border bg-card/50 px-6 py-4 relative"
@@ -143,15 +153,7 @@ export function FollowUpInput(props: FollowUpInputProps) {
                   }
                 }
               }}
-              placeholder={
-                currentTask.status === 'interrupted'
-                  ? hasSession
-                    ? t('followUp.interruptedPlaceholder')
-                    : t('followUp.noSessionPlaceholder')
-                  : currentTask.status === 'completed'
-                    ? t('followUp.completedPlaceholder')
-                    : t('followUp.defaultPlaceholder')
-              }
+              placeholder={getPlaceholder()}
               disabled={isLoading || speechInput.isRecording}
               rows={1}
               className="w-full max-h-[160px] resize-none bg-transparent text-[15px] leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"

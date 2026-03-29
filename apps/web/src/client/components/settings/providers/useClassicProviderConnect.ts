@@ -194,31 +194,60 @@ export function useClassicProviderConnect({
   const handleChatGptSignIn = async () => {
     setSigningIn(true);
     setError(null);
+    let pollStarted = false;
     try {
       const accomplish = getAccomplish();
-      await accomplish.loginOpenAiWithChatGpt();
-      const status = await accomplish.getOpenAiOauthStatus();
-      if (status.connected) {
-        let availableModels = OPENAI_OAUTH_FALLBACK_MODELS;
-        if (providerConfig?.modelsEndpoint) {
-          const fetchResult = await accomplish.fetchProviderModels(providerId, {});
-          if (fetchResult.success && fetchResult.models?.length) {
-            availableModels = fetchResult.models;
+      const result = await accomplish.loginOpenAiWithChatGpt();
+
+      if (!result.ok) {
+        setError(t('status.signInFailed'));
+        return;
+      }
+
+      pollStarted = true;
+
+      const POLL_INTERVAL_MS = 5000;
+      const MAX_ATTEMPTS = 36; // 3 minutes
+
+      const poll = async () => {
+        for (let i = 0; i < MAX_ATTEMPTS; i++) {
+          await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+          const status = await accomplish.getOpenAiOauthStatus();
+          if (status.connected) {
+            let availableModels = OPENAI_OAUTH_FALLBACK_MODELS;
+            if (providerConfig?.modelsEndpoint) {
+              const fetchResult = await accomplish.fetchProviderModels(providerId, {});
+              if (fetchResult.success && fetchResult.models?.length) {
+                availableModels = fetchResult.models;
+              }
+            }
+            onConnect({
+              providerId,
+              connectionStatus: 'connected',
+              selectedModelId: providerConfig?.defaultModelId ?? null,
+              credentials: { type: 'oauth', oauthProvider: 'chatgpt' } as OAuthCredentials,
+              lastConnectedAt: new Date().toISOString(),
+              availableModels,
+            });
+            setSigningIn(false);
+            return;
           }
         }
-        onConnect({
-          providerId,
-          connectionStatus: 'connected',
-          selectedModelId: providerConfig?.defaultModelId ?? null,
-          credentials: { type: 'oauth', oauthProvider: 'chatgpt' } as OAuthCredentials,
-          lastConnectedAt: new Date().toISOString(),
-          availableModels,
-        });
-      }
+        setError(t('status.signInTimedOut') ?? 'Timed out waiting for ChatGPT sign-in. Please try again.');
+        setSigningIn(false);
+      };
+
+      void poll().catch((err) => {
+        logger.error('Error polling OpenAI OAuth status:', err);
+        setError(err instanceof Error ? err.message : t('status.signInFailed'));
+        setSigningIn(false);
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : t('status.signInFailed'));
     } finally {
-      setSigningIn(false);
+      if (!pollStarted) {
+        setSigningIn(false);
+      }
     }
   };
 
