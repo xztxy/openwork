@@ -72,3 +72,23 @@ export function setNotificationsEnabled(enabled: boolean): void {
   const db = getDatabase();
   db.prepare('UPDATE app_settings SET notifications_enabled = ? WHERE id = 1').run(enabled ? 1 : 0);
 }
+
+export type CloseBehavior = 'keep-daemon' | 'stop-daemon';
+
+export function getCloseBehavior(): CloseBehavior {
+  const row = getUiRow();
+  // close_behavior column added in v021 migration; cast through unknown for safety
+  const value = (row as unknown as { close_behavior?: string }).close_behavior;
+  if (value === 'stop-daemon') {
+    return 'stop-daemon';
+  }
+  return 'keep-daemon';
+}
+
+export function setCloseBehavior(behavior: CloseBehavior): void {
+  if (behavior !== 'keep-daemon' && behavior !== 'stop-daemon') {
+    throw new Error(`Invalid close behavior: ${behavior}`);
+  }
+  const db = getDatabase();
+  db.prepare('UPDATE app_settings SET close_behavior = ? WHERE id = 1').run(behavior);
+}

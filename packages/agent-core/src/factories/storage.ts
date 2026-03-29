@@ -59,6 +59,8 @@ import {
   setSandboxConfig,
   getNotificationsEnabled,
   setNotificationsEnabled,
+  getCloseBehavior,
+  setCloseBehavior,
 } from '../storage/repositories/appSettings.js';
 import {
   getProviderSettings,
@@ -171,6 +173,8 @@ export function createStorage(options: StorageOptions = {}): StorageAPI {
     setSandboxConfig: (config) => setSandboxConfig(config),
     getNotificationsEnabled: () => getNotificationsEnabled(),
     setNotificationsEnabled: (enabled) => setNotificationsEnabled(enabled),
+    getCloseBehavior: () => getCloseBehavior(),
+    setCloseBehavior: (behavior) => setCloseBehavior(behavior),
 
     // Provider Settings
     getProviderSettings: () => getProviderSettings(),

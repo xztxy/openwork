@@ -3,12 +3,18 @@
  *
  * Connects to the standalone daemon process via Unix socket / Windows named pipe.
  * If no daemon is running, spawns one (detached, survives Electron exit).
- * Registers notification forwarding: daemon pushes → renderer IPC.
+ * Registers notification forwarding and reconnection handling.
  */
 
 import type { BrowserWindow } from 'electron';
 import type { DaemonClient } from '@accomplish_ai/agent-core';
-import { ensureDaemonRunning } from './daemon/daemon-connector';
+import { createSocketTransport } from '@accomplish_ai/agent-core';
+import {
+  ensureDaemonRunning,
+  onReconnect,
+  setupDisconnectHandler,
+  getDataDir,
+} from './daemon/daemon-connector';
 import { setClient, setMode, getDaemonClient } from './daemon/daemon-lifecycle';
 import { getLogCollector } from './logging';
 
@@ -25,6 +31,9 @@ function log(level: 'INFO' | 'WARN' | 'ERROR', msg: string): void {
   }
 }
 
+/** Window getter for notification forwarding. Set during bootstrap. */
+let windowGetter: (() => BrowserWindow | null) | null = null;
+
 /**
  * Boot the daemon — connect to existing or spawn a new one.
  * Returns the connected DaemonClient.
@@ -36,23 +45,57 @@ export async function bootstrapDaemon(): Promise<DaemonClient> {
   setClient(client);
   setMode('socket');
 
+  // Set up disconnect detection + reconnection
+  await setupTransportReconnection(client);
+
+  // Register handler for when a new client replaces the old one after reconnect
+  onReconnect(
+    (state) => {
+      log('INFO', `[DaemonBootstrap] Connection state: ${state}`);
+    },
+    (newClient) => {
+      setClient(newClient);
+      // Re-register notification forwarding on the new client
+      if (windowGetter) {
+        registerNotificationHandlers(newClient, windowGetter);
+      }
+      // Set up disconnect detection on the new client
+      void setupTransportReconnection(newClient);
+    },
+  );
+
   log('INFO', '[DaemonBootstrap] Connected to daemon via socket');
   return client;
 }
 
 /**
+ * Set up transport-level disconnect detection for reconnection.
+ */
+async function setupTransportReconnection(client: DaemonClient): Promise<void> {
+  try {
+    const transport = await createSocketTransport({
+      dataDir: getDataDir(),
+      connectTimeout: 2000,
+    });
+    setupDisconnectHandler(client, transport);
+  } catch {
+    // If we can't create a monitoring transport, reconnection won't auto-trigger.
+    // The client itself will still detect errors on the next RPC call.
+    log('WARN', '[DaemonBootstrap] Could not set up disconnect monitor');
+  }
+}
+
+/**
  * Register forwarding of daemon notifications to the renderer process.
  *
- * Maps daemon JSON-RPC notifications to Electron IPC channels that the
- * React UI (via preload contextBridge) already listens on.
- *
  * Uses a dynamic window getter so that if the window is recreated (e.g.
- * macOS `activate` event), notifications route to the current window
- * without re-registering handlers.
+ * macOS `activate` event), notifications route to the current window.
  *
  * Must be called after bootstrapDaemon().
  */
 export function registerNotificationForwarding(getWindow: () => BrowserWindow | null): void {
+  windowGetter = getWindow;
+
   let client: DaemonClient;
   try {
     client = getDaemonClient();
@@ -61,6 +104,18 @@ export function registerNotificationForwarding(getWindow: () => BrowserWindow | 
     return;
   }
 
+  registerNotificationHandlers(client, getWindow);
+  log('INFO', '[DaemonBootstrap] Notification forwarding registered');
+}
+
+/**
+ * Wire notification handlers on a specific DaemonClient instance.
+ * Called both on initial bootstrap and after reconnection.
+ */
+function registerNotificationHandlers(
+  client: DaemonClient,
+  getWindow: () => BrowserWindow | null,
+): void {
   const forward = (channel: string, data: unknown): void => {
     const win = getWindow();
     if (!win || win.isDestroyed()) {
@@ -116,6 +171,4 @@ export function registerNotificationForwarding(getWindow: () => BrowserWindow | 
   client.onNotification('task.checkpoint', (data) => {
     forward('task:checkpoint', data);
   });
-
-  log('INFO', '[DaemonBootstrap] Notification forwarding registered');
 }

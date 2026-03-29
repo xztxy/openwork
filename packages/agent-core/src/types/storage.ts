@@ -173,6 +173,10 @@ export interface AppSettingsAPI {
   getNotificationsEnabled(): boolean;
   /** Enable or disable desktop notifications */
   setNotificationsEnabled(enabled: boolean): void;
+  /** Get the window close button behavior ('keep-daemon' | 'stop-daemon') */
+  getCloseBehavior(): 'keep-daemon' | 'stop-daemon';
+  /** Set the window close button behavior */
+  setCloseBehavior(behavior: 'keep-daemon' | 'stop-daemon'): void;
   /** Get all application settings as a snapshot */
   getAppSettings(): AppSettings;
   /** Reset all application settings to defaults */

@@ -46,8 +46,12 @@ export {
   setRunInBackground,
   getNotificationsEnabled,
   setNotificationsEnabled,
+  getCloseBehavior,
+  setCloseBehavior,
   VALID_THEMES,
 } from './ui-settings.js';
+
+export type { CloseBehavior } from './ui-settings.js';
 
 interface AppSettingsRow {
   id: number;

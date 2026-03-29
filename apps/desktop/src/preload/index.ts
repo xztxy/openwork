@@ -598,6 +598,17 @@ const accomplishAPI = {
     ipcRenderer.invoke('daemon:set-run-in-background', enabled),
   getDaemonSocketPath: (): Promise<string> => ipcRenderer.invoke('daemon:get-socket-path'),
 
+  // Daemon control
+  daemonPing: (): Promise<{ status: string; uptime: number }> => ipcRenderer.invoke('daemon:ping'),
+  daemonRestart: (): Promise<{ success: boolean }> => ipcRenderer.invoke('daemon:restart'),
+  daemonStop: (): Promise<{ success: boolean }> => ipcRenderer.invoke('daemon:stop'),
+  daemonStart: (): Promise<{ success: boolean }> => ipcRenderer.invoke('daemon:start'),
+
+  // Close behavior
+  getCloseBehavior: (): Promise<string> => ipcRenderer.invoke('daemon:get-close-behavior'),
+  setCloseBehavior: (behavior: string): Promise<void> =>
+    ipcRenderer.invoke('daemon:set-close-behavior', behavior),
+
   // Favorites
   addFavorite: (taskId: string): Promise<void> => ipcRenderer.invoke('favorites:add', taskId),
   removeFavorite: (taskId: string): Promise<void> => ipcRenderer.invoke('favorites:remove', taskId),

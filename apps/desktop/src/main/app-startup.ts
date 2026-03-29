@@ -18,7 +18,11 @@ import { getLogCollector } from './logging';
 import { skillsManager } from './skills';
 import { startHuggingFaceServer } from './providers/huggingface-local';
 import { createTray } from './tray';
-import { bootstrapDaemon, registerNotificationForwarding } from './daemon-bootstrap';
+import {
+  bootstrapDaemon,
+  registerNotificationForwarding,
+  getDaemonClient,
+} from './daemon-bootstrap';
 import { registerIPCHandlers } from './ipc/handlers';
 
 function logMain(level: 'INFO' | 'WARN' | 'ERROR', msg: string, data?: Record<string, unknown>) {
@@ -152,10 +156,35 @@ export async function startApp(
     logMain('INFO', '[Main] Daemon notification forwarding registered');
 
     mainWindow.on('close', (event) => {
-      if (!isQuittingRef.value) {
+      if (isQuittingRef.value) {
+        return; // Already quitting — let it close
+      }
+
+      const closeBehavior = getStorage().getCloseBehavior();
+
+      if (closeBehavior === 'keep-daemon') {
+        // Default: hide to tray, daemon keeps running
         event.preventDefault();
         mainWindow?.hide();
-        logMain('INFO', '[Main] Window hidden to tray');
+        logMain('INFO', '[Main] Window hidden to tray (daemon keeps running)');
+      } else if (closeBehavior === 'stop-daemon') {
+        // User opted in: shutdown daemon and quit
+        event.preventDefault();
+        logMain('INFO', '[Main] Stopping daemon and quitting (close-behavior: stop-daemon)');
+        try {
+          const client = getDaemonClient();
+          void client
+            .call('daemon.shutdown')
+            .catch(() => {})
+            .finally(() => {
+              isQuittingRef.value = true;
+              app.quit();
+            });
+        } catch {
+          // No daemon client — just quit
+          isQuittingRef.value = true;
+          app.quit();
+        }
       }
     });
 

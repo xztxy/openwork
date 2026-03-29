@@ -79,8 +79,66 @@ export function registerSettingsHandlers(): void {
 
   handle('daemon:get-socket-path', async () => {
     const { getSocketPath } = await import('@accomplish_ai/agent-core');
-    // Pass Electron's userData so the reported path matches the daemon's actual identity.
     return getSocketPath(app.getPath('userData'));
+  });
+
+  // ── Daemon Control ──────────────────────────────────────────────────
+
+  handle('daemon:ping', async () => {
+    const { getDaemonClient } = await import('../../daemon-bootstrap');
+    try {
+      const client = getDaemonClient();
+      return await client.ping();
+    } catch {
+      return { status: 'disconnected', uptime: 0 };
+    }
+  });
+
+  handle('daemon:restart', async () => {
+    const { getDaemonClient, shutdownDaemon, bootstrapDaemon } =
+      await import('../../daemon-bootstrap');
+    try {
+      const client = getDaemonClient();
+      await client.call('daemon.shutdown');
+    } catch {
+      // Daemon may already be down — that's fine
+    }
+    shutdownDaemon();
+    // Wait briefly for daemon to exit
+    await new Promise((r) => setTimeout(r, 1000));
+    await bootstrapDaemon();
+    return { success: true };
+  });
+
+  handle('daemon:stop', async () => {
+    const { getDaemonClient, shutdownDaemon } = await import('../../daemon-bootstrap');
+    try {
+      const client = getDaemonClient();
+      await client.call('daemon.shutdown');
+    } catch {
+      // Daemon may already be down
+    }
+    shutdownDaemon();
+    return { success: true };
+  });
+
+  handle('daemon:start', async () => {
+    const { bootstrapDaemon } = await import('../../daemon-bootstrap');
+    await bootstrapDaemon();
+    return { success: true };
+  });
+
+  // ── Close Behavior ──────────────────────────────────────────────────
+
+  handle('daemon:get-close-behavior', async () => {
+    return storage.getCloseBehavior();
+  });
+
+  handle('daemon:set-close-behavior', async (_event: IpcMainInvokeEvent, behavior: string) => {
+    if (behavior !== 'keep-daemon' && behavior !== 'stop-daemon') {
+      throw new Error(`Invalid close behavior: ${behavior}`);
+    }
+    storage.setCloseBehavior(behavior);
   });
 
   registerCloudBrowserHandlers(handle);

@@ -5,13 +5,13 @@
  * connects via Unix socket / Windows named pipe. If the daemon is already
  * running (e.g. started by OS login item), reuses the existing instance.
  *
- * This replaces the old child-process fork approach (daemon-spawn.ts)
- * which killed the daemon when Electron exited.
+ * Also handles reconnection with exponential backoff if the daemon
+ * disconnects (crash, restart, etc.).
  */
 
 import { spawn } from 'child_process';
 import path from 'path';
-import { app } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import { DaemonClient, createSocketTransport, getSocketPath } from '@accomplish_ai/agent-core';
 import { getNodePath } from '../utils/bundled-node';
 import { getLogCollector } from '../logging';
@@ -22,6 +22,11 @@ const SPAWN_READY_TIMEOUT_MS = 10_000;
 const POLL_INTERVAL_MS = 200;
 /** Short delay to allow a login-item-started daemon to finish booting. */
 const LOGIN_ITEM_RETRY_DELAY_MS = 500;
+
+/** Reconnection backoff config */
+const RECONNECT_INITIAL_MS = 200;
+const RECONNECT_MAX_MS = 5000;
+const RECONNECT_MAX_ATTEMPTS = 10;
 
 function log(level: 'INFO' | 'WARN' | 'ERROR', msg: string, data?: Record<string, unknown>): void {
   try {
@@ -38,24 +43,18 @@ function log(level: 'INFO' | 'WARN' | 'ERROR', msg: string, data?: Record<string
  * Resolve the data directory for the daemon.
  * Must match the data-dir contract: daemon uses same DB, socket, PID.
  */
-function getDataDir(): string {
+export function getDataDir(): string {
   return app.getPath('userData');
 }
 
 /**
  * Resolve the path to the daemon entry script.
- *
- * - Packaged: bundled at resources/daemon/index.js (pre-built by electron-builder)
- * - Dev: uses the built artifact at apps/daemon/dist/index.js.
- *   The daemon build is triggered by the desktop predev script.
  */
-function getDaemonEntryPath(): string {
+export function getDaemonEntryPath(): string {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'daemon', 'index.js');
   }
-  // Dev: use built daemon artifact. The predev script ensures this exists.
-  const devPath = path.join(app.getAppPath(), '..', 'daemon', 'dist', 'index.js');
-  return devPath;
+  return path.join(app.getAppPath(), '..', 'daemon', 'dist', 'index.js');
 }
 
 /**
@@ -71,11 +70,9 @@ async function tryConnect(dataDir: string): Promise<DaemonClient | null> {
       connectTimeout: 2000,
     });
     client = new DaemonClient({ transport });
-    // Verify the daemon is responsive
     await client.ping();
     return client;
   } catch {
-    // Clean up on failure to prevent leaked connections
     if (client) {
       client.close();
     } else if (transport) {
@@ -89,7 +86,7 @@ async function tryConnect(dataDir: string): Promise<DaemonClient | null> {
  * Spawn the daemon as a fully detached process.
  * The daemon process survives Electron exit (detached + unref).
  */
-function spawnDaemon(dataDir: string): void {
+export function spawnDaemon(dataDir: string): void {
   const nodeBin = getNodePath();
   const entryPath = getDaemonEntryPath();
 
@@ -100,14 +97,11 @@ function spawnDaemon(dataDir: string): void {
     stdio: 'ignore',
     env: {
       ...process.env,
-      // Ensure the daemon picks up bundled Node.js for CLI spawning
       ELECTRON_RUN_AS_NODE: undefined,
     },
   });
 
-  // Detach from parent — daemon survives Electron exit
   child.unref();
-
   log('INFO', `[DaemonConnector] Daemon spawned (detached, pid=${child.pid})`);
 }
 
@@ -133,16 +127,10 @@ async function waitForDaemon(dataDir: string, timeoutMs: number): Promise<Daemon
 
 /**
  * Ensure a daemon is running and return a connected DaemonClient.
- *
- * 1. Try connecting to an existing daemon (may have been started by login item).
- * 2. If not running, wait briefly (login item may still be booting).
- * 3. If still not running, spawn a new daemon (detached + unref).
- * 4. Poll until the daemon is ready.
  */
 export async function ensureDaemonRunning(): Promise<DaemonClient> {
   const dataDir = getDataDir();
 
-  // Step 1: Try direct connect
   log('INFO', '[DaemonConnector] Attempting connection to existing daemon...');
   const existing = await tryConnect(dataDir);
   if (existing) {
@@ -150,7 +138,6 @@ export async function ensureDaemonRunning(): Promise<DaemonClient> {
     return existing;
   }
 
-  // Step 2: Short retry — login item may still be booting
   log('INFO', '[DaemonConnector] No daemon found, retrying after short delay...');
   await sleep(LOGIN_ITEM_RETRY_DELAY_MS);
   const retried = await tryConnect(dataDir);
@@ -159,14 +146,113 @@ export async function ensureDaemonRunning(): Promise<DaemonClient> {
     return retried;
   }
 
-  // Step 3: Spawn a new daemon
   log('INFO', '[DaemonConnector] Spawning new daemon...');
   spawnDaemon(dataDir);
 
-  // Step 4: Wait for it to become ready
   const client = await waitForDaemon(dataDir, SPAWN_READY_TIMEOUT_MS);
   log('INFO', '[DaemonConnector] Connected to newly spawned daemon');
   return client;
+}
+
+// =============================================================================
+// Reconnection
+// =============================================================================
+
+/** Callback for connection state changes. */
+export type ConnectionStateHandler = (state: 'connected' | 'disconnected' | 'reconnecting') => void;
+
+let reconnecting = false;
+let onStateChange: ConnectionStateHandler | null = null;
+let onClientReplaced: ((client: DaemonClient) => void) | null = null;
+
+/**
+ * Register handlers for reconnection lifecycle events.
+ *
+ * @param stateHandler — called when connection state changes
+ * @param clientHandler — called with the new DaemonClient after successful reconnection
+ */
+export function onReconnect(
+  stateHandler: ConnectionStateHandler,
+  clientHandler: (client: DaemonClient) => void,
+): void {
+  onStateChange = stateHandler;
+  onClientReplaced = clientHandler;
+}
+
+/**
+ * Set up disconnect detection on a DaemonClient's transport.
+ * When the socket closes, begins reconnection with exponential backoff.
+ */
+export function setupDisconnectHandler(
+  client: DaemonClient,
+  transport: Awaited<ReturnType<typeof createSocketTransport>>,
+): void {
+  transport.onDisconnect(() => {
+    if (reconnecting) {
+      return;
+    }
+    reconnecting = true;
+    log('WARN', '[DaemonConnector] Daemon disconnected — starting reconnection...');
+
+    // Notify renderer
+    onStateChange?.('disconnected');
+    broadcastToRenderer('daemon:disconnected');
+
+    void reconnectWithBackoff().finally(() => {
+      reconnecting = false;
+    });
+  });
+}
+
+async function reconnectWithBackoff(): Promise<void> {
+  let delay = RECONNECT_INITIAL_MS;
+
+  for (let attempt = 1; attempt <= RECONNECT_MAX_ATTEMPTS; attempt++) {
+    onStateChange?.('reconnecting');
+    log('INFO', `[DaemonConnector] Reconnect attempt ${attempt}/${RECONNECT_MAX_ATTEMPTS}...`);
+
+    await sleep(delay);
+    const dataDir = getDataDir();
+    const client = await tryConnect(dataDir);
+
+    if (client) {
+      log('INFO', '[DaemonConnector] Reconnected to daemon');
+      onStateChange?.('connected');
+      onClientReplaced?.(client);
+      broadcastToRenderer('daemon:reconnected');
+      return;
+    }
+
+    delay = Math.min(delay * 2, RECONNECT_MAX_MS);
+  }
+
+  // All retries failed — try spawning a new daemon
+  log('WARN', '[DaemonConnector] All reconnect attempts failed — spawning new daemon...');
+  const dataDir = getDataDir();
+  spawnDaemon(dataDir);
+
+  try {
+    const client = await waitForDaemon(dataDir, SPAWN_READY_TIMEOUT_MS);
+    log('INFO', '[DaemonConnector] Connected to newly spawned daemon after reconnect');
+    onStateChange?.('connected');
+    onClientReplaced?.(client);
+    broadcastToRenderer('daemon:reconnected');
+  } catch (err) {
+    log('ERROR', `[DaemonConnector] Failed to reconnect: ${String(err)}`);
+    broadcastToRenderer('daemon:reconnect-failed');
+  }
+}
+
+function broadcastToRenderer(channel: string): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      try {
+        win.webContents.send(channel);
+      } catch {
+        // Window torn down — safe to ignore
+      }
+    }
+  }
 }
 
 function sleep(ms: number): Promise<void> {
