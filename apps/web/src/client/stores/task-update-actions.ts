@@ -2,7 +2,7 @@ import type {
   TaskStatus,
   TaskUpdateEvent,
   TaskMessage,
-} from '@accomplish_ai/agent-core/common';
+} from '@accomplish_ai/agent-core';
 import { getAccomplish } from '../lib/accomplish';
 import type { TaskState } from './taskStore';
 

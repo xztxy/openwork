@@ -3,15 +3,19 @@ import {
   type TaskConfig,
   type Task,
   type TaskStatus,
-} from '@accomplish_ai/agent-core/common';
+  type FileAttachmentInfo,
+} from '@accomplish_ai/agent-core';
 import { getAccomplish } from '../lib/accomplish';
 import type { TaskState } from './taskStore';
 import { hasTaskStateToken } from './task-state-helpers';
 import { createTaskPermissionActions } from './task-permission-actions';
 import { createTaskUpdateActions } from './task-update-actions';
+import { createTaskLifecycleActions } from './task-lifecycle-actions';
+
 type SetFn = (partial: Partial<TaskState> | ((state: TaskState) => Partial<TaskState>)) => void;
 type GetFn = () => TaskState;
-/** Task execution slice: startTask, sendFollowUp, cancelTask, interruptTask, permission handling. */
+
+/** Task execution slice: startTask, sendFollowUp, permission handling. */
 export function createTaskExecutionActions(set: SetFn, get: GetFn) {
   return {
     startTask: async (config: TaskConfig): Promise<Task | null> => {
@@ -60,7 +64,7 @@ export function createTaskExecutionActions(set: SetFn, get: GetFn) {
 
     sendFollowUp: async (
       message: string,
-      attachments?: import('@accomplish_ai/agent-core/common').FileAttachmentInfo[],
+      attachments?: FileAttachmentInfo[],
     ): Promise<boolean> => {
       const accomplish = getAccomplish();
       const { currentTask, startTask } = get();
@@ -158,67 +162,8 @@ export function createTaskExecutionActions(set: SetFn, get: GetFn) {
         return false;
       }
     },
-    cancelTask: async () => {
-      const accomplish = getAccomplish();
-      const { currentTask } = get();
-      if (currentTask) {
-        const taskStateToken = get()._taskStateToken;
-        void accomplish.logEvent({
-          level: 'info',
-          message: 'UI cancel task',
-          context: { taskId: currentTask.id },
-        });
-        try {
-          await accomplish.cancelTask(currentTask.id);
-          if (!hasTaskStateToken(get(), taskStateToken)) {
-            return;
-          }
-          set((state) => ({
-            currentTask: state.currentTask ? { ...state.currentTask, status: 'cancelled' } : null,
-            tasks: state.tasks.map((t) =>
-              t.id === currentTask.id ? { ...t, status: 'cancelled' as TaskStatus } : t,
-            ),
-          }));
-        } catch (err) {
-          if (!hasTaskStateToken(get(), taskStateToken)) {
-            return;
-          }
-          set({ error: err instanceof Error ? err.message : 'Failed to cancel task' });
-          void accomplish.logEvent({
-            level: 'error',
-            message: 'UI cancel task failed',
-            context: { taskId: currentTask.id, error: err instanceof Error ? err.message : String(err) },
-          });
-        }
-      }
-    },
 
-    interruptTask: async () => {
-      const accomplish = getAccomplish();
-      const { currentTask } = get();
-      if (currentTask && currentTask.status === 'running') {
-        const taskStateToken = get()._taskStateToken;
-        void accomplish.logEvent({
-          level: 'info',
-          message: 'UI interrupt task',
-          context: { taskId: currentTask.id },
-        });
-        try {
-          await accomplish.interruptTask(currentTask.id);
-        } catch (err) {
-          if (!hasTaskStateToken(get(), taskStateToken)) {
-            return;
-          }
-          set({ error: err instanceof Error ? err.message : 'Failed to interrupt task' });
-          void accomplish.logEvent({
-            level: 'error',
-            message: 'UI interrupt task failed',
-            context: { taskId: currentTask.id, error: err instanceof Error ? err.message : String(err) },
-          });
-        }
-      }
-    },
-
+    ...createTaskLifecycleActions(set, get),
     ...createTaskPermissionActions(set, get),
     ...createTaskUpdateActions(set, get),
   };

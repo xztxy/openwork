@@ -4,6 +4,7 @@ import type { ProviderId, ConnectedProvider, ApiKeyCredentials } from '@accompli
 import { DEFAULT_PROVIDERS } from '@accomplish_ai/agent-core/common';
 import { getAccomplish } from '@/lib/accomplish';
 import { createLogger } from '@/lib/logger';
+import { useProviderModels } from './useProviderModels';
 
 const logger = createLogger('useApiKeyConnect');
 
@@ -46,9 +47,6 @@ export function useApiKeyConnect({
   const [error, setError] = useState<string | null>(null);
   const [openAiBaseUrl, setOpenAiBaseUrl] = useState('');
   const [customBaseUrl, setCustomBaseUrl] = useState('');
-  const [fetchedModels, setFetchedModels] = useState<Array<{ id: string; name: string }> | null>(
-    null,
-  );
 
   const providerConfig = DEFAULT_PROVIDERS.find((p) => p.id === providerId);
   const isConnected = connectedProvider?.connectionStatus === 'connected';
@@ -56,56 +54,36 @@ export function useApiKeyConnect({
     ? connectedProvider?.customBaseUrl || defaultBaseUrl || undefined
     : undefined;
 
+  // Issue #2: AbortController cleanup for getOpenAiBaseUrl effect
   useEffect(() => {
-    if (!isOpenAI) {
-      return;
-    }
+    if (!isOpenAI) return;
+    const controller = new AbortController();
     const accomplish = getAccomplish();
     accomplish
       .getOpenAiBaseUrl()
-      .then(setOpenAiBaseUrl)
-      .catch((err) => logger.error('Failed to load OpenAI base URL:', err));
+      .then((url) => {
+        if (!controller.signal.aborted) setOpenAiBaseUrl(url);
+      })
+      .catch((err) => {
+        if (!controller.signal.aborted) logger.error('Failed to load OpenAI base URL:', err);
+      });
+    return () => controller.abort();
   }, [isOpenAI]);
 
   useEffect(() => {
-    if (!hasEditableBaseUrl) {
-      return;
-    }
+    if (!hasEditableBaseUrl) return;
     setCustomBaseUrl(connectedProvider?.customBaseUrl || '');
   }, [hasEditableBaseUrl, connectedProvider?.customBaseUrl]);
 
-  useEffect(() => {
-    if (!isConnected) {
-      return;
-    }
-    const isOAuth = connectedProvider?.credentials?.type === 'oauth';
-    if (!isOAuth && connectedProvider?.availableModels?.length) {
-      return;
-    }
-    if (!providerConfig?.modelsEndpoint) {
-      return;
-    }
-    const accomplish = getAccomplish();
-    accomplish
-      .fetchProviderModels(providerId, {
-        baseUrl: isOpenAI ? openAiBaseUrl.trim() || undefined : connectedProviderBaseUrl,
-      })
-      .then((result) => {
-        if (result.success && result.models?.length) {
-          setFetchedModels(result.models);
-        }
-      })
-      .catch((err) => logger.error('Failed to fetch provider models:', err));
-  }, [
-    connectedProvider?.availableModels?.length,
-    connectedProvider?.credentials?.type,
-    connectedProviderBaseUrl,
+  // Issue #1: model-fetching delegated to useProviderModels hook
+  const fetchedModels = useProviderModels({
+    providerId,
+    connectedProvider,
     isConnected,
     isOpenAI,
     openAiBaseUrl,
-    providerConfig?.modelsEndpoint,
-    providerId,
-  ]);
+    connectedProviderBaseUrl,
+  });
 
   const handleConnect = async () => {
     if (!apiKey.trim()) {
@@ -140,13 +118,16 @@ export function useApiKeyConnect({
     setError(null);
     try {
       const accomplish = getAccomplish();
+      // Issue #3: use openAiBaseUrl consistently for OpenAI resolvedBaseUrl
+      let resolvedBaseUrl: string | undefined;
       if (isOpenAI) {
-        await accomplish.setOpenAiBaseUrl(openAiBaseUrl.trim());
+        resolvedBaseUrl = openAiBaseUrl.trim() || undefined;
+        await accomplish.setOpenAiBaseUrl(resolvedBaseUrl ?? '');
+      } else if (hasEditableBaseUrl) {
+        const explicitCustomBaseUrl = customBaseUrl.trim();
+        resolvedBaseUrl = explicitCustomBaseUrl || defaultBaseUrl || undefined;
       }
-      const explicitCustomBaseUrl = hasEditableBaseUrl ? customBaseUrl.trim() : '';
-      const resolvedBaseUrl = hasEditableBaseUrl
-        ? explicitCustomBaseUrl || defaultBaseUrl || undefined
-        : undefined;
+      const explicitCustomBaseUrl = hasEditableBaseUrl && !isOpenAI ? customBaseUrl.trim() : '';
       const validation = await accomplish.validateApiKeyForProvider(providerId, apiKey.trim(), {
         baseUrl: resolvedBaseUrl,
       });
@@ -160,7 +141,7 @@ export function useApiKeyConnect({
       let models: Array<{ id: string; name: string }> | undefined;
       if (providerConfig?.modelsEndpoint) {
         const fetchResult = await accomplish.fetchProviderModels(providerId, {
-          baseUrl: isOpenAI ? openAiBaseUrl.trim() || undefined : resolvedBaseUrl,
+          baseUrl: resolvedBaseUrl,
         });
         if (fetchResult.success && fetchResult.models) {
           models = fetchResult.models;

@@ -35,6 +35,8 @@ export function useOAuthSignIn({
   const { t } = useTranslation('settings');
   const [signingIn, setSigningIn] = useState(false);
   const oauthPollAbortRef = useRef<AbortController | null>(null);
+  // Issue #4: track attempt id so superseded attempts don't mutate state
+  const signInAttemptRef = useRef(0);
 
   // Abort any in-flight poll on unmount.
   useEffect(() => {
@@ -44,6 +46,8 @@ export function useOAuthSignIn({
   }, []);
 
   const handleChatGptSignIn = async () => {
+    // Increment attempt id so any previous in-flight attempt becomes stale.
+    const attemptId = ++signInAttemptRef.current;
     // Abort previous poll if any, then start a fresh controller.
     oauthPollAbortRef.current?.abort();
     const abortController = new AbortController();
@@ -59,6 +63,8 @@ export function useOAuthSignIn({
       const accomplish = getAccomplish();
       const result = await accomplish.loginOpenAiWithChatGpt();
 
+      if (abortController.signal.aborted || attemptId !== signInAttemptRef.current) return;
+
       if (!result.ok) {
         setError(t('status.signInFailed'));
         return;
@@ -73,13 +79,13 @@ export function useOAuthSignIn({
         for (let i = 0; i < MAX_ATTEMPTS; i++) {
           await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
 
-          if (abortController.signal.aborted) {
+          if (abortController.signal.aborted || attemptId !== signInAttemptRef.current) {
             return;
           }
 
           const status = await accomplish.getOpenAiOauthStatus();
 
-          if (abortController.signal.aborted) {
+          if (abortController.signal.aborted || attemptId !== signInAttemptRef.current) {
             return;
           }
 
@@ -91,19 +97,26 @@ export function useOAuthSignIn({
                 availableModels = fetchResult.models;
               }
             }
+            if (abortController.signal.aborted || attemptId !== signInAttemptRef.current) return;
+            // Issue #5: only preselect defaultModelId if it's in availableModels
             onConnect({
               providerId,
               connectionStatus: 'connected',
-              selectedModelId: providerConfig?.defaultModelId ?? null,
+              selectedModelId:
+                providerConfig?.defaultModelId &&
+                availableModels.some((m) => m.id === providerConfig.defaultModelId)
+                  ? providerConfig.defaultModelId
+                  : null,
               credentials: { type: 'oauth', oauthProvider: 'chatgpt' } as OAuthCredentials,
               lastConnectedAt: new Date().toISOString(),
               availableModels,
             });
+            if (abortController.signal.aborted || attemptId !== signInAttemptRef.current) return;
             setSigningIn(false);
             return;
           }
         }
-        if (!abortController.signal.aborted) {
+        if (!abortController.signal.aborted && attemptId === signInAttemptRef.current) {
           setError(
             t('status.signInTimedOut') ?? 'Timed out waiting for ChatGPT sign-in. Please try again.',
           );
@@ -112,7 +125,7 @@ export function useOAuthSignIn({
       };
 
       void poll().catch((err) => {
-        if (abortController.signal.aborted) {
+        if (abortController.signal.aborted || attemptId !== signInAttemptRef.current) {
           return;
         }
         logger.error('Error polling OpenAI OAuth status:', err);
@@ -120,8 +133,12 @@ export function useOAuthSignIn({
         setSigningIn(false);
       });
     } catch (err) {
+      if (abortController.signal.aborted || attemptId !== signInAttemptRef.current) return;
       setError(err instanceof Error ? err.message : t('status.signInFailed'));
     } finally {
+      if (!pollStarted && (abortController.signal.aborted || attemptId !== signInAttemptRef.current)) {
+        return;
+      }
       if (!pollStarted) {
         setSigningIn(false);
       }

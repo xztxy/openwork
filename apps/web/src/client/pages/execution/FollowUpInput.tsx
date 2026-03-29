@@ -34,7 +34,7 @@ interface FollowUpInputProps {
 
 /** Follow-up input bar shown when the user can send a message. */
 export function FollowUpInput(props: FollowUpInputProps) {
-  const { tCommon } = { tCommon: useTranslation('common').t };
+  const { t: tCommon } = useTranslation('common');
   const { t } = useTranslation('execution');
   const {
     followUp,
