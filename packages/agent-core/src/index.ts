@@ -541,6 +541,9 @@ export type { DaemonRpcServerOptions } from './daemon/index.js';
 
 // Socket path, PID lock, and crash handler utilities for the daemon process
 export { getSocketPath, getPidFilePath, getDaemonDir } from './daemon/index.js';
+
+export { createSocketTransport } from './daemon/index.js';
+export type { SocketTransportOptions } from './daemon/index.js';
 export { acquirePidLock, PidLockError } from './daemon/index.js';
 export type { PidLockHandle, PidLockPayload } from './daemon/index.js';
 export { installCrashHandlers } from './daemon/index.js';

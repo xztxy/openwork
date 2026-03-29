@@ -31,6 +31,9 @@ export type { DaemonRpcServerOptions } from './rpc-server.js';
 
 export { getSocketPath, getPidFilePath, getDaemonDir } from './socket-path.js';
 
+export { createSocketTransport } from './socket-transport.js';
+export type { SocketTransportOptions } from './socket-transport.js';
+
 export { acquirePidLock, PidLockError } from './pid-lock.js';
 export type { PidLockHandle, PidLockPayload } from './pid-lock.js';
 
