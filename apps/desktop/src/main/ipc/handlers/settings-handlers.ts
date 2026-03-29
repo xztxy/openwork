@@ -78,7 +78,7 @@ export function registerSettingsHandlers(): void {
   });
 
   handle('daemon:get-socket-path', async () => {
-    const { getSocketPath } = await import('../../daemon/server');
+    const { getSocketPath } = await import('@accomplish_ai/agent-core');
     return getSocketPath();
   });
 

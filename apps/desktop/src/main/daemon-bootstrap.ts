@@ -1,56 +1,31 @@
 /**
  * Daemon Bootstrap
  *
- * Manages the daemon lifecycle with two modes:
- *   1. **Child process** (Step 3): forks a separate Node.js process via IPC channel
- *   2. **In-process** (Step 2 fallback): runs everything in the Electron main process
- *
- * The bootstrap automatically falls back to in-process mode if the child
- * process fails to start.
+ * Temporary no-op stub — the in-process daemon and child-process fork have been
+ * removed as dead code. This file will be rewritten in Phase 4 to connect to the
+ * standalone daemon process via Unix socket / Windows named pipe.
  */
 
-import { DaemonClient } from '@accomplish_ai/agent-core';
-import type { TaskManagerAPI, StorageAPI } from '@accomplish_ai/agent-core';
 import { getLogCollector } from './logging';
-import { spawnDaemonProcess } from './daemon/daemon-spawn';
-import { bootstrapInProcess } from './daemon/daemon-inprocess';
-import { setClient, setMode } from './daemon/daemon-lifecycle';
 
-export interface DaemonBootstrapOptions {
-  taskManager: TaskManagerAPI;
-  storage: StorageAPI;
-}
-
-// Re-export everything that was previously exported from this file
-export { bootstrapInProcess } from './daemon/daemon-inprocess';
-export {
-  getDaemonClient,
-  getDaemonServer,
-  getDaemonMode,
-  shutdownDaemon,
-} from './daemon/daemon-lifecycle';
+export { getDaemonClient, getDaemonMode, shutdownDaemon } from './daemon/daemon-lifecycle';
 
 /**
- * Boot the daemon — tries child process first, falls back to in-process.
+ * Boot the daemon — currently a no-op pending socket migration.
+ *
+ * Will be rewritten to call `ensureDaemonRunning()` in Phase 4.
  */
-export async function bootstrapDaemon(options: DaemonBootstrapOptions): Promise<DaemonClient> {
-  const { taskManager, storage } = options;
-
-  // Try child process mode
+export async function bootstrapDaemon(): Promise<void> {
   try {
-    const childClient = await spawnDaemonProcess();
-    getLogCollector().logEnv('INFO', '[DaemonBootstrap] Running in child-process mode');
-    setClient(childClient);
-    setMode('child-process');
-    return childClient;
-  } catch (err) {
-    getLogCollector().logEnv(
-      'WARN',
-      '[DaemonBootstrap] Child process failed, falling back to in-process',
-      { error: String(err) },
-    );
+    const l = getLogCollector();
+    if (l?.log) {
+      l.log(
+        'INFO',
+        'daemon',
+        '[DaemonBootstrap] Daemon bootstrap skipped — pending socket migration',
+      );
+    }
+  } catch {
+    /* best-effort logging */
   }
-
-  // Fallback: in-process mode (Step 2 behavior)
-  return bootstrapInProcess(taskManager, storage);
 }

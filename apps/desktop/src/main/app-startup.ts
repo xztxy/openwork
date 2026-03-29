@@ -10,7 +10,6 @@ import path from 'path';
 import { FutureSchemaError } from '@accomplish_ai/agent-core';
 import type { ProviderId } from '@accomplish_ai/agent-core';
 import { initThoughtStreamApi, startThoughtStreamServer } from './thought-stream-api';
-import { getTaskManager } from './opencode';
 import { migrateLegacyData } from './store/legacyMigration';
 import { initializeStorage, getStorage } from './store/storage';
 import { getApiKey } from './store/secureStorage';
@@ -134,10 +133,8 @@ export async function startApp(
     // First launch or corrupt DB — nativeTheme stays 'system'
   }
 
-  const taskManager = getTaskManager();
-  const storage = getStorage();
-  await bootstrapDaemon({ taskManager, storage });
-  logMain('INFO', '[Main] Daemon bootstrapped');
+  await bootstrapDaemon();
+  logMain('INFO', '[Main] Daemon bootstrap complete (no-op stub — pending socket migration)');
 
   registerIPCHandlers();
   logMain('INFO', '[Main] IPC handlers registered');

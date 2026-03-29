@@ -15,9 +15,6 @@ import { notifyTaskCompletion } from '../services/task-notification';
 import { getLogCollector } from '../logging';
 import { createBrowserFailureState, handleBrowserToolCall } from './browser-failure-detection';
 
-export { createDaemonTaskCallbacks } from './daemon-task-callbacks';
-export type { DaemonTaskCallbacksOptions } from './daemon-task-callbacks';
-
 export interface TaskCallbacksOptions {
   taskId: string;
   window: BrowserWindow;
