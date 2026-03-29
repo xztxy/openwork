@@ -44,12 +44,18 @@ function getDataDir(): string {
 
 /**
  * Resolve the path to the daemon entry script.
+ *
+ * - Packaged: bundled at resources/daemon/index.js (pre-built by electron-builder)
+ * - Dev: uses the built artifact at apps/daemon/dist/index.js.
+ *   The daemon build is triggered by the desktop predev script.
  */
 function getDaemonEntryPath(): string {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'daemon', 'index.js');
   }
-  return path.join(app.getAppPath(), '..', 'daemon', 'dist', 'index.js');
+  // Dev: use built daemon artifact. The predev script ensures this exists.
+  const devPath = path.join(app.getAppPath(), '..', 'daemon', 'dist', 'index.js');
+  return devPath;
 }
 
 /**
@@ -57,16 +63,24 @@ function getDaemonEntryPath(): string {
  * Returns a connected DaemonClient, or null if the daemon is not reachable.
  */
 async function tryConnect(dataDir: string): Promise<DaemonClient | null> {
+  let transport: Awaited<ReturnType<typeof createSocketTransport>> | null = null;
+  let client: DaemonClient | null = null;
   try {
-    const transport = await createSocketTransport({
+    transport = await createSocketTransport({
       dataDir,
       connectTimeout: 2000,
     });
-    const client = new DaemonClient({ transport });
+    client = new DaemonClient({ transport });
     // Verify the daemon is responsive
     await client.ping();
     return client;
   } catch {
+    // Clean up on failure to prevent leaked connections
+    if (client) {
+      client.close();
+    } else if (transport) {
+      transport.close();
+    }
     return null;
   }
 }
