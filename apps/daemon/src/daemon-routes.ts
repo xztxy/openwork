@@ -169,4 +169,3 @@ export function registerRpcMethods(services: RouteServices): void {
     safeHandler(() => Promise.resolve(healthService.getStatus())),
   );
 }
-

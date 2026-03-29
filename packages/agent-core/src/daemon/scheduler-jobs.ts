@@ -29,7 +29,13 @@ export function parseCronField(field: string, min: number, max: number): number[
       }
       const start = Number(rangeParts[0]);
       const end = Number(rangeParts[1]);
-      if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start < min || end > max) {
+      if (
+        !Number.isFinite(start) ||
+        !Number.isFinite(end) ||
+        start > end ||
+        start < min ||
+        end > max
+      ) {
         continue;
       }
       for (let i = Math.floor(start); i <= Math.floor(end); i++) {
@@ -130,7 +136,9 @@ export function validateCronExpression(cron: string): void {
 
   for (let i = 0; i < 5; i++) {
     const field = parts[i];
-    if (field === '*') { continue; }
+    if (field === '*') {
+      continue;
+    }
     const values = parseCronField(field, CRON_FIELD_RANGES[i][0], CRON_FIELD_RANGES[i][1]);
     if (values.length === 0) {
       throw new Error(

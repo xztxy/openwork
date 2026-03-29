@@ -27,11 +27,11 @@ export function parseFrontmatter(content: string): SkillFrontmatter {
 export function normalizeSkillSlug(name: string): string {
   return name
     .toLowerCase()
-    .replace(/\.\./g, '')        // strip path-traversal sequences
-    .replace(/[/\\]/g, '-')      // forward/back-slash → dash
+    .replace(/\.\./g, '') // strip path-traversal sequences
+    .replace(/[/\\]/g, '-') // forward/back-slash → dash
     .replace(/[^a-z0-9-]/g, '-') // everything else disallowed → dash
-    .replace(/-+/g, '-')         // collapse consecutive dashes
-    .replace(/^-|-$/g, '')       // strip leading/trailing dashes
+    .replace(/-+/g, '-') // collapse consecutive dashes
+    .replace(/^-|-$/g, '') // strip leading/trailing dashes
     .trim();
 }
 

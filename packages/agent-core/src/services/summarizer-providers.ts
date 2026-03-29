@@ -84,7 +84,6 @@ export async function callAnthropic(apiKey: string, prompt: string): Promise<str
   }
 }
 
-
 export async function callOpenAI(apiKey: string, prompt: string): Promise<string> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
@@ -122,7 +121,6 @@ export async function callOpenAI(apiKey: string, prompt: string): Promise<string
     clearTimeout(timeout);
   }
 }
-
 
 export async function callGoogle(apiKey: string, prompt: string): Promise<string> {
   const controller = new AbortController();
