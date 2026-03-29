@@ -8,3 +8,4 @@ export { ConnectButton } from './ConnectButton';
 export { ConnectedControls } from './ConnectedControls';
 export { ProviderFormHeader } from './ProviderFormHeader';
 export { FormError } from './FormError';
+export { ToolSupportBadge } from './ToolSupportBadge';
