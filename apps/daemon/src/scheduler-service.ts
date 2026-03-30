@@ -295,6 +295,17 @@ export class SchedulerService {
     if (!validateCron(cron)) {
       throw new Error(`Invalid cron expression: ${cron}`);
     }
+    // Verify the cron can actually fire within the scan window.
+    // Rejects expressions like "0 0 29 2 1" (Feb 29 on Monday) that may
+    // be decades away and would be persisted with next_run_at = NULL.
+    const nextRun = computeNextRunAt(cron, new Date());
+    if (!nextRun) {
+      throw new Error(
+        `Schedule "${cron}" has no matching date within the next 4 years. ` +
+          'This can happen with very specific day-of-month + day-of-week combinations. ' +
+          'Try a less restrictive expression.',
+      );
+    }
     return this.storage.createScheduledTask(cron, prompt, workspaceId);
   }
 
@@ -313,6 +324,18 @@ export class SchedulerService {
 
   /** Enable or disable a schedule. */
   setEnabled(id: string, enabled: boolean): void {
+    if (enabled) {
+      // Verify the schedule can fire before enabling
+      const task = this.storage.getScheduledTaskById(id);
+      if (task) {
+        const nextRun = computeNextRunAt(task.cron, new Date());
+        if (!nextRun) {
+          throw new Error(
+            `Cannot enable schedule: "${task.cron}" has no matching date within the next 4 years.`,
+          );
+        }
+      }
+    }
     this.storage.setScheduledTaskEnabled(id, enabled);
   }
 }
