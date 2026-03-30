@@ -18,17 +18,20 @@ export class StorageService {
     const dir = dataDir || DEV_DEFAULT_DATA_DIR;
     mkdirSync(dir, { recursive: true, mode: 0o700 });
 
-    // Use the same database name as the desktop app when --data-dir is
-    // explicitly provided (shared DB). In standalone dev mode, use the
-    // dev database name to avoid conflicts with the packaged app.
-    const dbName = dataDir ? 'accomplish.db' : 'accomplish-dev.db';
+    // Match the desktop app's database naming:
+    // - Packaged (ACCOMPLISH_IS_PACKAGED=1): accomplish.db + secure-storage.json
+    // - Dev mode: accomplish-dev.db + secure-storage-dev.json
+    // This ensures both the daemon and Electron read/write the same database.
+    const isPackaged = process.env.ACCOMPLISH_IS_PACKAGED === '1';
+    const dbName = isPackaged ? 'accomplish.db' : 'accomplish-dev.db';
+    const secureFileName = isPackaged ? 'secure-storage.json' : 'secure-storage-dev.json';
     const databasePath = join(dir, dbName);
 
     this.storage = createStorage({
       databasePath,
       runMigrations: true,
       userDataPath: dir,
-      secureStorageFileName: dataDir ? 'secure-storage.json' : 'secure-storage-dev.json',
+      secureStorageFileName: secureFileName,
     });
 
     this.storage.initialize();
