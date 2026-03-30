@@ -56,7 +56,7 @@ export function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [authSettingsOpen, setAuthSettingsOpen] = useState(false);
   const [authSettingsTab, setAuthSettingsTab] = useState<
-    'providers' | 'voice' | 'skills' | 'connectors' | 'about'
+    'providers' | 'voice' | 'skills' | 'connectors' | 'general' | 'about'
   >('providers');
   const [authSettingsProvider, setAuthSettingsProvider] = useState<ProviderId | undefined>(
     undefined,
@@ -167,7 +167,12 @@ export function App() {
       <AuthErrorToast error={authError} onReLogin={handleAuthReLogin} onDismiss={clearAuthError} />
 
       {/* Daemon Connection Toast - shown when daemon disconnects */}
-      <DaemonConnectionToast />
+      <DaemonConnectionToast
+        onOpenSettings={() => {
+          setAuthSettingsTab('general');
+          setAuthSettingsOpen(true);
+        }}
+      />
 
       {/* Settings Dialog for re-authentication */}
       <SettingsDialog

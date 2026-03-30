@@ -102,16 +102,27 @@ export function DaemonSection() {
   const [showConfirm, setShowConfirm] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Poll daemon for uptime/lastPing — status comes from store
+  // Poll daemon for uptime/lastPing — status comes from store.
+  // Skips overwriting transitional states (starting/stopping/reconnecting)
+  // to prevent the polling loop from defeating intentional state transitions.
+  const TRANSITIONAL_STATES = new Set(['starting', 'stopping', 'reconnecting']);
+
   const pollStatus = useCallback(async () => {
     try {
       const result = await accomplish.daemonPing();
       if (result.status === 'ok') {
         setUptime(result.uptime);
-        setGlobalStatus('connected');
+        // Only set connected if not in a transitional state
+        const currentStatus = useDaemonStore.getState().status;
+        if (!TRANSITIONAL_STATES.has(currentStatus)) {
+          setGlobalStatus('connected');
+        }
       } else {
         setUptime(0);
-        setGlobalStatus('stopped');
+        const currentStatus = useDaemonStore.getState().status;
+        if (!TRANSITIONAL_STATES.has(currentStatus)) {
+          setGlobalStatus('stopped');
+        }
       }
       setLastPing(new Date());
     } catch {
