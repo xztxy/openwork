@@ -175,6 +175,14 @@ let onStateChange: ConnectionStateHandler | null = null;
 let onClientReplaced: ((client: DaemonClient) => void) | null = null;
 
 /**
+ * Whether the daemon was explicitly stopped by the user.
+ * Used by workspace guards to distinguish intentional stop from transient disconnect.
+ */
+export function isDaemonStopped(): boolean {
+  return reconnectSuppressed;
+}
+
+/**
  * Suppress automatic reconnection. Call before explicit daemon stop/restart
  * to prevent the reconnect monitor from fighting the intentional disconnect.
  */

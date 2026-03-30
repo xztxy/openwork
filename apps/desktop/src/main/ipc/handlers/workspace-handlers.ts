@@ -15,15 +15,20 @@ import {
 } from '@accomplish_ai/agent-core';
 import { handle } from './utils';
 import { getDaemonClient } from '../../daemon-bootstrap';
+import { isDaemonStopped } from '../../daemon/daemon-connector';
 
 async function hasDaemonActiveTasks(): Promise<boolean> {
+  // If daemon was explicitly stopped by the user, no tasks are running
+  if (isDaemonStopped()) {
+    return false;
+  }
   try {
     const client = getDaemonClient();
     const count = await client.call('task.getActiveCount');
     return count > 0;
   } catch {
-    // Fail closed: if we can't reach the daemon, assume tasks might be
-    // running. This prevents workspace changes during disconnect/restart.
+    // Fail closed: if we can't reach the daemon during reconnect/crash,
+    // assume tasks might be running.
     return true;
   }
 }
