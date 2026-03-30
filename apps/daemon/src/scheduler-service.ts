@@ -66,7 +66,8 @@ function parseCronField(field: string, min: number, max: number): number[] | nul
 }
 
 /** Check whether a cron expression matches a given Date. */
-function matchesCron(cron: string, date: Date): boolean {
+/** Check if a cron expression matches a specific date. Used by validateCron. */
+function _matchesCron(cron: string, date: Date): boolean {
   const fields = cron.trim().split(/\s+/);
   if (fields.length !== 5) {
     return false;
@@ -93,20 +94,78 @@ function matchesCron(cron: string, date: Date): boolean {
 
 /**
  * Compute the next time a cron expression will fire, starting from `from`.
- * Scans minute-by-minute up to 7 days. Returns ISO string or null.
+ * Supports schedules up to 400 days out (monthly, yearly).
+ * Optimized: scans days first, then minutes within matching days.
  */
 function computeNextRunAt(cron: string, from: Date): string | null {
-  const candidate = new Date(from.getTime());
-  candidate.setSeconds(0, 0);
-  candidate.setMinutes(candidate.getMinutes() + 1);
+  const fields = cron.trim().split(/\s+/);
+  if (fields.length !== 5) {
+    return null;
+  }
+  const [minField, hourField, domField, monField, dowField] = fields;
+  const minutes = parseCronField(minField, 0, 59);
+  const hours = parseCronField(hourField, 0, 23);
+  const doms = parseCronField(domField, 1, 31);
+  const months = parseCronField(monField, 1, 12);
+  const dows = parseCronField(dowField, 0, 6);
 
-  const maxTime = from.getTime() + 7 * 24 * 60 * 60 * 1000;
+  if (!minutes || !hours || !doms || !months || !dows) {
+    return null;
+  }
 
-  while (candidate.getTime() <= maxTime) {
-    if (matchesCron(cron, candidate)) {
-      return candidate.toISOString();
+  const start = new Date(from.getTime());
+  start.setSeconds(0, 0);
+  start.setMinutes(start.getMinutes() + 1);
+
+  // Scan up to 400 days (covers monthly + yearly schedules)
+  const maxDays = 400;
+
+  for (let dayOffset = 0; dayOffset < maxDays; dayOffset++) {
+    const day = new Date(start.getTime());
+    if (dayOffset > 0) {
+      day.setDate(day.getDate() + dayOffset);
+      day.setHours(0, 0, 0, 0);
     }
-    candidate.setMinutes(candidate.getMinutes() + 1);
+
+    // Quick day-level check: does this day match dom/month/dow?
+    if (
+      !doms.includes(day.getDate()) ||
+      !months.includes(day.getMonth() + 1) ||
+      !dows.includes(day.getDay())
+    ) {
+      // For the first day, we need to check remaining hours/minutes
+      // For subsequent days, skip entirely if day doesn't match
+      if (dayOffset > 0) {
+        continue;
+      }
+      // First day: the day might not match, but we started partway through
+      // Fall through to check if remaining minutes on this day match
+    }
+
+    // Check each valid hour:minute on this day
+    for (const hour of hours) {
+      for (const minute of minutes) {
+        const candidate = new Date(
+          day.getFullYear(),
+          day.getMonth(),
+          day.getDate(),
+          hour,
+          minute,
+          0,
+          0,
+        );
+        if (candidate.getTime() <= from.getTime()) {
+          continue; // Skip times already passed
+        }
+        if (
+          doms.includes(candidate.getDate()) &&
+          months.includes(candidate.getMonth() + 1) &&
+          dows.includes(candidate.getDay())
+        ) {
+          return candidate.toISOString();
+        }
+      }
+    }
   }
 
   return null;
@@ -186,8 +245,13 @@ export class SchedulerService {
     const due = enabled.filter((t) => t.nextRunAt && t.nextRunAt <= nowIso);
 
     for (const task of due) {
-      const next = computeNextRunAt(task.cron, now) || nowIso;
+      const next = computeNextRunAt(task.cron, now);
+      if (!next) {
+        console.warn(`[Scheduler] Could not compute next run for schedule ${task.id} — skipping`);
+        continue;
+      }
       this.storage.updateScheduledTaskLastRun(task.id, nowIso, next);
+      console.log(`[Scheduler] Firing schedule ${task.id}: "${task.prompt.slice(0, 80)}"`);
       try {
         this.onTaskFire(task.prompt, task.workspaceId);
       } catch (err) {
@@ -208,8 +272,15 @@ export class SchedulerService {
     const overdue = enabled.filter((t) => t.nextRunAt && t.nextRunAt < nowIso);
 
     for (const task of overdue) {
-      const next = computeNextRunAt(task.cron, now) || nowIso;
+      const next = computeNextRunAt(task.cron, now);
+      if (!next) {
+        console.warn(
+          `[Scheduler] Could not compute next run for overdue schedule ${task.id} — skipping`,
+        );
+        continue;
+      }
       this.storage.updateScheduledTaskLastRun(task.id, nowIso, next);
+      console.log(`[Scheduler] Catch-up firing schedule ${task.id}: "${task.prompt.slice(0, 80)}"`);
       try {
         this.onTaskFire(task.prompt, task.workspaceId);
       } catch (err) {

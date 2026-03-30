@@ -49,7 +49,8 @@ export function SchedulerPanel() {
 
   const handleToggleEnabled = async (id: string, enabled: boolean) => {
     await accomplish.setScheduleEnabled(id, enabled);
-    setSchedules((prev) => prev.map((s) => (s.id === id ? { ...s, enabled } : s)));
+    // Re-fetch to get updated next_run_at (recomputed server-side on enable)
+    await loadSchedules();
   };
 
   const handleDelete = async (id: string) => {
