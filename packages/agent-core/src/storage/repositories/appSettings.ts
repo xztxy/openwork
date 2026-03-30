@@ -181,7 +181,6 @@ export function clearAppSettings(): void {
       nim_config = NULL,
       openai_base_url = '',
       theme = 'system',
-      run_in_background = 0,
       sandbox_config = '${JSON.stringify(DEFAULT_SANDBOX_CONFIG)}',
       cloud_browser_config = NULL,
       messaging_config = NULL,
