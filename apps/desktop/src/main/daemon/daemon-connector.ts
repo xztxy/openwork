@@ -106,11 +106,34 @@ export function spawnDaemon(dataDir: string): void {
     daemonEnv.ACCOMPLISH_APP_PATH = app.getAppPath();
   }
 
+  // In dev mode, pipe daemon stdout/stderr to the main process console
+  // so developers can see daemon logs. In production, use 'ignore'.
+  const useStdioPipe = !app.isPackaged;
+
   const child = spawn(nodeBin, [entryPath, '--data-dir', dataDir], {
     detached: true,
-    stdio: 'ignore',
+    stdio: useStdioPipe ? ['ignore', 'pipe', 'pipe'] : 'ignore',
     env: daemonEnv,
   });
+
+  if (useStdioPipe && child.stdout && child.stderr) {
+    // ANSI colors: cyan for stdout, red for stderr
+    const CYAN = '\x1b[36m';
+    const RED = '\x1b[31m';
+    const RESET = '\x1b[0m';
+    child.stdout.on('data', (data: Buffer) => {
+      const lines = data.toString().trimEnd().split('\n');
+      for (const line of lines) {
+        process.stdout.write(`${CYAN}[Daemon]${RESET} ${line}\n`);
+      }
+    });
+    child.stderr.on('data', (data: Buffer) => {
+      const lines = data.toString().trimEnd().split('\n');
+      for (const line of lines) {
+        process.stderr.write(`${RED}[Daemon:err]${RESET} ${line}\n`);
+      }
+    });
+  }
 
   child.unref();
   log('INFO', `[DaemonConnector] Daemon spawned (detached, pid=${child.pid})`);
