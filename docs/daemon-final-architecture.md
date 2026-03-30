@@ -2,7 +2,7 @@
 
 > **Current architecture** (implemented in Phases 0–11): standalone daemon process that survives Electron exit. The Electron app is a **thin UI/integration shell** (tray, native notifications, file pickers, auth browser flows, renderer IPC forwarding) that connects to the daemon via Unix socket / Windows named pipe JSON-RPC.
 >
-> **Out of scope:** Task scheduler (needs persistence design — in-memory scheduler code was removed). Scheduler types are retained in `daemon.ts` but not part of the live RPC contract.
+> **Future work:** Task scheduler requires persistence design before implementation. Not part of the current architecture or RPC contract.
 
 ---
 
@@ -61,23 +61,20 @@ This is the **safe default**. Future enhancements (queue-and-pause, external not
 
 Normalized method names (resolved `task.stop` vs `task.cancel` conflict):
 
-| Method                 | Params                                                               | Result               | Notes                                             |
-| ---------------------- | -------------------------------------------------------------------- | -------------------- | ------------------------------------------------- |
-| `daemon.ping`          | —                                                                    | `{ status, uptime }` | Health check, already exists                      |
-| `daemon.shutdown`      | —                                                                    | void                 | **New.** Graceful drain (30s) + exit              |
-| `task.start`           | `{ prompt, taskId?, workspaceId?, attachments?, workingDirectory? }` | `Task`               |                                                   |
-| `task.cancel`          | `{ taskId }`                                                         | void                 | Normalized (was `task.stop` in standalone daemon) |
-| `task.interrupt`       | `{ taskId }`                                                         | void                 |                                                   |
-| `task.get`             | `{ taskId }`                                                         | `Task`               |                                                   |
-| `task.list`            | —                                                                    | `Task[]`             |                                                   |
-| `task.delete`          | `{ taskId }`                                                         | void                 |                                                   |
-| `task.getTodos`        | `{ taskId }`                                                         | `TodoItem[]`         |                                                   |
-| `task.clearHistory`    | —                                                                    | void                 |                                                   |
-| `session.resume`       | `{ sessionId, prompt, existingTaskId?, attachments? }`               | `Task`               |                                                   |
-| `permission.respond`   | `{ requestId, decision, ... }`                                       | void                 |                                                   |
-| `task.schedule`        | `{ cron, prompt }`                                                   | `ScheduledTask`      | Planned, not yet implemented                      |
-| `task.listScheduled`   | —                                                                    | `ScheduledTask[]`    | Planned, not yet implemented                      |
-| `task.cancelScheduled` | `{ taskId }`                                                         | void                 | Planned, not yet implemented                      |
+| Method               | Params                                                               | Result               | Notes                                             |
+| -------------------- | -------------------------------------------------------------------- | -------------------- | ------------------------------------------------- |
+| `daemon.ping`        | —                                                                    | `{ status, uptime }` | Health check, already exists                      |
+| `daemon.shutdown`    | —                                                                    | void                 | **New.** Graceful drain (30s) + exit              |
+| `task.start`         | `{ prompt, taskId?, workspaceId?, attachments?, workingDirectory? }` | `Task`               |                                                   |
+| `task.cancel`        | `{ taskId }`                                                         | void                 | Normalized (was `task.stop` in standalone daemon) |
+| `task.interrupt`     | `{ taskId }`                                                         | void                 |                                                   |
+| `task.get`           | `{ taskId }`                                                         | `Task`               |                                                   |
+| `task.list`          | —                                                                    | `Task[]`             |                                                   |
+| `task.delete`        | `{ taskId }`                                                         | void                 |                                                   |
+| `task.getTodos`      | `{ taskId }`                                                         | `TodoItem[]`         |                                                   |
+| `task.clearHistory`  | —                                                                    | void                 |                                                   |
+| `session.resume`     | `{ sessionId, prompt, existingTaskId?, attachments? }`               | `Task`               |                                                   |
+| `permission.respond` | `{ requestId, decision, ... }`                                       | void                 |                                                   |
 
 ## Shutdown Semantics
 
@@ -115,7 +112,6 @@ graph TB
         STORAGE["StorageAPI (SQLite)"]
         PERM["PermissionService<br/><i>(authenticated local HTTP)</i>"]
         THOUGHT["ThoughtStreamService<br/><i>(authenticated local HTTP)</i>"]
-        SCHED["Scheduler<br/><i>(planned, not yet implemented)</i>"]
         HEALTH["HealthService"]
     end
 
@@ -143,7 +139,6 @@ graph TB
     MCP -->|"HTTP POST"| PERM
     MCP -->|"HTTP POST"| THOUGHT
     TS --> STORAGE
-    SCHED -->|"fires tasks"| TS
     CLI -->|"JSON-RPC over socket"| RPC
     ADAPTERS -->|"JSON-RPC over socket"| RPC
     TRAY -.->|"show/hide"| UI
@@ -155,7 +150,7 @@ graph TB
     classDef child fill:#fce4ec,stroke:#e53935
 
     class IPC_H,NF,TRAY,DC,AUTH electron
-    class RPC,TS,TM,OCA,STORAGE,PERM,THOUGHT,SCHED,HEALTH daemon
+    class RPC,TS,TM,OCA,STORAGE,PERM,THOUGHT,HEALTH daemon
     class UI ui
     class CLI,ADAPTERS external
     class PTY,MCP,AI child
@@ -309,12 +304,9 @@ sequenceDiagram
 
 Explicitly shows the "no UI connected" branch as a first-class path.
 
-> **Note:** The Scheduler component is planned but not yet implemented. The external adapter path is functional.
-
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Sched as Scheduler<br/>(planned, not yet implemented)
     participant Adapter as External Adapter<br/>(CLI / Slack / webhook)
     participant RPC as DaemonRpcServer
     participant TS as TaskService
@@ -324,14 +316,8 @@ sequenceDiagram
     participant AI as AI Provider
     participant Storage as StorageAPI
 
-    alt Scheduled task fires (planned)
-        Note over Sched: Every 60s: check cron matches
-        Sched->>Sched: matchesCron('0 9 * * 1-5', now) → true
-        Sched->>TS: onFire callback →<br/>startTask({ prompt: 'Check email' })
-    else External adapter call
-        Adapter->>RPC: JSON-RPC: task.start
-        RPC->>TS: taskStart handler
-    end
+    Adapter->>RPC: JSON-RPC: task.start
+    RPC->>TS: taskStart handler
 
     TS->>TS: Load shared config:<br/>skills, connectors, sandbox
     TS->>Storage: storage.saveTask(task)

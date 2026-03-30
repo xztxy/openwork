@@ -1,9 +1,11 @@
 /**
  * Daemon module — public exports
  *
- * Provides the in-process RPC infrastructure for the daemon architecture.
- * Step 2: server and client run in the same Electron main process.
- * Step 3: swap createInProcessTransportPair for a socket-based transport.
+ * Provides RPC infrastructure for the standalone daemon architecture:
+ * - DaemonServer / DaemonClient: JSON-RPC 2.0 typed server and client
+ * - DaemonRpcServer: socket-based server (Unix socket / Windows named pipe)
+ * - Transport abstractions: socket, in-process (testing), IPC (alternative)
+ * - Socket/PID path resolution, PID lock, crash handlers
  */
 
 export { DaemonServer } from './server.js';
