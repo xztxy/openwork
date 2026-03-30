@@ -128,6 +128,20 @@ export function registerSettingsHandlers(): void {
     try {
       const client = getDaemonClient();
       await client.call('daemon.shutdown');
+
+      // Wait for daemon to finish draining before clearing the local client.
+      // During drain, the daemon is still reachable and workspace guards can
+      // query task.getActiveCount. We clear client only after daemon exits.
+      const drainDeadline = Date.now() + 35_000; // 30s drain + 5s buffer
+      while (Date.now() < drainDeadline) {
+        await new Promise((r) => setTimeout(r, 500));
+        try {
+          await client.ping();
+        } catch {
+          // Daemon exited — drain complete
+          break;
+        }
+      }
     } catch {
       // Daemon may already be down
     }
