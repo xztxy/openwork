@@ -167,32 +167,47 @@ export async function startApp(
         return; // Already quitting — let it close
       }
 
-      const closeBehavior = getStorage().getCloseBehavior();
+      // Always prevent default and show a confirmation dialog
+      event.preventDefault();
 
-      if (closeBehavior === 'keep-daemon') {
-        // Default: hide to tray, daemon keeps running
-        event.preventDefault();
-        mainWindow?.hide();
-        logMain('INFO', '[Main] Window hidden to tray (daemon keeps running)');
-      } else if (closeBehavior === 'stop-daemon') {
-        // User opted in: shutdown daemon and quit
-        event.preventDefault();
-        logMain('INFO', '[Main] Stopping daemon and quitting (close-behavior: stop-daemon)');
-        try {
-          const client = getDaemonClient();
-          void client
-            .call('daemon.shutdown')
-            .catch(() => {})
-            .finally(() => {
+      void dialog
+        .showMessageBox(mainWindow, {
+          type: 'question',
+          title: 'Close Accomplish',
+          message: 'The background daemon will keep running.',
+          detail:
+            'Tasks and scheduled jobs will continue in the background. ' +
+            'You can reopen the app from the system tray.',
+          buttons: ['Close', 'Close & Stop Daemon', 'Cancel'],
+          defaultId: 0, // "Close" is the default
+          cancelId: 2, // "Cancel" maps to Escape key
+          noLink: true,
+        })
+        .then(({ response }) => {
+          if (response === 0) {
+            // Close app, daemon keeps running
+            logMain('INFO', '[Main] Closing app (daemon keeps running)');
+            isQuittingRef.value = true;
+            app.quit();
+          } else if (response === 1) {
+            // Close app AND stop daemon
+            logMain('INFO', '[Main] Closing app and stopping daemon');
+            try {
+              const client = getDaemonClient();
+              void client
+                .call('daemon.shutdown')
+                .catch(() => {})
+                .finally(() => {
+                  isQuittingRef.value = true;
+                  app.quit();
+                });
+            } catch {
               isQuittingRef.value = true;
               app.quit();
-            });
-        } catch {
-          // No daemon client — just quit
-          isQuittingRef.value = true;
-          app.quit();
-        }
-      }
+            }
+          }
+          // response === 2 (Cancel) — do nothing, window stays open
+        });
     });
 
     createTray(mainWindow);
