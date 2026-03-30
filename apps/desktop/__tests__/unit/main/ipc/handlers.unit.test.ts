@@ -144,6 +144,16 @@ const mockDaemonClient = {
         createdAt: new Date().toISOString(),
       };
     }
+    if (method === 'task.get') {
+      const p = params as { taskId: string };
+      return mockTasks.find((t) => t.id === p.taskId) || null;
+    }
+    if (method === 'task.list') {
+      return mockTasks;
+    }
+    if (method === 'task.getTodos') {
+      return [];
+    }
     return undefined;
   }),
   ping: vi.fn(async () => ({ status: 'ok' as const, uptime: 1000 })),
@@ -949,11 +959,10 @@ describe('IPC Handlers Integration', () => {
       expect(mockDaemonClient.call).toHaveBeenCalledWith('task.interrupt', { taskId });
     });
 
-    it('task:get should return task from history', async () => {
+    it('task:get should proxy to daemon and return task', async () => {
       // Arrange
-      const taskId = 'task_existing';
       mockTasks.push({
-        id: taskId,
+        id: 'task_existing',
         prompt: 'Existing task',
         status: 'completed',
         messages: [],
@@ -961,29 +970,30 @@ describe('IPC Handlers Integration', () => {
       });
 
       // Act
-      const result = await invokeHandler('task:get', taskId);
+      const result = await invokeHandler('task:get', 'task_existing');
 
       // Assert
+      expect(mockDaemonClient.call).toHaveBeenCalledWith('task.get', { taskId: 'task_existing' });
       expect(result).toEqual(
         expect.objectContaining({
-          id: taskId,
+          id: 'task_existing',
           prompt: 'Existing task',
-          status: 'completed',
         }),
       );
     });
 
     it('task:get should return null for non-existent task', async () => {
-      // Arrange - no tasks
-
       // Act
       const result = await invokeHandler('task:get', 'task_nonexistent');
 
       // Assert
+      expect(mockDaemonClient.call).toHaveBeenCalledWith('task.get', {
+        taskId: 'task_nonexistent',
+      });
       expect(result).toBeNull();
     });
 
-    it('task:list should return all tasks from history', async () => {
+    it('task:list should proxy to daemon', async () => {
       // Arrange
       mockTasks.push(
         {
@@ -1006,53 +1016,26 @@ describe('IPC Handlers Integration', () => {
       const result = await invokeHandler('task:list');
 
       // Assert
+      expect(mockDaemonClient.call).toHaveBeenCalledWith('task.list', expect.any(Object));
       expect(result).toHaveLength(2);
     });
 
-    it('task:delete should remove task from history', async () => {
-      // Arrange
-      const taskId = 'task_to_delete';
-      mockTasks.push({
-        id: taskId,
-        prompt: 'Task to delete',
-        status: 'completed',
-        messages: [],
-        createdAt: new Date().toISOString(),
-      });
-
+    it('task:delete should proxy to daemon', async () => {
       // Act
-      await invokeHandler('task:delete', taskId);
+      await invokeHandler('task:delete', 'task_to_delete');
 
-      // Assert
-      const { deleteTask } = await import('@accomplish_ai/agent-core');
-      expect(deleteTask).toHaveBeenCalledWith(taskId);
+      // Assert — proxied to daemon RPC
+      expect(mockDaemonClient.call).toHaveBeenCalledWith('task.delete', {
+        taskId: 'task_to_delete',
+      });
     });
 
-    it('task:clear-history should clear all tasks', async () => {
-      // Arrange
-      mockTasks.push(
-        {
-          id: 'task_1',
-          prompt: 'Task 1',
-          status: 'completed',
-          messages: [],
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: 'task_2',
-          prompt: 'Task 2',
-          status: 'completed',
-          messages: [],
-          createdAt: new Date().toISOString(),
-        },
-      );
-
+    it('task:clear-history should proxy to daemon', async () => {
       // Act
       await invokeHandler('task:clear-history');
 
-      // Assert
-      const { clearHistory } = await import('@accomplish_ai/agent-core');
-      expect(clearHistory).toHaveBeenCalled();
+      // Assert — proxied to daemon RPC
+      expect(mockDaemonClient.call).toHaveBeenCalledWith('task.clearHistory');
     });
   });
 

@@ -102,31 +102,39 @@ export function registerTaskHandlers(): void {
     await stopBrowserPreviewStream(taskId);
   });
 
-  // ─── Read-only handlers (direct DB — bridge mode) ────────────────────────────
-  // These read from the shared SQLite DB directly. The daemon writes, Electron
-  // reads. WAL mode ensures concurrent safety. Will migrate to daemon RPC in
-  // Phase 7 to eliminate split-brain risk.
+  // ─── Task reads (proxied to daemon — Phase 7) ────────────────────────────────
+  // Migrated from direct SQLite to daemon RPC. The daemon is the single
+  // source of truth for task runtime state.
 
   handle('task:get', async (_event: IpcMainInvokeEvent, taskId: string) => {
-    return storage.getTask(taskId) || null;
+    const client = getDaemonClient();
+    return (await client.call('task.get', { taskId })) || null;
   });
 
   handle('task:list', async (_event: IpcMainInvokeEvent) => {
-    return storage.getTasks(workspaceManager.getActiveWorkspace());
+    const client = getDaemonClient();
+    return await client.call('task.list', {
+      workspaceId: workspaceManager.getActiveWorkspace() ?? undefined,
+    });
   });
 
   handle('task:delete', async (_event: IpcMainInvokeEvent, taskId: string) => {
-    storage.deleteTask(taskId);
+    const client = getDaemonClient();
+    await client.call('task.delete', { taskId });
+    // Stop browser preview locally (desktop-specific concern)
     await stopBrowserPreviewStream(taskId);
   });
 
   handle('task:clear-history', async (_event: IpcMainInvokeEvent) => {
-    storage.clearHistory();
+    const client = getDaemonClient();
+    await client.call('task.clearHistory');
+    // Stop all preview streams locally (desktop-specific concern)
     await stopAllBrowserPreviewStreams();
   });
 
   handle('task:get-todos', async (_event: IpcMainInvokeEvent, taskId: string) => {
-    return storage.getTodosForTask(taskId);
+    const client = getDaemonClient();
+    return await client.call('task.getTodos', { taskId });
   });
 
   // ─── Browser Preview IPC handlers (ENG-695) ─────────────────────────────────
