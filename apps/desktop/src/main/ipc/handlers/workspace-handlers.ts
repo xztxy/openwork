@@ -18,18 +18,17 @@ import { getDaemonClient } from '../../daemon-bootstrap';
 import { isDaemonStopped } from '../../daemon/daemon-connector';
 
 async function hasDaemonActiveTasks(): Promise<boolean> {
-  // If daemon was explicitly stopped by the user, no tasks are running
-  if (isDaemonStopped()) {
-    return false;
-  }
   try {
+    // Always try the daemon first — it knows the real task count,
+    // even during the 30s drain window after daemon.shutdown
     const client = getDaemonClient();
     const count = await client.call('task.getActiveCount');
     return count > 0;
   } catch {
-    // Fail closed: if we can't reach the daemon during reconnect/crash,
-    // assume tasks might be running.
-    return true;
+    // Daemon unreachable. Two cases:
+    // 1. Explicitly stopped → no tasks running (allow workspace changes)
+    // 2. Crash/disconnect → tasks might still be running (block)
+    return !isDaemonStopped();
   }
 }
 
