@@ -64,18 +64,7 @@ export function registerSettingsHandlers(): void {
     return storage.getAppSettings();
   });
 
-  // ── Daemon / Background Mode ────────────────────────────────────────
-
-  handle('daemon:get-run-in-background', async () => {
-    return storage.getRunInBackground();
-  });
-
-  handle('daemon:set-run-in-background', async (_event: IpcMainInvokeEvent, enabled: boolean) => {
-    if (typeof enabled !== 'boolean') {
-      throw new Error('Invalid value: enabled must be a boolean');
-    }
-    storage.setRunInBackground(enabled);
-  });
+  // ── Daemon ──────────────────────────────────────────────────────────
 
   handle('daemon:get-socket-path', async () => {
     const { getSocketPath } = await import('@accomplish_ai/agent-core');

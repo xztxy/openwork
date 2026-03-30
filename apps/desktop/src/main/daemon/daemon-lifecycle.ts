@@ -6,7 +6,7 @@
  * (dead code cleanup). Will be expanded in Phase 4 with socket-based client.
  */
 
-import { DaemonClient, disposeScheduler } from '@accomplish_ai/agent-core';
+import { DaemonClient } from '@accomplish_ai/agent-core';
 import { getLogCollector } from '../logging';
 
 let client: DaemonClient | null = null;
@@ -47,7 +47,6 @@ export function shutdownDaemon(): void {
     client.close();
     client = null;
   }
-  disposeScheduler();
   mode = null;
   try {
     const l = getLogCollector();

@@ -5,7 +5,6 @@ interface AppSettingsUiRow {
   debug_mode: number;
   onboarding_complete: number;
   theme: string;
-  run_in_background: number;
   notifications_enabled: number;
   close_behavior: string;
 }
@@ -14,7 +13,7 @@ function getUiRow(): AppSettingsUiRow {
   const db = getDatabase();
   return db
     .prepare(
-      'SELECT debug_mode, onboarding_complete, theme, run_in_background, notifications_enabled, close_behavior FROM app_settings WHERE id = 1',
+      'SELECT debug_mode, onboarding_complete, theme, notifications_enabled, close_behavior FROM app_settings WHERE id = 1',
     )
     .get() as AppSettingsUiRow;
 }
@@ -54,15 +53,6 @@ export function setTheme(theme: ThemePreference): void {
   }
   const db = getDatabase();
   db.prepare('UPDATE app_settings SET theme = ? WHERE id = 1').run(theme);
-}
-
-export function getRunInBackground(): boolean {
-  return getUiRow().run_in_background === 1;
-}
-
-export function setRunInBackground(enabled: boolean): void {
-  const db = getDatabase();
-  db.prepare('UPDATE app_settings SET run_in_background = ? WHERE id = 1').run(enabled ? 1 : 0);
 }
 
 export function getNotificationsEnabled(): boolean {

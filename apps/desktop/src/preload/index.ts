@@ -592,10 +592,7 @@ const accomplishAPI = {
   showSkillInFolder: (filePath: string): Promise<void> =>
     ipcRenderer.invoke('skills:show-in-folder', filePath),
 
-  // Daemon / Background Mode
-  getRunInBackground: (): Promise<boolean> => ipcRenderer.invoke('daemon:get-run-in-background'),
-  setRunInBackground: (enabled: boolean): Promise<void> =>
-    ipcRenderer.invoke('daemon:set-run-in-background', enabled),
+  // Daemon
   getDaemonSocketPath: (): Promise<string> => ipcRenderer.invoke('daemon:get-socket-path'),
 
   // Daemon control
