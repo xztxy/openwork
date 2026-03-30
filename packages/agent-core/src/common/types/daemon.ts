@@ -197,29 +197,27 @@ export interface DaemonMethodMap {
   'task.start': { params: TaskStartParams; result: Task };
   'task.cancel': { params: TaskIdParams; result: void };
   'task.interrupt': { params: TaskIdParams; result: void };
-  'task.sendResponse': { params: TaskSendResponseParams; result: void };
   'task.list': { params: TaskListParams | undefined; result: Task[] };
   'task.get': { params: TaskIdParams; result: Task | null };
   'task.delete': { params: StorageDeleteTaskParams; result: void };
   'task.clearHistory': { params: undefined; result: void };
   'task.getTodos': { params: TaskIdParams; result: TodoItem[] };
-  'task.getActiveIds': { params: undefined; result: string[] };
   'task.getActiveCount': { params: undefined; result: number };
-  'task.hasActive': { params: TaskIdParams; result: boolean };
-  'task.isQueued': { params: TaskIdParams; result: boolean };
-  'task.cancelQueued': { params: TaskIdParams; result: boolean };
+  'task.status': {
+    params: TaskIdParams;
+    result: {
+      taskId: string;
+      status: import('./task.js').TaskStatus;
+      prompt: string;
+      createdAt: string;
+    } | null;
+  };
 
   // Session
   'session.resume': { params: SessionResumeParams; result: Task };
 
   // Permission
   'permission.respond': { params: PermissionRespondParams; result: void };
-
-  // Storage — task persistence
-  'storage.saveTask': { params: StorageSaveTaskParams; result: void };
-  'storage.updateTaskStatus': { params: StorageUpdateTaskStatusParams; result: void };
-  'storage.updateTaskSummary': { params: StorageUpdateTaskSummaryParams; result: void };
-  'storage.addTaskMessage': { params: StorageAddTaskMessageParams; result: void };
 
   // Scheduling
   'task.schedule': {
@@ -235,19 +233,7 @@ export interface DaemonMethodMap {
 
   // Health & lifecycle
   'daemon.ping': { params: undefined; result: { status: 'ok'; uptime: number } };
-  /** Graceful shutdown: drain active tasks (30s), then exit. */
   'daemon.shutdown': { params: undefined; result: void };
-
-  // Extended task methods used by the standalone daemon process
-  'task.status': {
-    params: TaskIdParams;
-    result: {
-      taskId: string;
-      status: import('./task.js').TaskStatus;
-      prompt: string;
-      createdAt: string;
-    } | null;
-  };
   'health.check': { params: undefined; result: HealthCheckResult };
 }
 
