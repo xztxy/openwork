@@ -105,6 +105,11 @@ export function spawnDaemon(dataDir: string): void {
     daemonEnv.ACCOMPLISH_IS_PACKAGED = '1';
     daemonEnv.ACCOMPLISH_RESOURCES_PATH = process.resourcesPath;
     daemonEnv.ACCOMPLISH_APP_PATH = app.getAppPath();
+  } else {
+    // Dev mode: pass desktop app path so daemon can find bundled Node.js
+    // and other resources relative to the desktop workspace
+    daemonEnv.ACCOMPLISH_APP_PATH = app.getAppPath();
+    daemonEnv.ACCOMPLISH_RESOURCES_PATH = path.join(app.getAppPath(), 'resources');
   }
 
   // In dev mode, redirect daemon output to a log file so it can be tailed

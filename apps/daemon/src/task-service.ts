@@ -427,16 +427,7 @@ export class TaskService extends EventEmitter {
       platform: process.platform,
       arch: process.arch,
     });
-    if (paths?.binDir) {
-      return paths.binDir;
-    }
-    // Dev mode fallback: use the directory containing the current Node/Electron binary.
-    // When the daemon runs via ELECTRON_RUN_AS_NODE, process.execPath is the Electron
-    // binary which can also be used as a Node.js runtime.
-    if (!this.isPackaged) {
-      return path.dirname(process.execPath);
-    }
-    return undefined;
+    return paths?.binDir;
   }
 
   /**
