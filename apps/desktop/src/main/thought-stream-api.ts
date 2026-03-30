@@ -35,19 +35,7 @@ export function initThoughtStreamApi(window: BrowserWindow): void {
   mainWindow = window;
 }
 
-/**
- * Register a task ID as active (called when task starts)
- */
-export function registerActiveTask(taskId: string): void {
-  thoughtStreamHandler.registerTask(taskId);
-}
-
-/**
- * Unregister a task ID (called when task completes)
- */
-export function unregisterActiveTask(taskId: string): void {
-  thoughtStreamHandler.unregisterTask(taskId);
-}
+// registerActiveTask / unregisterActiveTask removed — daemon owns task tracking now.
 
 /**
  * Create and start the HTTP server for thought streaming

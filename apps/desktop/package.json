@@ -154,6 +154,10 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "../../apps/daemon/dist",
+        "to": "daemon"
       }
     ],
     "asar": true,
