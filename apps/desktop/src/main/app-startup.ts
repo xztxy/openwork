@@ -138,8 +138,17 @@ export async function startApp(
     // First launch or corrupt DB — nativeTheme stays 'system'
   }
 
-  await bootstrapDaemon();
-  logMain('INFO', '[Main] Daemon connected');
+  // Daemon bootstrap is non-blocking — the GUI must always open even if
+  // the daemon fails to start. The status dot and toast will show the user
+  // that the daemon is disconnected, and task launch will be disabled.
+  try {
+    await bootstrapDaemon();
+    logMain('INFO', '[Main] Daemon connected');
+  } catch (err) {
+    logMain('WARN', '[Main] Daemon bootstrap failed — GUI will open without daemon', {
+      error: String(err),
+    });
+  }
 
   registerIPCHandlers();
   logMain('INFO', '[Main] IPC handlers registered');

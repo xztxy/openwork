@@ -87,15 +87,18 @@ async function tryConnect(dataDir: string): Promise<DaemonClient | null> {
  * The daemon process survives Electron exit (detached + unref).
  */
 export function spawnDaemon(dataDir: string): void {
-  const nodeBin = getNodePath();
+  // In dev mode, use Electron's own Node runtime (process.execPath with
+  // ELECTRON_RUN_AS_NODE=1) so native modules (better-sqlite3) are ABI-compatible.
+  // In packaged mode, use the bundled Node.js binary.
+  const nodeBin = app.isPackaged ? getNodePath() : process.execPath;
   const entryPath = getDaemonEntryPath();
 
   log('INFO', `[DaemonConnector] Spawning daemon: ${nodeBin} ${entryPath} --data-dir ${dataDir}`);
 
-  // Pass packaged-mode context so the daemon resolves CLI/bundled-node paths correctly
   const daemonEnv: Record<string, string | undefined> = {
     ...process.env,
-    ELECTRON_RUN_AS_NODE: undefined,
+    // In dev mode, tell Electron to act as plain Node.js
+    ELECTRON_RUN_AS_NODE: app.isPackaged ? undefined : '1',
   };
   if (app.isPackaged) {
     daemonEnv.ACCOMPLISH_IS_PACKAGED = '1';
