@@ -10,6 +10,7 @@
  */
 
 import { spawn } from 'child_process';
+import fs from 'fs';
 import path from 'path';
 import { app, BrowserWindow } from 'electron';
 import { DaemonClient, createSocketTransport, getSocketPath } from '@accomplish_ai/agent-core';
@@ -106,18 +107,96 @@ export function spawnDaemon(dataDir: string): void {
     daemonEnv.ACCOMPLISH_APP_PATH = app.getAppPath();
   }
 
-  // In dev mode, inherit stdio so daemon logs appear in the same terminal.
-  // 'inherit' is compatible with detached — the daemon survives parent exit
-  // because the terminal stays open (dev workflow). In production, use
-  // 'ignore' (daemon logs to files via its own logger).
-  const child = spawn(nodeBin, [entryPath, '--data-dir', dataDir], {
+  // In dev mode, redirect daemon output to a log file so it can be tailed
+  // by any Electron process (including restarts). In production, use 'ignore'.
+  const spawnOptions: Parameters<typeof spawn>[2] = {
     detached: true,
-    stdio: app.isPackaged ? 'ignore' : 'inherit',
+    stdio: 'ignore',
     env: daemonEnv,
-  });
+  };
+
+  if (!app.isPackaged) {
+    const logPath = getDaemonLogPath(dataDir);
+    const logFd = fs.openSync(logPath, 'a');
+    spawnOptions.stdio = ['ignore', logFd, logFd];
+  }
+
+  const child = spawn(nodeBin, [entryPath, '--data-dir', dataDir], spawnOptions);
 
   child.unref();
   log('INFO', `[DaemonConnector] Daemon spawned (detached, pid=${child.pid})`);
+}
+
+/**
+ * Get the path to the daemon log file.
+ */
+function getDaemonLogPath(dataDir: string): string {
+  return path.join(dataDir, 'daemon.log');
+}
+
+/** Active log tail watcher — only one at a time */
+let logWatcher: fs.FSWatcher | null = null;
+
+/**
+ * Start tailing the daemon log file in dev mode.
+ * Prints new lines to the main process console with colored prefix.
+ * Safe to call multiple times — replaces any existing tail.
+ */
+export function tailDaemonLog(): void {
+  if (app.isPackaged) {
+    return;
+  }
+
+  // Stop any existing tail
+  stopTailingDaemonLog();
+
+  const dataDir = getDataDir();
+  const logPath = getDaemonLogPath(dataDir);
+
+  if (!fs.existsSync(logPath)) {
+    return;
+  }
+
+  const CYAN = '\x1b[36m';
+  const RESET = '\x1b[0m';
+
+  // Start reading from current end of file
+  let fileSize = fs.statSync(logPath).size;
+
+  logWatcher = fs.watch(logPath, () => {
+    try {
+      const newSize = fs.statSync(logPath).size;
+      if (newSize <= fileSize) {
+        fileSize = newSize; // File was truncated
+        return;
+      }
+
+      const buf = Buffer.alloc(newSize - fileSize);
+      const fd = fs.openSync(logPath, 'r');
+      fs.readSync(fd, buf, 0, buf.length, fileSize);
+      fs.closeSync(fd);
+      fileSize = newSize;
+
+      const lines = buf.toString().trimEnd().split('\n');
+      for (const line of lines) {
+        if (line.trim()) {
+          process.stdout.write(`${CYAN}[Daemon]${RESET} ${line}\n`);
+        }
+      }
+    } catch {
+      // File may have been deleted or rotated — ignore
+    }
+  });
+}
+
+/**
+ * Stop tailing the daemon log file.
+ */
+export function stopTailingDaemonLog(): void {
+  if (logWatcher) {
+    logWatcher.close();
+    logWatcher = null;
+  }
 }
 
 /**

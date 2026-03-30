@@ -14,6 +14,7 @@ import {
   onReconnect,
   setupDisconnectHandler,
   getDataDir,
+  tailDaemonLog,
 } from './daemon/daemon-connector';
 import { setClient, setMode, getDaemonClient } from './daemon/daemon-lifecycle';
 import { getLogCollector } from './logging';
@@ -44,6 +45,10 @@ export async function bootstrapDaemon(): Promise<DaemonClient> {
   const client = await ensureDaemonRunning();
   setClient(client);
   setMode('socket');
+
+  // Start tailing daemon logs in dev mode — works for both fresh spawns
+  // and reconnections to already-running daemons
+  tailDaemonLog();
 
   // Re-register notification forwarding if a window getter was previously set
   // (handles explicit daemon:start / daemon:restart from settings UI)
