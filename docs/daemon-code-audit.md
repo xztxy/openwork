@@ -1,4 +1,6 @@
-# Daemon Code Audit — Duplication & Dead Code
+# Daemon Code Audit — HISTORICAL
+
+> **This document is historical.** It was written before the daemon migration to analyze dead code and duplication. All recommended removals have been completed. For the current architecture, see [`daemon-final-architecture.md`](daemon-final-architecture.md).
 
 **Date:** 2026-03-25
 **Scope:** All daemon-related code across the monorepo

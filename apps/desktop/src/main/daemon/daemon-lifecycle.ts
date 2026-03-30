@@ -2,8 +2,8 @@
  * Daemon Lifecycle
  *
  * Module-level state for the daemon client connection.
- * Simplified: removed in-process DaemonServer and child-process references
- * (dead code cleanup). Will be expanded in Phase 4 with socket-based client.
+ * The desktop connects to the standalone daemon via Unix socket / named pipe.
+ * shutdownDaemon() only closes the client — it does NOT kill the daemon process.
  */
 
 import { DaemonClient } from '@accomplish_ai/agent-core';

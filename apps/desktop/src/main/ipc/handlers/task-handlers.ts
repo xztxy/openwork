@@ -102,9 +102,8 @@ export function registerTaskHandlers(): void {
     await stopBrowserPreviewStream(taskId);
   });
 
-  // ─── Task reads (proxied to daemon — Phase 7) ────────────────────────────────
-  // Migrated from direct SQLite to daemon RPC. The daemon is the single
-  // source of truth for task runtime state.
+  // ─── Task reads (proxied to daemon) ──────────────────────────────────────────
+  // The daemon is the single source of truth for task runtime state.
 
   handle('task:get', async (_event: IpcMainInvokeEvent, taskId: string) => {
     const client = getDaemonClient();
