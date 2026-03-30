@@ -13,6 +13,7 @@ export function AddScheduleDialog({ open, onOpenChange, onSubmit }: AddScheduleD
   const [cron, setCron] = useState('');
   const [prompt, setPrompt] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const canSubmit = cron.trim().length > 0 && prompt.trim().length > 0 && !submitting;
 
@@ -21,11 +22,16 @@ export function AddScheduleDialog({ open, onOpenChange, onSubmit }: AddScheduleD
       return;
     }
     setSubmitting(true);
+    setError(null);
     try {
       await onSubmit(cron.trim(), prompt.trim());
       setCron('');
       setPrompt('');
+      setError(null);
       onOpenChange(false);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
     } finally {
       setSubmitting(false);
     }
@@ -80,6 +86,7 @@ export function AddScheduleDialog({ open, onOpenChange, onSubmit }: AddScheduleD
               {submitting ? '...' : t('scheduler.addDialog.create')}
             </button>
           </div>
+          {error && <p className="text-sm text-destructive mt-2">{error}</p>}
         </div>
       </DialogContent>
     </Dialog>

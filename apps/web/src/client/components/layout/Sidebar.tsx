@@ -20,7 +20,14 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const [showSettings, setShowSettings] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<
-    'providers' | 'voice' | 'skills' | 'connectors' | 'workspaces' | 'about'
+    | 'providers'
+    | 'voice'
+    | 'skills'
+    | 'connectors'
+    | 'workspaces'
+    | 'scheduler'
+    | 'general'
+    | 'about'
   >('providers');
   const { tasks, loadTasks, updateTaskStatus, addTaskUpdate, openLauncher } = useTaskStore();
   const accomplish = getAccomplish();

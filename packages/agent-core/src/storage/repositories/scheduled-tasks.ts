@@ -30,7 +30,8 @@ function rowToScheduledTask(row: ScheduledTaskRow): ScheduledTask {
 
 /**
  * Compute the next run time for a cron expression starting from a given date.
- * Scans minute-by-minute up to 7 days out.
+ * Scans up to 400 days (supports monthly/yearly schedules).
+ * Optimized: scans day-by-day, then hour:minute within matching days.
  */
 function computeNextRunAt(cron: string, from: Date): string | null {
   const fields = cron.trim().split(/\s+/);
@@ -48,31 +49,52 @@ function computeNextRunAt(cron: string, from: Date): string | null {
     return null;
   }
 
-  // Start from the next minute
-  const candidate = new Date(from.getTime());
-  candidate.setSeconds(0, 0);
-  candidate.setMinutes(candidate.getMinutes() + 1);
+  const start = new Date(from.getTime());
+  start.setSeconds(0, 0);
+  start.setMinutes(start.getMinutes() + 1);
 
-  const maxTime = from.getTime() + 7 * 24 * 60 * 60 * 1000;
+  const maxDays = 400;
 
-  while (candidate.getTime() <= maxTime) {
-    const m = candidate.getMinutes();
-    const h = candidate.getHours();
-    const dom = candidate.getDate();
-    const mon = candidate.getMonth() + 1;
-    const dow = candidate.getDay();
-
-    if (
-      minutes.includes(m) &&
-      hours.includes(h) &&
-      doms.includes(dom) &&
-      months.includes(mon) &&
-      dows.includes(dow)
-    ) {
-      return candidate.toISOString();
+  for (let dayOffset = 0; dayOffset < maxDays; dayOffset++) {
+    const day = new Date(start.getTime());
+    if (dayOffset > 0) {
+      day.setDate(day.getDate() + dayOffset);
+      day.setHours(0, 0, 0, 0);
     }
 
-    candidate.setMinutes(candidate.getMinutes() + 1);
+    // Quick day-level check for non-first days
+    if (
+      dayOffset > 0 &&
+      (!doms.includes(day.getDate()) ||
+        !months.includes(day.getMonth() + 1) ||
+        !dows.includes(day.getDay()))
+    ) {
+      continue;
+    }
+
+    for (const hour of hours) {
+      for (const minute of minutes) {
+        const candidate = new Date(
+          day.getFullYear(),
+          day.getMonth(),
+          day.getDate(),
+          hour,
+          minute,
+          0,
+          0,
+        );
+        if (candidate.getTime() <= from.getTime()) {
+          continue;
+        }
+        if (
+          doms.includes(candidate.getDate()) &&
+          months.includes(candidate.getMonth() + 1) &&
+          dows.includes(candidate.getDay())
+        ) {
+          return candidate.toISOString();
+        }
+      }
+    }
   }
 
   return null;
