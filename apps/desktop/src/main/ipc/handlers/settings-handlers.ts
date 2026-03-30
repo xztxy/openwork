@@ -105,16 +105,26 @@ export function registerSettingsHandlers(): void {
       try {
         const client = getDaemonClient();
         await client.call('daemon.shutdown');
+
+        // Wait for daemon to finish draining before starting a new one.
+        // Same pattern as daemon:stop — prevents bootstrap from reconnecting
+        // to the old draining daemon instead of spawning a fresh one.
+        const drainDeadline = Date.now() + 35_000;
+        while (Date.now() < drainDeadline) {
+          await new Promise((r) => setTimeout(r, 500));
+          try {
+            await client.ping();
+          } catch {
+            break; // Daemon exited
+          }
+        }
       } catch {
         // Daemon may already be down — that's fine
       }
       shutdownDaemon();
-      // Wait briefly for daemon to exit
-      await new Promise((r) => setTimeout(r, 1000));
       await bootstrapDaemon();
       return { success: true };
     } finally {
-      // Always re-enable reconnect — even if bootstrap fails
       enableReconnect();
     }
   });
