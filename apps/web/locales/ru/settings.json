@@ -286,11 +286,11 @@
       "label": "Window Close Behavior",
       "keepDescription": "Closing the window hides it to the system tray. The daemon keeps running and tasks continue in the background.",
       "stopDescription": "Closing the window stops the daemon and quits the app. Running tasks will be terminated.",
-      "warning": "Background features (scheduled tasks, external integrations) will not work when the window is closed."
+      "warning": "Background features (external integrations) will not work when the window is closed."
     },
     "warningDialog": {
       "title": "Disable Background Mode?",
-      "description": "This will terminate any running tasks when you close the window. Background features like scheduled tasks and external integrations will stop working.",
+      "description": "This will terminate any running tasks when you close the window. Background features like external integrations will stop working.",
       "cancel": "Cancel",
       "continue": "Continue"
     },
@@ -302,7 +302,7 @@
     },
     "socket": {
       "title": "Daemon Socket",
-      "description": "External clients (CLI tools, integrations, scheduled jobs) can send tasks via the local daemon socket using JSON-RPC 2.0.",
+      "description": "External clients (CLI tools, integrations) can send tasks via the local daemon socket using JSON-RPC 2.0.",
       "pathLabel": "Socket Path",
       "pathUnavailable": "Socket path unavailable.",
       "copy": "Copy"

@@ -8,7 +8,7 @@
 
 | Owner                     | Responsibilities                                                                                                                                                                                                        |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`apps/daemon`**         | Task execution, task/session lifecycle, scheduler, permission/question HTTP services, thought streaming, durable task state, reconnectable notification stream                                                          |
+| **`apps/daemon`**         | Task execution, task/session lifecycle, permission/question HTTP services, thought streaming, durable task state, reconnectable notification stream                                                                     |
 | **`apps/desktop`**        | Thin UI/integration shell: trusted-window checks, renderer IPC surface, tray, native notifications, native dialogs/file pickers, auth/browser flows (OAuth popups), forwarding daemon notifications to renderer         |
 | **`packages/agent-core`** | Daemon protocol/server/client/transport abstractions, TaskManager/OpenCodeAdapter/runtime building blocks, storage primitives, **shared config-building helpers** (skills, connectors, sandbox, workspace, attachments) |
 
@@ -73,9 +73,9 @@ Normalized method names (resolved `task.stop` vs `task.cancel` conflict):
 | `task.clearHistory`    | —                                                                    | void                 |                                                   |
 | `session.resume`       | `{ sessionId, prompt, existingTaskId?, attachments? }`               | `Task`               |                                                   |
 | `permission.respond`   | `{ requestId, decision, ... }`                                       | void                 |                                                   |
-| `task.schedule`        | `{ cron, prompt }`                                                   | `ScheduledTask`      |                                                   |
-| `task.listScheduled`   | —                                                                    | `ScheduledTask[]`    |                                                   |
-| `task.cancelScheduled` | `{ taskId }`                                                         | void                 |                                                   |
+| `task.schedule`        | `{ cron, prompt }`                                                   | `ScheduledTask`      | Planned, not yet implemented                      |
+| `task.listScheduled`   | —                                                                    | `ScheduledTask[]`    | Planned, not yet implemented                      |
+| `task.cancelScheduled` | `{ taskId }`                                                         | void                 | Planned, not yet implemented                      |
 
 ## Shutdown Semantics
 
@@ -113,7 +113,7 @@ graph TB
         STORAGE["StorageAPI (SQLite)"]
         PERM["PermissionService<br/><i>(authenticated local HTTP)</i>"]
         THOUGHT["ThoughtStreamService<br/><i>(authenticated local HTTP)</i>"]
-        SCHED["Scheduler<br/><i>(cron-based)</i>"]
+        SCHED["Scheduler<br/><i>(planned, not yet implemented)</i>"]
         HEALTH["HealthService"]
     end
 
@@ -307,10 +307,12 @@ sequenceDiagram
 
 Explicitly shows the "no UI connected" branch as a first-class path.
 
+> **Note:** The Scheduler component is planned but not yet implemented. The external adapter path is functional.
+
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Sched as Scheduler<br/>(cron timer)
+    participant Sched as Scheduler<br/>(planned, not yet implemented)
     participant Adapter as External Adapter<br/>(CLI / Slack / webhook)
     participant RPC as DaemonRpcServer
     participant TS as TaskService
@@ -320,7 +322,7 @@ sequenceDiagram
     participant AI as AI Provider
     participant Storage as StorageAPI
 
-    alt Scheduled task fires
+    alt Scheduled task fires (planned)
         Note over Sched: Every 60s: check cron matches
         Sched->>Sched: matchesCron('0 9 * * 1-5', now) → true
         Sched->>TS: onFire callback →<br/>startTask({ prompt: 'Check email' })
