@@ -13,6 +13,9 @@ import {
   permissionResponseSchema,
   resumeSessionSchema,
   validate,
+  PERMISSION_API_PORT,
+  QUESTION_API_PORT,
+  THOUGHT_STREAM_PORT,
 } from '@accomplish_ai/agent-core';
 import { z } from 'zod';
 import { StorageService } from './storage-service.js';
@@ -361,11 +364,14 @@ async function main(): Promise<void> {
     rpc.notify('task.summary', data);
   });
 
-  // 11. Start all servers
+  // 11. Start all servers on well-known ports so MCP tools can connect reliably.
+  // The constants (PERMISSION_API_PORT=9226, QUESTION_API_PORT=9227,
+  // THOUGHT_STREAM_PORT=9228) must match what config-generator writes
+  // into the MCP tool environment.
   await rpc.start();
-  await permissionService.startPermissionApiServer();
-  await permissionService.startQuestionApiServer();
-  await thoughtStreamService.start();
+  await permissionService.startPermissionApiServer(PERMISSION_API_PORT);
+  await permissionService.startQuestionApiServer(QUESTION_API_PORT);
+  await thoughtStreamService.start(THOUGHT_STREAM_PORT);
 
   // Pass auth token and actual ports to child processes via environment
   const permPorts = permissionService.getPorts();

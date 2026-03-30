@@ -58,7 +58,7 @@ export class PermissionService {
     return coreIsQuestionRequest(requestId);
   }
 
-  async startPermissionApiServer(): Promise<http.Server> {
+  async startPermissionApiServer(fixedPort?: number): Promise<http.Server> {
     const routes: Route[] = [
       {
         method: 'POST',
@@ -112,6 +112,7 @@ export class PermissionService {
       rateLimiter: this.rateLimiter,
       routes,
       serviceName: 'PermissionService:Permission',
+      port: fixedPort,
     });
 
     this.permissionServer = server;
@@ -119,7 +120,7 @@ export class PermissionService {
     return server;
   }
 
-  async startQuestionApiServer(): Promise<http.Server> {
+  async startQuestionApiServer(fixedPort?: number): Promise<http.Server> {
     const routes: Route[] = [
       {
         method: 'POST',
@@ -173,6 +174,7 @@ export class PermissionService {
       rateLimiter: this.rateLimiter,
       routes,
       serviceName: 'PermissionService:Question',
+      port: fixedPort,
     });
 
     this.questionServer = server;
