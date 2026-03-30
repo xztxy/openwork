@@ -212,14 +212,21 @@ export class SchedulerService {
   start(): void {
     this.catchUp();
 
-    // Align to the next minute boundary
+    // Align to the next minute boundary.
+    // If we're exactly on a boundary (msUntilNextMinute === 60000), tick immediately.
     const now = Date.now();
-    const msUntilNextMinute = 60_000 - (now % 60_000);
+    const remainder = now % 60_000;
+    const msUntilNextMinute = remainder === 0 ? 0 : 60_000 - remainder;
 
-    this.alignTimeout = setTimeout(() => {
+    if (msUntilNextMinute === 0) {
       this.tick();
       this.tickInterval = setInterval(() => this.tick(), 60_000);
-    }, msUntilNextMinute);
+    } else {
+      this.alignTimeout = setTimeout(() => {
+        this.tick();
+        this.tickInterval = setInterval(() => this.tick(), 60_000);
+      }, msUntilNextMinute);
+    }
   }
 
   /** Stop all timers. */
@@ -270,7 +277,7 @@ export class SchedulerService {
     const nowIso = now.toISOString();
 
     const enabled = this.storage.getEnabledScheduledTasks();
-    const overdue = enabled.filter((t) => t.nextRunAt && t.nextRunAt < nowIso);
+    const overdue = enabled.filter((t) => t.nextRunAt && t.nextRunAt <= nowIso);
 
     for (const task of overdue) {
       const next = computeNextRunAt(task.cron, now);

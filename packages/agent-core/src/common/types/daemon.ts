@@ -170,6 +170,7 @@ export interface ScheduledTask {
 export interface TaskScheduleParams {
   cron: string;
   prompt: string;
+  workspaceId?: string;
 }
 
 /** Parameters for task.cancelScheduled */
@@ -220,10 +221,7 @@ export interface DaemonMethodMap {
   'permission.respond': { params: PermissionRespondParams; result: void };
 
   // Scheduling
-  'task.schedule': {
-    params: TaskScheduleParams & { workspaceId?: string };
-    result: ScheduledTask;
-  };
+  'task.schedule': { params: TaskScheduleParams; result: ScheduledTask };
   'task.listScheduled': { params: { workspaceId?: string } | undefined; result: ScheduledTask[] };
   'task.cancelScheduled': { params: TaskCancelScheduledParams; result: void };
   'task.setScheduleEnabled': {

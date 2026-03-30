@@ -195,6 +195,13 @@ export function createScheduledTask(
   const now = new Date().toISOString();
   const nextRunAt = computeNextRunAt(cron, new Date());
 
+  if (!nextRunAt) {
+    throw new Error(
+      `Cannot schedule "${cron}": no matching date within the scan window. ` +
+        'Try a less restrictive cron expression.',
+    );
+  }
+
   db.prepare(
     `INSERT INTO scheduled_tasks (id, cron, prompt, workspace_id, is_enabled, created_at, updated_at, last_run_at, next_run_at)
      VALUES (?, ?, ?, ?, 1, ?, ?, NULL, ?)`,
@@ -222,11 +229,16 @@ export function setScheduledTaskEnabled(id: string, enabled: boolean): void {
   const now = new Date().toISOString();
 
   if (enabled) {
-    // Recompute next_run_at when enabling
+    // Recompute next_run_at when enabling — reject if no match in scan window
     const row = db.prepare('SELECT cron FROM scheduled_tasks WHERE id = ?').get(id) as
       | { cron: string }
       | undefined;
     const nextRunAt = row ? computeNextRunAt(row.cron, new Date()) : null;
+    if (!nextRunAt) {
+      throw new Error(
+        `Cannot enable schedule: no matching date within the scan window for "${row?.cron ?? 'unknown'}".`,
+      );
+    }
     db.prepare(
       'UPDATE scheduled_tasks SET is_enabled = 1, next_run_at = ?, updated_at = ? WHERE id = ?',
     ).run(nextRunAt, now, id);

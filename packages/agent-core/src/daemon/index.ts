@@ -18,8 +18,8 @@ export { createInProcessTransportPair } from './transport.js';
 
 export { createChildProcessTransport, createParentProcessTransport } from './ipc-transport.js';
 
-// Scheduler removed — needs persistence design before implementation.
-// Types retained in common/types/daemon.ts for future use.
+// Scheduler logic lives in apps/daemon/src/scheduler-service.ts (persistence-backed).
+// Types in common/types/daemon.ts.
 
 export { DaemonRpcServer } from './rpc-server.js';
 export type { DaemonRpcServerOptions } from './rpc-server.js';
