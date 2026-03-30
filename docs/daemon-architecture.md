@@ -1,6 +1,8 @@
-# Daemon Architecture — Current State & Migration Path
+# Daemon Architecture — HISTORICAL (Pre-Migration)
 
-> Shows how the daemon subsystem coexists with the original IPC architecture today, where duplication exists, and the intended end-state.
+> **⚠️ This document is historical.** It describes the architecture BEFORE the daemon migration (Phases 0–11). The current architecture is documented in [`daemon-final-architecture.md`](daemon-final-architecture.md).
+>
+> Retained for reference: shows the original IPC/TaskManager architecture, the three failed daemon implementations that were removed, and the migration analysis that informed the plan.
 
 ---
 

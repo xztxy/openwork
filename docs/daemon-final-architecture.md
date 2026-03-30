@@ -1,6 +1,8 @@
 # Daemon Final Architecture — Flow Diagrams
 
-> Target architecture: standalone daemon process that survives Electron exit. The Electron app becomes a **thin UI/integration shell** (tray, native notifications, file pickers, auth browser flows, renderer IPC forwarding) that connects to the daemon via Unix socket / Windows named pipe JSON-RPC.
+> **Current architecture** (implemented in Phases 0–11): standalone daemon process that survives Electron exit. The Electron app is a **thin UI/integration shell** (tray, native notifications, file pickers, auth browser flows, renderer IPC forwarding) that connects to the daemon via Unix socket / Windows named pipe JSON-RPC.
+>
+> **Out of scope:** Task scheduler (needs persistence design — in-memory scheduler code was removed). Scheduler types are retained in `daemon.ts` but not part of the live RPC contract.
 
 ---
 

@@ -146,10 +146,7 @@ export interface StorageDeleteTaskParams {
   taskId: string;
 }
 
-// Scheduler types removed — needs persistence design before implementation.
-// Will be re-added when scheduler is built with durable storage.
-
-/** @deprecated Placeholder — scheduler not yet implemented. */
+/** @deprecated Scheduler not yet implemented — needs persistence design. */
 export interface ScheduledTask {
   id: string;
   /** Cron expression (e.g. '0 9 * * 1-5' = weekdays at 9am) */
@@ -221,10 +218,9 @@ export interface DaemonMethodMap {
   'storage.updateTaskSummary': { params: StorageUpdateTaskSummaryParams; result: void };
   'storage.addTaskMessage': { params: StorageAddTaskMessageParams; result: void };
 
-  // Scheduling
-  'task.schedule': { params: TaskScheduleParams; result: ScheduledTask };
-  'task.listScheduled': { params: undefined; result: ScheduledTask[] };
-  'task.cancelScheduled': { params: TaskCancelScheduledParams; result: void };
+  // Scheduling — intentionally removed from contract until persistence is designed.
+  // Types (ScheduledTask, TaskScheduleParams, TaskCancelScheduledParams) retained
+  // for future use but are NOT part of the live RPC surface.
 
   // Health & lifecycle
   'daemon.ping': { params: undefined; result: { status: 'ok'; uptime: number } };
