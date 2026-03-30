@@ -28,6 +28,7 @@ import { migration as v018 } from './v018-copilot-provider.js';
 import { migration as v019 } from './v019-huggingface-local.js';
 import { migration as v020 } from './v020-messaging.js';
 import { migration as v021 } from './v021-close-behavior.js';
+import { migration as v022 } from './v022-remove-run-in-background.js';
 
 const migrations: Migration[] = [
   v001,
@@ -51,13 +52,14 @@ const migrations: Migration[] = [
   v019,
   v020,
   v021,
+  v022,
 ];
 export function registerMigration(migration: Migration): void {
   migrations.push(migration);
   migrations.sort((a, b) => a.version - b.version);
 }
 
-export const CURRENT_VERSION = 21;
+export const CURRENT_VERSION = 22;
 export function getStoredVersion(db: Database): number {
   try {
     const tableExists = db

@@ -524,15 +524,6 @@ export {
 
 export { DaemonServer, DaemonClient, createInProcessTransportPair } from './daemon/index.js';
 export { createChildProcessTransport, createParentProcessTransport } from './daemon/index.js';
-export {
-  addScheduledTask,
-  listScheduledTasks,
-  cancelScheduledTask,
-  onScheduledTaskFire,
-  disposeScheduler,
-  parseCronField,
-  matchesCron,
-} from './daemon/index.js';
 export type { DaemonServerOptions, DaemonClientOptions } from './daemon/index.js';
 
 // Socket-based RPC server for the standalone daemon process

@@ -16,15 +16,8 @@ export { createInProcessTransportPair } from './transport.js';
 
 export { createChildProcessTransport, createParentProcessTransport } from './ipc-transport.js';
 
-export {
-  addScheduledTask,
-  listScheduledTasks,
-  cancelScheduledTask,
-  onScheduledTaskFire,
-  disposeScheduler,
-  parseCronField,
-  matchesCron,
-} from './scheduler.js';
+// Scheduler removed — needs persistence design before implementation.
+// Types retained in common/types/daemon.ts for future use.
 
 export { DaemonRpcServer } from './rpc-server.js';
 export type { DaemonRpcServerOptions } from './rpc-server.js';

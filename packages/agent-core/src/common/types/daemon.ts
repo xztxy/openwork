@@ -146,7 +146,10 @@ export interface StorageDeleteTaskParams {
   taskId: string;
 }
 
-/** A scheduled task definition. */
+// Scheduler types removed — needs persistence design before implementation.
+// Will be re-added when scheduler is built with durable storage.
+
+/** @deprecated Placeholder — scheduler not yet implemented. */
 export interface ScheduledTask {
   id: string;
   /** Cron expression (e.g. '0 9 * * 1-5' = weekdays at 9am) */
