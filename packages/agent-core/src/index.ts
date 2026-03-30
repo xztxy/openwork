@@ -556,9 +556,6 @@ export type {
   TypedJsonRpcRequest,
   TypedJsonRpcResponse,
   TypedJsonRpcNotification,
-  ScheduledTask,
-  TaskScheduleParams,
-  TaskCancelScheduledParams,
   HealthCheckResult,
 } from './common/types/daemon.js';
 
