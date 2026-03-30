@@ -154,13 +154,16 @@ export function DaemonSection() {
       .catch(() => {});
   }, [accomplish]);
 
-  // Control actions — update global store for all state changes
+  // Control actions — update global store for all state changes.
+  // After successful start/restart, explicitly set 'connected' before
+  // calling pollStatus(), since the poll guard skips transitional states.
   const handleRestart = async () => {
     setActionInProgress('restart');
     setGlobalStatus('reconnecting');
     try {
       await accomplish.daemonRestart();
-      await pollStatus();
+      setGlobalStatus('connected'); // Explicit: daemon is healthy
+      await pollStatus(); // Updates uptime/lastPing
     } catch {
       setGlobalStatus('reconnect-failed');
     } finally {
@@ -187,7 +190,8 @@ export function DaemonSection() {
     setGlobalStatus('starting');
     try {
       await accomplish.daemonStart();
-      await pollStatus();
+      setGlobalStatus('connected'); // Explicit: daemon is healthy
+      await pollStatus(); // Updates uptime/lastPing
     } catch {
       setGlobalStatus('reconnect-failed');
     } finally {
