@@ -9,7 +9,8 @@ import { app, BrowserWindow, dialog, nativeImage, nativeTheme } from 'electron';
 import path from 'path';
 import { FutureSchemaError } from '@accomplish_ai/agent-core';
 import type { ProviderId } from '@accomplish_ai/agent-core';
-import { initThoughtStreamApi, startThoughtStreamServer } from './thought-stream-api';
+// thought-stream-api removed — daemon owns thought/checkpoint streaming.
+// Events forwarded via daemon notification subscription (task.thought, task.checkpoint).
 import { migrateLegacyData } from './store/legacyMigration';
 import { initializeStorage, getStorage } from './store/storage';
 import { getApiKey } from './store/secureStorage';
@@ -147,9 +148,6 @@ export async function startApp(
 
   const mainWindow = getMainWindow();
   if (mainWindow) {
-    initThoughtStreamApi(mainWindow);
-    startThoughtStreamServer();
-
     // Forward daemon notifications to the renderer via IPC.
     // Uses a dynamic getter so recreated windows (macOS activate) receive events.
     registerNotificationForwarding(() => getMainWindow());

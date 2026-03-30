@@ -320,6 +320,8 @@ async function main(): Promise<void> {
   }
   if (thoughtPort) {
     process.env.ACCOMPLISH_THOUGHT_STREAM_PORT = String(thoughtPort);
+    // MCP tools (report-thought, report-checkpoint) read THOUGHT_STREAM_PORT
+    process.env.THOUGHT_STREAM_PORT = String(thoughtPort);
   }
 
   console.log(`[Daemon] Listening on ${socketPath}`);
