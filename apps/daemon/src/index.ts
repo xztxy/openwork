@@ -222,6 +222,10 @@ async function main(): Promise<void> {
     }),
   );
   rpc.registerMethod(
+    'task.getActiveCount',
+    safeHandler(() => Promise.resolve(taskService.getActiveTaskCount())),
+  );
+  rpc.registerMethod(
     'permission.respond',
     safeHandler((params) => {
       const validated = validate(permissionResponseSchema, params);
