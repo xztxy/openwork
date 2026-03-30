@@ -139,10 +139,14 @@ export class TaskService extends EventEmitter {
 
     const validatedConfig = validateTaskConfig(config);
 
-    const activeModel = this.storage.getActiveProviderModel();
-    const selectedModel = activeModel || this.storage.getSelectedModel();
-    if (selectedModel?.model) {
-      validatedConfig.modelId = selectedModel.model;
+    // Only fill in default model if caller didn't specify one.
+    // Honors the public RPC contract: callers can override the model.
+    if (!validatedConfig.modelId) {
+      const activeModel = this.storage.getActiveProviderModel();
+      const selectedModel = activeModel || this.storage.getSelectedModel();
+      if (selectedModel?.model) {
+        validatedConfig.modelId = selectedModel.model;
+      }
     }
 
     const callbacks = this.createCallbacks(taskId);

@@ -22,7 +22,9 @@ async function hasDaemonActiveTasks(): Promise<boolean> {
     const count = await client.call('task.getActiveCount');
     return count > 0;
   } catch {
-    return false;
+    // Fail closed: if we can't reach the daemon, assume tasks might be
+    // running. This prevents workspace changes during disconnect/restart.
+    return true;
   }
 }
 
