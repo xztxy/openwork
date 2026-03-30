@@ -104,9 +104,14 @@ export async function discoverOAuthProtectedResourceMetadata(
   }
 
   if (!metadataResponse || !metadataResponse.ok) {
-    // Use URL origin to avoid resetting any subpath on serverUrl
-    const serverOrigin = new URL(serverUrl).origin;
-    const wellKnownUrl = new URL('/.well-known/oauth-protected-resource', serverOrigin).toString();
+    // Preserve any subpath on serverUrl (e.g. /mcp) so subpath-mounted servers
+    // resolve to the correct well-known document rather than origin root.
+    const resourceUrl = new URL(serverUrl);
+    const resourcePath = resourceUrl.pathname === '/' ? '' : resourceUrl.pathname;
+    const wellKnownUrl = new URL(
+      `/.well-known/oauth-protected-resource${resourcePath}`,
+      resourceUrl.origin,
+    ).toString();
     try {
       metadataResponse = await fetchWithTimeout(wellKnownUrl, {
         method: 'GET',

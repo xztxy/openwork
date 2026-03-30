@@ -21,7 +21,8 @@ import type { HealthService } from './health.js';
 import type { StorageService } from './storage-service.js';
 
 const taskIdSchema = z.object({ taskId: z.string().min(1) });
-const taskStartSchema = taskConfigSchema.extend({ modelId: z.string().optional() });
+// taskConfigSchema already includes modelId — no extension needed
+const taskStartSchema = taskConfigSchema;
 
 function sanitizeErrorMessage(err: unknown): string {
   if (err instanceof z.ZodError) {
