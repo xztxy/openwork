@@ -135,7 +135,7 @@ export function registerRpcMethods(services: RouteServices): void {
     'permission.respond',
     safeHandler((params) => {
       const validated = validate(permissionResponseSchema, params);
-      const { requestId, taskId, decision, selectedOptions, customText } = validated;
+      const { requestId, decision, selectedOptions, customText } = validated;
 
       if (requestId && permissionService.isFilePermissionRequest(requestId)) {
         const resolved = permissionService.resolvePermission(requestId, decision === 'allow');
