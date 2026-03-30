@@ -9,80 +9,41 @@
 
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Microphone, SpinnerGap, WarningCircle } from '@phosphor-icons/react';
+import { SpinnerGap, WarningCircle, Microphone } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { formatDuration } from './speechInputHelpers';
+
+export { MicrophoneIcon } from './speechInputHelpers';
 
 interface SpeechInputButtonProps {
-  /**
-   * Whether currently recording
-   */
+  /** Whether currently recording */
   isRecording: boolean;
-
-  /**
-   * Whether currently transcribing
-   */
+  /** Whether currently transcribing */
   isTranscribing: boolean;
-
-  /**
-   * Current recording duration in milliseconds
-   */
+  /** Current recording duration in milliseconds */
   recordingDuration?: number;
-
-  /**
-   * Error state
-   */
+  /** Error state */
   error?: Error | null;
-
-  /**
-   * Whether speech input is configured
-   */
+  /** Whether speech input is configured */
   isConfigured?: boolean;
-
-  /**
-   * Whether disabled (e.g., during task execution)
-   */
+  /** Whether disabled (e.g., during task execution) */
   disabled?: boolean;
-
-  /**
-   * Called when user clicks to start recording
-   */
+  /** Called when user clicks to start recording */
   onStartRecording?: () => void;
-
-  /**
-   * Called when user clicks to stop recording
-   */
+  /** Called when user clicks to stop recording */
   onStopRecording?: () => void;
-
-  /**
-   * Called when user clicks to cancel recording
-   */
+  /** Called when user clicks to cancel recording */
   onCancel?: () => void;
-
-  /**
-   * Called when user clicks to retry
-   */
+  /** Called when user clicks to retry */
   onRetry?: () => void;
-
-  /**
-   * Called when user clicks the button while not configured
-   * (to open settings dialog)
-   */
+  /** Called when user clicks the button while not configured (to open settings dialog) */
   onOpenSettings?: () => void;
-
-  /**
-   * Size variant
-   */
+  /** Size variant */
   size?: 'sm' | 'md' | 'lg';
-
-  /**
-   * Custom CSS classes
-   */
+  /** Custom CSS classes */
   className?: string;
-
-  /**
-   * Custom tooltip text
-   */
+  /** Custom tooltip text */
   tooltipText?: string;
 }
 
@@ -116,22 +77,17 @@ export function SpeechInputButton({
 
   const buttonClasses = useMemo(() => {
     if (isRecording) {
-      // Recording state: red button with animation
       return 'bg-transparent text-red-600 hover:text-red-700';
     }
     if (isTranscribing) {
-      // Transcribing state: blue button
       return 'bg-transparent text-blue-600 hover:text-blue-700 cursor-wait';
     }
     if (error) {
-      // Error state: red/orange button
       return 'bg-transparent text-orange-600 hover:text-orange-700';
     }
     if (!isConfigured) {
-      // Not configured: show muted style but still clickable (will open settings)
       return 'bg-transparent text-muted-foreground hover:text-foreground';
     }
-    // Normal state: primary color
     return 'bg-transparent text-foreground hover:text-primary';
   }, [isRecording, isTranscribing, error, isConfigured]);
 
@@ -149,7 +105,6 @@ export function SpeechInputButton({
     (e: React.MouseEvent) => {
       e.stopPropagation();
       if (!isConfigured) {
-        // Open settings dialog when not configured
         onOpenSettings?.();
       } else if (isRecording) {
         onStopRecording?.();
@@ -212,36 +167,6 @@ export function SpeechInputButton({
       {/* Error retry helper text */}
       {error && !isRecording && !isTranscribing && (
         <div className="text-xs text-orange-600 dark:text-orange-400 shrink-0">Retry</div>
-      )}
-    </div>
-  );
-}
-
-/**
- * Format milliseconds to MM:SS display
- */
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
-
-/**
- * Standalone microphone icon button (for use in other places)
- */
-export function MicrophoneIcon({
-  isRecording,
-  className,
-}: {
-  isRecording?: boolean;
-  className?: string;
-}) {
-  return (
-    <div className={cn('relative inline-flex items-center justify-center', className)}>
-      <Microphone className={cn('h-4 w-4', isRecording && 'text-red-500 animate-pulse')} />
-      {isRecording && (
-        <div className="absolute inset-0 rounded-full border-2 border-red-500 animate-ping opacity-75" />
       )}
     </div>
   );

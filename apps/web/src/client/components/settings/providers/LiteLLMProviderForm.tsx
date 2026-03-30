@@ -1,18 +1,13 @@
-// apps/desktop/src/renderer/components/settings/providers/LiteLLMProviderForm.tsx
+// apps/web/src/client/components/settings/providers/LiteLLMProviderForm.tsx
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { ConnectedProvider, LiteLLMCredentials } from '@accomplish_ai/agent-core/common';
-import {
-  ModelSelector,
-  ConnectButton,
-  ConnectedControls,
-  ProviderFormHeader,
-  FormError,
-} from '../shared';
+import { ConnectButton, ProviderFormHeader, FormError } from '../shared';
 import { settingsVariants, settingsTransitions } from '@/lib/animations';
 import { getAccomplish } from '@/lib/accomplish';
+import { LiteLLMConnectedSection } from './LiteLLMConnectedSection';
 
 // Import LiteLLM logo
 import litellmLogo from '/assets/ai-logos/litellm.svg';
@@ -165,59 +160,13 @@ export function LiteLLMProviderForm({
               <ConnectButton onClick={handleConnect} connecting={connecting} />
             </motion.div>
           ) : (
-            <motion.div
-              key="connected"
-              variants={settingsVariants.fadeSlide}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={settingsTransitions.enter}
-              className="space-y-3"
-            >
-              {/* Display saved connection details */}
-              <div className="space-y-3">
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-foreground">
-                    {t('litellm.serverUrl')}
-                  </label>
-                  <input
-                    type="text"
-                    value={
-                      (connectedProvider?.credentials as LiteLLMCredentials)?.serverUrl ||
-                      'http://localhost:4000'
-                    }
-                    disabled
-                    className="w-full rounded-md border border-input bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground"
-                  />
-                </div>
-                {(connectedProvider?.credentials as LiteLLMCredentials)?.hasApiKey && (
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-foreground">
-                      {t('apiKey.title')}
-                    </label>
-                    <input
-                      type="text"
-                      value={
-                        (connectedProvider?.credentials as LiteLLMCredentials)?.keyPrefix ||
-                        t('apiKey.saved')
-                      }
-                      disabled
-                      className="w-full rounded-md border border-input bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground"
-                    />
-                  </div>
-                )}
-              </div>
-
-              <ConnectedControls onDisconnect={onDisconnect} />
-
-              {/* Model Selector */}
-              <ModelSelector
-                models={models}
-                value={connectedProvider?.selectedModelId || null}
-                onChange={onModelChange}
-                error={showModelError && !connectedProvider?.selectedModelId}
-              />
-            </motion.div>
+            <LiteLLMConnectedSection
+              connectedProvider={connectedProvider}
+              models={models}
+              onDisconnect={onDisconnect}
+              onModelChange={onModelChange}
+              showModelError={showModelError}
+            />
           )}
         </AnimatePresence>
       </div>

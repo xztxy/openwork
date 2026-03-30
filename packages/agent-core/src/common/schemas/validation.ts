@@ -20,6 +20,8 @@ export const taskConfigSchema = z.object({
   chrome: z.boolean().optional(),
   workspaceId: z.string().optional(),
   attachments: z.array(fileAttachmentSchema).optional(),
+  modelId: z.string().optional(),
+  provider: z.string().optional(),
 });
 
 export const permissionResponseSchema = z.object({

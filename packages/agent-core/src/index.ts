@@ -537,7 +537,7 @@ export { createSocketTransport } from './daemon/index.js';
 export type { SocketTransportOptions } from './daemon/index.js';
 export { acquirePidLock, PidLockError } from './daemon/index.js';
 export type { PidLockHandle, PidLockPayload } from './daemon/index.js';
-export { installCrashHandlers } from './daemon/index.js';
+export { installCrashHandlers, logger } from './daemon/index.js';
 
 // Daemon protocol types (re-exported from common/types/daemon.ts)
 export { JSON_RPC_ERRORS } from './common/types/daemon.js';
