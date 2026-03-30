@@ -53,7 +53,8 @@ function computeNextRunAt(cron: string, from: Date): string | null {
   start.setSeconds(0, 0);
   start.setMinutes(start.getMinutes() + 1);
 
-  const maxDays = 400;
+  // 1461 days = 4 years — guarantees hitting Feb 29 for leap-year schedules
+  const maxDays = 1461;
 
   for (let dayOffset = 0; dayOffset < maxDays; dayOffset++) {
     const day = new Date(start.getTime());

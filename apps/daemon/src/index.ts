@@ -398,6 +398,10 @@ async function main(): Promise<void> {
     shuttingDown = true;
     console.log('[Daemon] Shutting down...');
 
+    // Stop scheduler FIRST — prevent new tasks from being launched during drain
+    schedulerService.stop();
+    console.log('[Daemon] Scheduler stopped');
+
     // Drain phase: wait for active tasks to finish
     const activeCount = taskService.getActiveTaskCount();
     if (activeCount > 0) {
@@ -432,7 +436,6 @@ async function main(): Promise<void> {
       });
     }
 
-    schedulerService.stop();
     thoughtStreamService.close();
     permissionService.close();
     taskService.dispose();
