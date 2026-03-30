@@ -180,6 +180,11 @@ describe('SchedulerService', () => {
         'Invalid cron expression',
       );
     });
+
+    it('throws on valid syntax but unschedulable cron (no match in scan window)', () => {
+      // Feb 29 on a Monday — can be decades away
+      expect(() => service.createSchedule('0 0 29 2 1', 'leap monday')).toThrow('no matching date');
+    });
   });
 
   // =========================================================================
@@ -379,6 +384,22 @@ describe('SchedulerService', () => {
 
       expect(onTaskFire).not.toHaveBeenCalled();
     });
+
+    it('catches up schedules due at exactly the current time (<=)', () => {
+      const exactlyNow = new Date().toISOString();
+      storage.tasks.push(
+        makeTask({
+          id: 'exact-now',
+          prompt: 'exact catch-up',
+          enabled: true,
+          nextRunAt: exactlyNow,
+        }),
+      );
+
+      service.catchUp();
+
+      expect(onTaskFire).toHaveBeenCalledWith('exact catch-up', undefined);
+    });
   });
 
   // =========================================================================
@@ -398,26 +419,44 @@ describe('SchedulerService', () => {
       expect(onTaskFire).toHaveBeenCalledWith('catch-up', undefined);
     });
 
-    it('aligns tick to next minute boundary via setTimeout', () => {
+    it('ticks immediately when started exactly on a minute boundary', () => {
       // Current time: 2025-06-15T10:00:00.000Z — exactly on the minute
-      // msUntilNextMinute = 60_000 - (Date.now() % 60_000) = 60_000
-      service.start();
-
-      // No tick yet (only catchUp has run, but no due tasks for tick)
+      // With the fix, remainder === 0, so tick runs immediately
       const pastTime = new Date(Date.now() - 1000).toISOString();
       storage.tasks.push(
-        makeTask({ id: 'tick-test', prompt: 'tick me', enabled: true, nextRunAt: pastTime }),
+        makeTask({
+          id: 'boundary-test',
+          prompt: 'boundary fire',
+          enabled: true,
+          nextRunAt: pastTime,
+        }),
       );
 
-      // Advance to just before the alignment fires
-      vi.advanceTimersByTime(59_999);
-      // tick hasn't been called yet — onTaskFire only from catchUp (none due)
+      service.start();
+
+      // tick should have fired immediately (no setTimeout delay)
+      expect(onTaskFire).toHaveBeenCalledWith('boundary fire', undefined);
+    });
+
+    it('aligns tick to next minute boundary when not on boundary', () => {
+      // Move to mid-minute: 10:00:30.000
+      vi.setSystemTime(new Date('2025-06-15T10:00:30.000Z'));
+
+      service = new SchedulerService(storage as never, onTaskFire);
+      service.start();
+
+      const pastTime = new Date(Date.now() - 1000).toISOString();
+      storage.tasks.push(
+        makeTask({ id: 'align-test', prompt: 'aligned fire', enabled: true, nextRunAt: pastTime }),
+      );
+
+      // Advance to just before alignment (30s away)
+      vi.advanceTimersByTime(29_999);
       expect(onTaskFire).not.toHaveBeenCalled();
 
-      // Advance past the alignment timeout
+      // Advance past alignment
       vi.advanceTimersByTime(1);
-      // Now tick should have run
-      expect(onTaskFire).toHaveBeenCalledWith('tick me', undefined);
+      expect(onTaskFire).toHaveBeenCalledWith('aligned fire', undefined);
     });
 
     it('ticks every 60 seconds after alignment', () => {
