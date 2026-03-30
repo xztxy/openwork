@@ -268,7 +268,11 @@
       "reconnecting": "Reconnecting...",
       "unknown": "Unknown",
       "uptime": "Uptime: {{uptime}}",
-      "lastPing": "Last ping: {{seconds}}s ago"
+      "lastPing": "Last ping: {{seconds}}s ago",
+      "starting": "Starting...",
+      "stopping": "Stopping...",
+      "failed": "Failed",
+      "failedMessage": "The daemon could not start or reconnect. Try restarting manually."
     },
     "controls": {
       "restart": "Restart",

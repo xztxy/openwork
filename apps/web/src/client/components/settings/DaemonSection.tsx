@@ -1,18 +1,16 @@
 /**
  * DaemonSection — Settings UI for daemon monitoring and control.
  *
- * Merged from the standalone DaemonPanel. Includes:
- * - Status monitor (running/stopped/reconnecting) with uptime and last ping
- * - Control buttons (start/stop/restart)
- * - Close-button behavior setting with double confirmation
- * - Socket path display with copy button
- *
- * Rendered inside the General settings tab.
+ * Reads daemon status from the global daemonStore (single source of truth).
+ * All status changes go through the store so sidebar dot, toast, and this
+ * section always agree.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Warning } from '@phosphor-icons/react';
 import { useAccomplish } from '@/lib/accomplish';
+import { useDaemonStore } from '@/stores/daemonStore';
 import {
   Dialog,
   DialogContent,
@@ -23,11 +21,9 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 
-type DaemonStatus = 'running' | 'stopped' | 'reconnecting' | 'unknown';
-
 function formatUptime(ms: number): string {
   if (ms <= 0) {
-    return '—';
+    return '\u2014';
   }
   const seconds = Math.floor(ms / 1000);
   const minutes = Math.floor(seconds / 60);
@@ -46,11 +42,57 @@ function formatUptime(ms: number): string {
   return `${seconds}s`;
 }
 
+// Map global store status → display status for the settings section
+function getDisplayStatus(
+  storeStatus: ReturnType<typeof useDaemonStore.getState>['status'],
+): string {
+  switch (storeStatus) {
+    case 'connected':
+      return 'running';
+    case 'starting':
+      return 'starting';
+    case 'stopping':
+      return 'stopping';
+    case 'stopped':
+      return 'stopped';
+    case 'disconnected':
+    case 'reconnecting':
+      return 'reconnecting';
+    case 'reconnect-failed':
+      return 'failed';
+    default:
+      return 'unknown';
+  }
+}
+
+function getStatusDotClass(displayStatus: string): string {
+  switch (displayStatus) {
+    case 'running':
+      return 'bg-green-500';
+    case 'starting':
+      return 'bg-green-500 animate-pulse';
+    case 'stopping':
+      return 'bg-red-500 animate-pulse';
+    case 'reconnecting':
+      return 'bg-yellow-500 animate-pulse';
+    case 'failed':
+    case 'stopped':
+      return 'bg-red-500';
+    default:
+      return 'bg-gray-500';
+  }
+}
+
 export function DaemonSection() {
   const accomplish = useAccomplish();
   const { t } = useTranslation('settings');
 
-  const [status, setStatus] = useState<DaemonStatus>('unknown');
+  // Read status from global store — single source of truth
+  const storeStatus = useDaemonStore((s) => s.status);
+  const setGlobalStatus = useDaemonStore((s) => s.setStatus);
+  const displayStatus = getDisplayStatus(storeStatus);
+
+  // Local state for section-specific data (not daemon connection state)
   const [uptime, setUptime] = useState(0);
   const [lastPing, setLastPing] = useState<Date | null>(null);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
@@ -60,23 +102,24 @@ export function DaemonSection() {
   const [showConfirm, setShowConfirm] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Poll daemon status
+  // Poll daemon for uptime/lastPing — status comes from store
   const pollStatus = useCallback(async () => {
     try {
       const result = await accomplish.daemonPing();
       if (result.status === 'ok') {
-        setStatus('running');
         setUptime(result.uptime);
+        setGlobalStatus('connected');
       } else {
-        setStatus('stopped');
         setUptime(0);
+        setGlobalStatus('stopped');
       }
       setLastPing(new Date());
     } catch {
-      setStatus('stopped');
       setUptime(0);
+      // Don't override store status on poll failure — store handles
+      // disconnect/reconnect events with more nuance
     }
-  }, [accomplish]);
+  }, [accomplish, setGlobalStatus]);
 
   useEffect(() => {
     void pollStatus();
@@ -100,26 +143,15 @@ export function DaemonSection() {
       .catch(() => {});
   }, [accomplish]);
 
-  // Listen for daemon connection events (disconnected/reconnected)
-  useEffect(() => {
-    const unsubDisconnect = accomplish.onDaemonDisconnected(() => {
-      setStatus('reconnecting');
-    });
-    const unsubReconnect = accomplish.onDaemonReconnected(() => {
-      void pollStatus();
-    });
-    return () => {
-      unsubDisconnect();
-      unsubReconnect();
-    };
-  }, [accomplish, pollStatus]);
-
-  // Control actions
+  // Control actions — update global store for all state changes
   const handleRestart = async () => {
     setActionInProgress('restart');
+    setGlobalStatus('reconnecting');
     try {
       await accomplish.daemonRestart();
       await pollStatus();
+    } catch {
+      setGlobalStatus('reconnect-failed');
     } finally {
       setActionInProgress(null);
     }
@@ -127,10 +159,13 @@ export function DaemonSection() {
 
   const handleStop = async () => {
     setActionInProgress('stop');
+    setGlobalStatus('stopping');
     try {
       await accomplish.daemonStop();
-      setStatus('stopped');
+      setGlobalStatus('stopped');
       setUptime(0);
+    } catch {
+      setGlobalStatus('reconnect-failed');
     } finally {
       setActionInProgress(null);
     }
@@ -138,9 +173,12 @@ export function DaemonSection() {
 
   const handleStart = async () => {
     setActionInProgress('start');
+    setGlobalStatus('starting');
     try {
       await accomplish.daemonStart();
       await pollStatus();
+    } catch {
+      setGlobalStatus('reconnect-failed');
     } finally {
       setActionInProgress(null);
     }
@@ -167,14 +205,10 @@ export function DaemonSection() {
     setCloseBehavior('stop-daemon');
   };
 
-  const statusDot =
-    status === 'running'
-      ? 'bg-green-500'
-      : status === 'reconnecting'
-        ? 'bg-yellow-500'
-        : 'bg-red-500';
-
-  const statusLabel = t(`daemon.status.${status}`, status);
+  const dotClass = getStatusDotClass(displayStatus);
+  const statusLabel = t(`daemon.status.${displayStatus}`, displayStatus);
+  const isRunning = displayStatus === 'running';
+  const isFailed = displayStatus === 'failed';
 
   return (
     <>
@@ -186,15 +220,15 @@ export function DaemonSection() {
       <div className="rounded-lg border border-border bg-card p-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className={`h-2.5 w-2.5 rounded-full ${statusDot}`} />
+            <span className={`h-2.5 w-2.5 rounded-full ${dotClass}`} />
             <div>
               <div className="font-medium text-foreground text-sm">{statusLabel}</div>
-              {status === 'running' && (
+              {isRunning && (
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {t('daemon.status.uptime', { uptime: formatUptime(uptime) })}
                   {lastPing && (
                     <span className="ml-2">
-                      ·{' '}
+                      \u00b7{' '}
                       {t('daemon.status.lastPing', {
                         seconds: Math.round((Date.now() - lastPing.getTime()) / 1000),
                       })}
@@ -206,7 +240,7 @@ export function DaemonSection() {
           </div>
 
           <div className="flex items-center gap-2">
-            {status === 'running' ? (
+            {isRunning ? (
               <>
                 <Button
                   variant="outline"
@@ -244,6 +278,14 @@ export function DaemonSection() {
           </div>
         </div>
       </div>
+
+      {/* Failed Warning Banner */}
+      {isFailed && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 flex items-start gap-3">
+          <Warning className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-destructive">{t('daemon.status.failedMessage')}</p>
+        </div>
+      )}
 
       {/* Close Button Behavior */}
       <div className="rounded-lg border border-border bg-card p-5">

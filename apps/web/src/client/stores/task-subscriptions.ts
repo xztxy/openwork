@@ -87,6 +87,14 @@ export function registerTaskSubscriptions(getStore: () => import('./taskStore').
     getStore().setAuthError(data);
   });
 
+  window.accomplish.onDaemonReconnected(() => {
+    const state = getStore();
+    void state.loadTasks();
+    if (state.currentTask?.id) {
+      void state.loadTaskById(state.currentTask.id);
+    }
+  });
+
   window.accomplish.onWorkspaceChanged?.(async () => {
     const state = getStore();
     state.reset();

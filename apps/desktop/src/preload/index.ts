@@ -617,6 +617,11 @@ const accomplishAPI = {
     ipcRenderer.on('daemon:reconnected', listener);
     return () => ipcRenderer.removeListener('daemon:reconnected', listener);
   },
+  onDaemonReconnectFailed: (callback: () => void): (() => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('daemon:reconnect-failed', listener);
+    return () => ipcRenderer.removeListener('daemon:reconnect-failed', listener);
+  },
 
   // Favorites
   addFavorite: (taskId: string): Promise<void> => ipcRenderer.invoke('favorites:add', taskId),

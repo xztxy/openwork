@@ -568,6 +568,7 @@ interface AccomplishAPI {
   // Daemon connection events
   onDaemonDisconnected(callback: () => void): () => void;
   onDaemonReconnected(callback: () => void): () => void;
+  onDaemonReconnectFailed(callback: () => void): () => void;
 
   // Sandbox configuration
   getSandboxConfig(): Promise<{
