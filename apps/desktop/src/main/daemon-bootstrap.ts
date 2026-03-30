@@ -45,6 +45,13 @@ export async function bootstrapDaemon(): Promise<DaemonClient> {
   setClient(client);
   setMode('socket');
 
+  // Re-register notification forwarding if a window getter was previously set
+  // (handles explicit daemon:start / daemon:restart from settings UI)
+  if (windowGetter) {
+    registerNotificationHandlers(client, windowGetter);
+    log('INFO', '[DaemonBootstrap] Re-registered notification forwarding on new client');
+  }
+
   // Set up disconnect detection + reconnection
   await setupTransportReconnection(client);
 

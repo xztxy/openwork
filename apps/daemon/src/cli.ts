@@ -4,6 +4,10 @@ export interface DaemonArgs {
   socketPath?: string;
   dataDir?: string;
   version?: boolean;
+  /** Packaged mode flags — passed by Electron spawn or login-item */
+  isPackaged?: boolean;
+  resourcesPath?: string;
+  appPath?: string;
 }
 
 export function parseArgs(argv: string[] = process.argv.slice(2)): DaemonArgs {
@@ -19,6 +23,14 @@ export function parseArgs(argv: string[] = process.argv.slice(2)): DaemonArgs {
       i++;
     } else if (argv[i] === '--version') {
       result.version = true;
+    } else if (argv[i] === '--packaged') {
+      result.isPackaged = true;
+    } else if (argv[i] === '--resources-path' && argv[i + 1]) {
+      result.resourcesPath = argv[i + 1];
+      i++;
+    } else if (argv[i] === '--app-path' && argv[i + 1]) {
+      result.appPath = argv[i + 1];
+      i++;
     }
   }
 

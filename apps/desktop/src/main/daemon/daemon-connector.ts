@@ -92,13 +92,21 @@ export function spawnDaemon(dataDir: string): void {
 
   log('INFO', `[DaemonConnector] Spawning daemon: ${nodeBin} ${entryPath} --data-dir ${dataDir}`);
 
+  // Pass packaged-mode context so the daemon resolves CLI/bundled-node paths correctly
+  const daemonEnv: Record<string, string | undefined> = {
+    ...process.env,
+    ELECTRON_RUN_AS_NODE: undefined,
+  };
+  if (app.isPackaged) {
+    daemonEnv.ACCOMPLISH_IS_PACKAGED = '1';
+    daemonEnv.ACCOMPLISH_RESOURCES_PATH = process.resourcesPath;
+    daemonEnv.ACCOMPLISH_APP_PATH = app.getAppPath();
+  }
+
   const child = spawn(nodeBin, [entryPath, '--data-dir', dataDir], {
     detached: true,
     stdio: 'ignore',
-    env: {
-      ...process.env,
-      ELECTRON_RUN_AS_NODE: undefined,
-    },
+    env: daemonEnv,
   });
 
   child.unref();

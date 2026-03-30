@@ -113,17 +113,21 @@ async function main(): Promise<void> {
   }
 
   // 5. Create services
+  // Packaged-mode context: CLI args take precedence over env vars (for Windows login-item).
   const userDataPath = dataDir || path.join(homedir(), '.accomplish');
-  const mcpToolsPath =
-    process.env.MCP_TOOLS_PATH ||
-    path.resolve(__dirname, '..', '..', '..', 'packages', 'agent-core', 'mcp-tools');
-  const isPackaged = process.env.ACCOMPLISH_IS_PACKAGED === '1';
+  const isPackaged = args.isPackaged || process.env.ACCOMPLISH_IS_PACKAGED === '1';
+  const resourcesPath = args.resourcesPath || process.env.ACCOMPLISH_RESOURCES_PATH || '';
+  const appPath = args.appPath || process.env.ACCOMPLISH_APP_PATH || '';
+  const mcpToolsPath = isPackaged
+    ? path.join(resourcesPath, 'mcp-tools')
+    : process.env.MCP_TOOLS_PATH ||
+      path.resolve(__dirname, '..', '..', '..', 'packages', 'agent-core', 'mcp-tools');
   const taskService = new TaskService(storage, {
     userDataPath,
     mcpToolsPath,
     isPackaged,
-    resourcesPath: process.env.ACCOMPLISH_RESOURCES_PATH,
-    appPath: process.env.ACCOMPLISH_APP_PATH,
+    resourcesPath,
+    appPath,
   });
   const healthService = new HealthService();
   const permissionService = new PermissionService(authToken);

@@ -64,7 +64,16 @@ export function enableAutoStart(): void {
     app.setLoginItemSettings({
       openAtLogin: true,
       path: nodePath,
-      args: [entryPath, '--data-dir', dataDir],
+      args: [
+        entryPath,
+        '--data-dir',
+        dataDir,
+        '--packaged',
+        '--resources-path',
+        process.resourcesPath,
+        '--app-path',
+        app.getAppPath(),
+      ],
     });
     logD('INFO', '[ServiceManager] Auto-start enabled: daemon binary via login item');
   } else {
@@ -141,7 +150,7 @@ function getLaunchAgentContent(): string {
   const entryPath = getDaemonEntryPath();
   const dataDir = getDataDir();
 
-  return [
+  const lines = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
     '<plist version="1.0">',
@@ -156,6 +165,21 @@ function getLaunchAgentContent(): string {
     '  </array>',
     '  <key>KeepAlive</key><true/>',
     '  <key>RunAtLoad</key><true/>',
+  ];
+
+  // Pass packaged-mode context so daemon resolves paths correctly
+  if (app.isPackaged) {
+    lines.push(
+      '  <key>EnvironmentVariables</key>',
+      '  <dict>',
+      '    <key>ACCOMPLISH_IS_PACKAGED</key><string>1</string>',
+      `    <key>ACCOMPLISH_RESOURCES_PATH</key><string>${process.resourcesPath}</string>`,
+      `    <key>ACCOMPLISH_APP_PATH</key><string>${app.getAppPath()}</string>`,
+      '  </dict>',
+    );
+  }
+
+  lines.push(
     '  <key>StandardOutPath</key>',
     `  <string>${path.join(dataDir, 'daemon-stdout.log')}</string>`,
     '  <key>StandardErrorPath</key>',
@@ -163,7 +187,9 @@ function getLaunchAgentContent(): string {
     '</dict>',
     '</plist>',
     '',
-  ].join('\n');
+  );
+
+  return lines.join('\n');
 }
 
 function installLaunchAgent(): void {
@@ -225,7 +251,7 @@ function getSystemdServiceContent(): string {
   const entryPath = getDaemonEntryPath();
   const dataDir = getDataDir();
 
-  return [
+  const lines = [
     '[Unit]',
     'Description=Accomplish AI Daemon',
     'After=default.target',
@@ -233,13 +259,20 @@ function getSystemdServiceContent(): string {
     '[Service]',
     'Type=simple',
     `ExecStart=${nodePath} ${entryPath} --data-dir ${dataDir}`,
-    'Restart=on-failure',
-    'RestartSec=5',
-    '',
-    '[Install]',
-    'WantedBy=default.target',
-    '',
-  ].join('\n');
+  ];
+
+  // Pass packaged-mode context so daemon resolves paths correctly
+  if (app.isPackaged) {
+    lines.push(
+      `Environment=ACCOMPLISH_IS_PACKAGED=1`,
+      `Environment=ACCOMPLISH_RESOURCES_PATH=${process.resourcesPath}`,
+      `Environment=ACCOMPLISH_APP_PATH=${app.getAppPath()}`,
+    );
+  }
+
+  lines.push('Restart=on-failure', 'RestartSec=5', '', '[Install]', 'WantedBy=default.target', '');
+
+  return lines.join('\n');
 }
 
 function installSystemdService(): void {

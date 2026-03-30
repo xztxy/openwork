@@ -189,6 +189,7 @@ ${options.knowledgeNotes}
     permissionApiPort,
     questionApiPort,
     browserConfig,
+    authToken: options.authToken,
     connectors: options.connectors,
   });
 
