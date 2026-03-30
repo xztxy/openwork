@@ -228,7 +228,8 @@
     "appearance": "外观",
     "general": "通用",
     "about": "关于",
-    "integrations": "集成"
+    "integrations": "集成",
+    "scheduler": "Scheduler"
   },
   "integrations": {
     "title": "消息平台集成",
@@ -528,6 +529,30 @@
     "selectModelPlaceholder": "选择模型...",
     "infoBannerTitle": "使用 Transformers.js 进行本地推理",
     "infoBannerDescription": "模型使用 ONNX Runtime 在本地运行。建议使用较小的量化模型（Q4）以获得更快的推理速度。"
+  },
+  "scheduler": {
+    "title": "Scheduled Tasks",
+    "description": "Automate recurring tasks with cron expressions. Schedules persist across daemon restarts.",
+    "empty": "No scheduled tasks. Create one to automate recurring work.",
+    "addButton": "Add Schedule",
+    "autoStartWarning": "Enable 'Start at Login' in Settings \u2192 General to ensure schedules fire after system restart.",
+    "card": {
+      "lastRun": "Last run",
+      "nextRun": "Next run",
+      "never": "Never",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this scheduled task?"
+    },
+    "addDialog": {
+      "title": "New Scheduled Task",
+      "cronLabel": "Cron Expression",
+      "cronPlaceholder": "0 9 * * 1-5",
+      "cronHelp": "5-field format: minute hour day-of-month month day-of-week. Examples: '0 9 * * *' (daily at 9am), '0 9 * * 1-5' (weekdays at 9am), '*/30 * * * *' (every 30 min)",
+      "promptLabel": "Task Prompt",
+      "promptPlaceholder": "Check email and summarize important items",
+      "create": "Create Schedule",
+      "cancel": "Cancel"
+    }
   },
   "knowledgeNotes": {
     "title": "知识笔记",

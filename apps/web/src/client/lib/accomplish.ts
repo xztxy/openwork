@@ -39,6 +39,7 @@ import type {
 import type {
   CloudBrowserConfig,
   MessagingConnectionStatus,
+  ScheduledTask,
 } from '@accomplish_ai/agent-core/common';
 
 // Define the API interface
@@ -587,6 +588,13 @@ interface AccomplishAPI {
     dockerImage?: string;
     networkPolicy?: { allowOutbound: boolean; allowedHosts?: string[] };
   }): Promise<void>;
+
+  // Scheduler
+  listSchedules(workspaceId?: string): Promise<ScheduledTask[]>;
+  createSchedule(cron: string, prompt: string, workspaceId?: string): Promise<ScheduledTask>;
+  deleteSchedule(scheduleId: string): Promise<void>;
+  setScheduleEnabled(scheduleId: string, enabled: boolean): Promise<void>;
+  isAutoStartEnabled(): Promise<boolean>;
 
   // MCP Connectors
   getConnectors(): Promise<McpConnector[]>;

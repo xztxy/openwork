@@ -557,6 +557,9 @@ export type {
   TypedJsonRpcResponse,
   TypedJsonRpcNotification,
   HealthCheckResult,
+  ScheduledTask,
+  TaskScheduleParams,
+  TaskCancelScheduledParams,
 } from './common/types/daemon.js';
 
 // Browser live-view types (ENG-695)

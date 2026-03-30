@@ -19,6 +19,7 @@ import type { SandboxConfig } from '../common/types/sandbox.js';
 import type { CloudBrowserConfig } from '../common/types/cloud-browser.js';
 import type { MessagingConfig } from '../common/types/messaging.js';
 import type { BlocklistEntry } from '../common/types/desktop.js';
+import type { ScheduledTask } from '../common/types/daemon.js';
 
 /** Options for creating a Storage instance */
 export interface StorageOptions {
@@ -288,7 +289,27 @@ export interface DesktopControlStorageAPI {
   removeDesktopBlocklistEntry(appName: string): void;
 }
 
-/** Unified storage API combining task, settings, provider, secure storage, connector, desktop control, and database lifecycle operations */
+/** API for cron-based scheduled task persistence */
+export interface SchedulerStorageAPI {
+  /** Get all scheduled tasks */
+  getAllScheduledTasks(): ScheduledTask[];
+  /** Get only enabled scheduled tasks */
+  getEnabledScheduledTasks(): ScheduledTask[];
+  /** Get scheduled tasks scoped to a workspace */
+  getScheduledTasksByWorkspace(workspaceId: string): ScheduledTask[];
+  /** Get a scheduled task by ID */
+  getScheduledTaskById(id: string): ScheduledTask | null;
+  /** Create a new scheduled task */
+  createScheduledTask(cron: string, prompt: string, workspaceId?: string): ScheduledTask;
+  /** Delete a scheduled task */
+  deleteScheduledTask(id: string): void;
+  /** Enable or disable a scheduled task */
+  setScheduledTaskEnabled(id: string, enabled: boolean): void;
+  /** Update the last run timestamp and next run time */
+  updateScheduledTaskLastRun(id: string, timestamp: string, nextRunAt: string): void;
+}
+
+/** Unified storage API combining task, settings, provider, secure storage, connector, desktop control, scheduler, and database lifecycle operations */
 export interface StorageAPI
   extends
     TaskStorageAPI,
@@ -297,6 +318,7 @@ export interface StorageAPI
     SecureStorageAPI,
     ConnectorStorageAPI,
     DesktopControlStorageAPI,
+    SchedulerStorageAPI,
     DatabaseLifecycleAPI {}
 
 export type {

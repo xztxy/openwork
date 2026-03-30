@@ -158,6 +158,43 @@ export function registerSettingsHandlers(): void {
     return { success: true };
   });
 
+  // ── Scheduler ────────────────────────────────────────────────────────
+
+  handle('scheduler:list', async (_event: IpcMainInvokeEvent, workspaceId?: string) => {
+    const { getDaemonClient } = await import('../../daemon-bootstrap');
+    const client = getDaemonClient();
+    return client.call('task.listScheduled', { workspaceId });
+  });
+
+  handle(
+    'scheduler:create',
+    async (_event: IpcMainInvokeEvent, cron: string, prompt: string, workspaceId?: string) => {
+      const { getDaemonClient } = await import('../../daemon-bootstrap');
+      const client = getDaemonClient();
+      return client.call('task.schedule', { cron, prompt, workspaceId });
+    },
+  );
+
+  handle('scheduler:delete', async (_event: IpcMainInvokeEvent, scheduleId: string) => {
+    const { getDaemonClient } = await import('../../daemon-bootstrap');
+    const client = getDaemonClient();
+    return client.call('task.cancelScheduled', { scheduleId });
+  });
+
+  handle(
+    'scheduler:set-enabled',
+    async (_event: IpcMainInvokeEvent, scheduleId: string, enabled: boolean) => {
+      const { getDaemonClient } = await import('../../daemon-bootstrap');
+      const client = getDaemonClient();
+      return client.call('task.setScheduleEnabled', { scheduleId, enabled });
+    },
+  );
+
+  handle('daemon:is-auto-start-enabled', async () => {
+    const { isAutoStartEnabled } = await import('../../daemon/service-manager');
+    return isAutoStartEnabled();
+  });
+
   // ── Close Behavior ──────────────────────────────────────────────────
 
   handle('daemon:get-close-behavior', async () => {

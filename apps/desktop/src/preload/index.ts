@@ -827,6 +827,17 @@ const accomplishAPI = {
     ipcRenderer.on('integrations:whatsapp:status', listener);
     return () => ipcRenderer.removeListener('integrations:whatsapp:status', listener);
   },
+
+  // ── Scheduler ─────────────────────────────────────────────────────────────
+  listSchedules: (workspaceId?: string): Promise<unknown[]> =>
+    ipcRenderer.invoke('scheduler:list', workspaceId),
+  createSchedule: (cron: string, prompt: string, workspaceId?: string): Promise<unknown> =>
+    ipcRenderer.invoke('scheduler:create', cron, prompt, workspaceId),
+  deleteSchedule: (scheduleId: string): Promise<void> =>
+    ipcRenderer.invoke('scheduler:delete', scheduleId),
+  setScheduleEnabled: (scheduleId: string, enabled: boolean): Promise<void> =>
+    ipcRenderer.invoke('scheduler:set-enabled', scheduleId, enabled),
+  isAutoStartEnabled: (): Promise<boolean> => ipcRenderer.invoke('daemon:is-auto-start-enabled'),
 };
 
 // Expose the API to the renderer

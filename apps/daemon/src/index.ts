@@ -19,6 +19,7 @@ import { StorageService } from './storage-service.js';
 import { TaskService } from './task-service.js';
 import { PermissionService } from './permission-service.js';
 import { ThoughtStreamService } from './thought-stream-service.js';
+import { SchedulerService } from './scheduler-service.js';
 import { HealthService, VERSION } from './health.js';
 import { parseArgs } from './cli.js';
 
@@ -132,6 +133,9 @@ async function main(): Promise<void> {
   const healthService = new HealthService();
   const permissionService = new PermissionService(authToken);
   const thoughtStreamService = new ThoughtStreamService(authToken);
+  const schedulerService = new SchedulerService(storage, (prompt, workspaceId) => {
+    void taskService.startTask({ prompt, workspaceId });
+  });
 
   // 6. Create RPC server — socket path derived from dataDir for profile isolation
   const socketPath = args.socketPath || getSocketPath(dataDir);
@@ -279,6 +283,53 @@ async function main(): Promise<void> {
     safeHandler(() => Promise.resolve(healthService.getStatus())),
   );
 
+  // Scheduling
+  rpc.registerMethod(
+    'task.schedule',
+    safeHandler((params) => {
+      const validated = validate(
+        z.object({
+          cron: z.string().min(1),
+          prompt: z.string().min(1),
+          workspaceId: z.string().optional(),
+        }),
+        params,
+      );
+      return Promise.resolve(
+        schedulerService.createSchedule(validated.cron, validated.prompt, validated.workspaceId),
+      );
+    }),
+  );
+  rpc.registerMethod(
+    'task.listScheduled',
+    safeHandler((params) => {
+      const workspaceId =
+        params && typeof params === 'object' && 'workspaceId' in params
+          ? (params as { workspaceId?: string }).workspaceId
+          : undefined;
+      return Promise.resolve(schedulerService.listSchedules(workspaceId));
+    }),
+  );
+  rpc.registerMethod(
+    'task.cancelScheduled',
+    safeHandler((params) => {
+      const validated = validate(z.object({ scheduleId: z.string().min(1) }), params);
+      schedulerService.deleteSchedule(validated.scheduleId);
+      return Promise.resolve();
+    }),
+  );
+  rpc.registerMethod(
+    'task.setScheduleEnabled',
+    safeHandler((params) => {
+      const validated = validate(
+        z.object({ scheduleId: z.string().min(1), enabled: z.boolean() }),
+        params,
+      );
+      schedulerService.setEnabled(validated.scheduleId, validated.enabled);
+      return Promise.resolve();
+    }),
+  );
+
   // 10. Forward task events as RPC notifications
   taskService.on('progress', (data) => {
     rpc.notify('task.progress', data);
@@ -332,6 +383,10 @@ async function main(): Promise<void> {
     process.env.THOUGHT_STREAM_PORT = String(thoughtPort);
   }
 
+  // Start scheduler after RPC server is ready
+  schedulerService.start();
+  console.log('[Daemon] Scheduler started');
+
   console.log(`[Daemon] Listening on ${socketPath}`);
 
   // 12. Graceful shutdown with drain phase
@@ -377,6 +432,7 @@ async function main(): Promise<void> {
       });
     }
 
+    schedulerService.stop();
     thoughtStreamService.close();
     permissionService.close();
     taskService.dispose();

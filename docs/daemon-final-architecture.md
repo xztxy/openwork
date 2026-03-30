@@ -2,7 +2,7 @@
 
 > **Current architecture** (implemented in Phases 0–11): standalone daemon process that survives Electron exit. The Electron app is a **thin UI/integration shell** (tray, native notifications, file pickers, auth browser flows, renderer IPC forwarding) that connects to the daemon via Unix socket / Windows named pipe JSON-RPC.
 >
-> **Future work:** Task scheduler requires persistence design before implementation. Not part of the current architecture or RPC contract.
+> Task scheduler is implemented with SQLite persistence, cron matching, and a dedicated Settings tab.
 
 ---
 
@@ -61,20 +61,24 @@ This is the **safe default**. Future enhancements (queue-and-pause, external not
 
 Normalized method names (resolved `task.stop` vs `task.cancel` conflict):
 
-| Method               | Params                                                               | Result               | Notes                                             |
-| -------------------- | -------------------------------------------------------------------- | -------------------- | ------------------------------------------------- |
-| `daemon.ping`        | —                                                                    | `{ status, uptime }` | Health check, already exists                      |
-| `daemon.shutdown`    | —                                                                    | void                 | **New.** Graceful drain (30s) + exit              |
-| `task.start`         | `{ prompt, taskId?, workspaceId?, attachments?, workingDirectory? }` | `Task`               |                                                   |
-| `task.cancel`        | `{ taskId }`                                                         | void                 | Normalized (was `task.stop` in standalone daemon) |
-| `task.interrupt`     | `{ taskId }`                                                         | void                 |                                                   |
-| `task.get`           | `{ taskId }`                                                         | `Task`               |                                                   |
-| `task.list`          | —                                                                    | `Task[]`             |                                                   |
-| `task.delete`        | `{ taskId }`                                                         | void                 |                                                   |
-| `task.getTodos`      | `{ taskId }`                                                         | `TodoItem[]`         |                                                   |
-| `task.clearHistory`  | —                                                                    | void                 |                                                   |
-| `session.resume`     | `{ sessionId, prompt, existingTaskId?, attachments? }`               | `Task`               |                                                   |
-| `permission.respond` | `{ requestId, decision, ... }`                                       | void                 |                                                   |
+| Method                    | Params                                                               | Result               | Notes                                             |
+| ------------------------- | -------------------------------------------------------------------- | -------------------- | ------------------------------------------------- |
+| `daemon.ping`             | —                                                                    | `{ status, uptime }` | Health check, already exists                      |
+| `daemon.shutdown`         | —                                                                    | void                 | **New.** Graceful drain (30s) + exit              |
+| `task.start`              | `{ prompt, taskId?, workspaceId?, attachments?, workingDirectory? }` | `Task`               |                                                   |
+| `task.cancel`             | `{ taskId }`                                                         | void                 | Normalized (was `task.stop` in standalone daemon) |
+| `task.interrupt`          | `{ taskId }`                                                         | void                 |                                                   |
+| `task.get`                | `{ taskId }`                                                         | `Task`               |                                                   |
+| `task.list`               | —                                                                    | `Task[]`             |                                                   |
+| `task.delete`             | `{ taskId }`                                                         | void                 |                                                   |
+| `task.getTodos`           | `{ taskId }`                                                         | `TodoItem[]`         |                                                   |
+| `task.clearHistory`       | —                                                                    | void                 |                                                   |
+| `session.resume`          | `{ sessionId, prompt, existingTaskId?, attachments? }`               | `Task`               |                                                   |
+| `permission.respond`      | `{ requestId, decision, ... }`                                       | void                 |                                                   |
+| `task.schedule`           | `{ cron, prompt, workspaceId? }`                                     | `ScheduledTask`      | Create persistent schedule                        |
+| `task.listScheduled`      | `{ workspaceId? }`                                                   | `ScheduledTask[]`    | Server-side workspace filtering                   |
+| `task.cancelScheduled`    | `{ scheduleId }`                                                     | void                 |                                                   |
+| `task.setScheduleEnabled` | `{ scheduleId, enabled }`                                            | void                 | Re-computes next_run_at on enable                 |
 
 ## Shutdown Semantics
 

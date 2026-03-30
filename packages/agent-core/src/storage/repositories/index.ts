@@ -92,3 +92,14 @@ export {
   deleteKnowledgeNote,
   getKnowledgeNotesForPrompt,
 } from './knowledgeNotes.js';
+
+export {
+  getAllScheduledTasks,
+  getEnabledScheduledTasks,
+  getScheduledTasksByWorkspace,
+  getScheduledTaskById,
+  createScheduledTask,
+  deleteScheduledTask,
+  setScheduledTaskEnabled,
+  updateScheduledTaskLastRun,
+} from './scheduled-tasks.js';

@@ -146,17 +146,20 @@ export interface StorageDeleteTaskParams {
   taskId: string;
 }
 
-/** @deprecated Scheduler not yet implemented — needs persistence design. */
 export interface ScheduledTask {
   id: string;
   /** Cron expression (e.g. '0 9 * * 1-5' = weekdays at 9am) */
   cron: string;
   /** Task prompt to execute */
   prompt: string;
+  /** Optional workspace scope */
+  workspaceId?: string;
   /** Whether this schedule is active */
   enabled: boolean;
   /** ISO timestamp of creation */
   createdAt: string;
+  /** ISO timestamp of last update */
+  updatedAt: string;
   /** ISO timestamp of last execution, if any */
   lastRunAt?: string;
   /** ISO timestamp of next planned execution */
@@ -218,9 +221,17 @@ export interface DaemonMethodMap {
   'storage.updateTaskSummary': { params: StorageUpdateTaskSummaryParams; result: void };
   'storage.addTaskMessage': { params: StorageAddTaskMessageParams; result: void };
 
-  // Scheduling — intentionally removed from contract until persistence is designed.
-  // Types (ScheduledTask, TaskScheduleParams, TaskCancelScheduledParams) retained
-  // for future use but are NOT part of the live RPC surface.
+  // Scheduling
+  'task.schedule': {
+    params: TaskScheduleParams & { workspaceId?: string };
+    result: ScheduledTask;
+  };
+  'task.listScheduled': { params: { workspaceId?: string } | undefined; result: ScheduledTask[] };
+  'task.cancelScheduled': { params: TaskCancelScheduledParams; result: void };
+  'task.setScheduleEnabled': {
+    params: { scheduleId: string; enabled: boolean };
+    result: void;
+  };
 
   // Health & lifecycle
   'daemon.ping': { params: undefined; result: { status: 'ok'; uptime: number } };
