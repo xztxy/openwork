@@ -78,6 +78,7 @@ export async function discoverOAuthProtectedResourceMetadata(
   }
 
   const authenticateHeader = response.headers.get('www-authenticate');
+  // RFC 7235 allows optional whitespace around `=` in auth-params
   const metadataUrlMatch = authenticateHeader?.match(/\bresource_metadata\s*=\s*"([^"]+)"/i);
   const metadataUrl = metadataUrlMatch?.[1];
 
@@ -103,7 +104,9 @@ export async function discoverOAuthProtectedResourceMetadata(
   }
 
   if (!metadataResponse || !metadataResponse.ok) {
-    const wellKnownUrl = new URL('./.well-known/oauth-protected-resource', serverUrl).toString();
+    // Use URL origin to avoid resetting any subpath on serverUrl
+    const serverOrigin = new URL(serverUrl).origin;
+    const wellKnownUrl = new URL('/.well-known/oauth-protected-resource', serverOrigin).toString();
     try {
       metadataResponse = await fetchWithTimeout(wellKnownUrl, {
         method: 'GET',

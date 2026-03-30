@@ -306,7 +306,9 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     }
 
     if (this.options.onBeforeStart) {
-      this.externalEnv = (await this.options.onBeforeStart()) || {};
+      // Always reset externalEnv so stale values from a prior run are never reused
+      // when the current call returns void/undefined.
+      this.externalEnv = (await this.options.onBeforeStart()) ?? {};
     }
 
     const cliArgs = await this.options.buildCliArgs(config);

@@ -63,9 +63,10 @@ function forwardRequest(
     delete headers[header];
   });
 
-  if (body.length !== rawBody.length) {
-    headers['content-length'] = String(body.length);
-  }
+  // Always set content-length to the actual body length being forwarded.
+  // When transfer-encoding was chunked, the hop-by-hop removal above deletes it,
+  // so an explicit content-length is required even when the body was not transformed.
+  headers['content-length'] = String(body.length);
 
   const proxy = (isHttps ? https : http).request(
     {

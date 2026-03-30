@@ -153,15 +153,10 @@ export function registerRpcMethods(services: RouteServices): void {
           return Promise.resolve();
         }
       }
-      if (requestId) {
-        logger.warn(`[Daemon] Permission response for unmatched requestId: ${requestId}`);
-        return Promise.reject(new Error(`No pending permission request with id: ${requestId}`));
-      }
-      if (!taskService.hasActiveTask(taskId)) {
-        return Promise.resolve();
-      }
-      const message = decision === 'allow' ? selectedOptions?.join(', ') || 'yes' : 'no';
-      return taskService.sendResponse(taskId, message);
+      // requestId is always present after schema validation — fall through means
+      // neither a file-permission nor a question request matched.
+      logger.warn(`[Daemon] Permission response for unmatched requestId: ${requestId}`);
+      return Promise.reject(new Error(`No pending permission request with id: ${requestId}`));
     }),
   );
   rpc.registerMethod(

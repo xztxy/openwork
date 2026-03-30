@@ -88,11 +88,15 @@ export async function buildEnvironment(
 
 export async function buildCliArgs(config: TaskConfig, storage: StorageAPI): Promise<string[]> {
   let selectedModel;
-  if (config.modelId) {
+  if (config.modelId && config.provider) {
     selectedModel = {
-      provider: (config.provider as ProviderId) || ('unknown' as ProviderId),
+      provider: config.provider as ProviderId,
       model: config.modelId,
     };
+  } else if (config.modelId) {
+    // provider not specified — fall through to active/selected model lookup,
+    // which will supply the correct provider from storage.
+    selectedModel = undefined;
   } else {
     const activeModel = storage.getActiveProviderModel();
     selectedModel = activeModel || storage.getSelectedModel();
