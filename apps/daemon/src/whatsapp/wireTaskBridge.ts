@@ -58,7 +58,8 @@ export function wireTaskBridge(
       }
     };
 
-    const onPermission = (data: { taskId?: string; request?: unknown }): void => {
+    // TaskService emits the raw PermissionRequest object (with id, taskId at top level)
+    const onPermission = (data: { id?: string; taskId?: string }): void => {
       if (data.taskId && data.taskId !== taskId) {
         return;
       }
@@ -68,10 +69,7 @@ export function wireTaskBridge(
           'Task requires a permission that cannot be auto-approved. It has been denied for safety.',
         )
         .catch(() => {});
-      const requestId =
-        data.request && typeof data.request === 'object' && 'id' in data.request
-          ? (data.request as { id: string }).id
-          : undefined;
+      const requestId = data.id;
       if (requestId) {
         // Auto-deny both file permissions and question requests
         if (permissionService.isFilePermissionRequest(requestId)) {
@@ -87,21 +85,24 @@ export function wireTaskBridge(
         return;
       }
       cleanup();
-      // Read session from storage for conversation continuity
-      const task = taskService.listTasks().find((t) => t.id === taskId);
-      if (task?.sessionId && task.status === 'completed') {
-        bridge.setSessionForSender(senderId, task.sessionId);
-      }
-      let replyText =
-        lastAssistantContent ||
-        (task?.status === 'completed'
-          ? 'Task completed successfully.'
-          : `Task finished with status: ${task?.status ?? 'unknown'}`);
-      if (replyText.length > MAX_MESSAGE_LENGTH) {
-        replyText = replyText.substring(0, MAX_MESSAGE_LENGTH - 22) + '\n\n[Response truncated]';
-      }
-      service.sendMessage(senderId, replyText).catch(() => {});
-      bridge.clearActiveTask(senderId);
+      // Defer storage read to next tick so task-callbacks.ts has time to
+      // persist sessionId and status (it writes synchronously after emitting 'complete').
+      process.nextTick(() => {
+        const task = taskService.listTasks().find((t) => t.id === taskId);
+        if (task?.sessionId) {
+          bridge.setSessionForSender(senderId, task.sessionId);
+        }
+        let replyText =
+          lastAssistantContent ||
+          (task?.status === 'completed'
+            ? 'Task completed successfully.'
+            : `Task finished with status: ${task?.status ?? 'unknown'}`);
+        if (replyText.length > MAX_MESSAGE_LENGTH) {
+          replyText = replyText.substring(0, MAX_MESSAGE_LENGTH - 22) + '\n\n[Response truncated]';
+        }
+        service.sendMessage(senderId, replyText).catch(() => {});
+        bridge.clearActiveTask(senderId);
+      });
     };
 
     const onError = (data: { taskId: string }): void => {

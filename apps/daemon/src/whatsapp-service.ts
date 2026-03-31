@@ -126,9 +126,11 @@ export class WhatsAppDaemonService extends EventEmitter {
       return null;
     }
 
+    // If the service is alive (connect() was called), treat as enabled
+    // even if the persisted config hasn't been written yet (first-time QR flow).
     const result: WhatsAppDaemonConfig = {
       providerId: 'whatsapp',
-      enabled: waConfig?.enabled ?? false,
+      enabled: this.service ? true : (waConfig?.enabled ?? false),
       status,
       phoneNumber: waConfig?.phoneNumber as string | undefined,
       lastConnectedAt: waConfig?.lastConnectedAt as number | undefined,
