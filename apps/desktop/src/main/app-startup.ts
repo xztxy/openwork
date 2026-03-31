@@ -207,8 +207,9 @@ export async function startApp(
               const client = getDaemonClient();
               await client.call('daemon.shutdown');
 
-              // Wait for daemon to finish draining (same pattern as daemon:stop)
-              const drainDeadline = Date.now() + 10_000;
+              // Wait for daemon to finish draining — matches daemon's 30s
+              // DRAIN_TIMEOUT_MS plus a 5s buffer, same as daemon:stop.
+              const drainDeadline = Date.now() + 35_000;
               while (Date.now() < drainDeadline) {
                 await new Promise((r) => setTimeout(r, 500));
                 try {
