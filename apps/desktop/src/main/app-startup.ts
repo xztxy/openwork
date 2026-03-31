@@ -173,6 +173,11 @@ export async function startApp(
         return; // Already quitting — let it close
       }
 
+      // Skip close dialog in E2E mode — tests need clean app.close()
+      if (process.env.E2E_MOCK_TASK_EVENTS === '1') {
+        return;
+      }
+
       // Always prevent default and show a confirmation dialog
       event.preventDefault();
 
