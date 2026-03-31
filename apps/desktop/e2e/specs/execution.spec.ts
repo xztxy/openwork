@@ -488,10 +488,11 @@ test.describe('Execution Page', () => {
     // Scroll to top to simulate user scrolling up
     await scrollContainer.evaluate((el) => {
       el.scrollTop = 0;
+      el.dispatchEvent(new Event('scroll'));
     });
 
-    // Wait for scroll state to update
-    await window.waitForTimeout(TEST_TIMEOUTS.STATE_UPDATE);
+    // Wait for scroll state + AnimatePresence to propagate (Docker can be slow)
+    await window.waitForTimeout(TEST_TIMEOUTS.STATE_UPDATE * 4);
 
     // Check if the container is scrollable (has content taller than viewport)
     const isScrollable = await scrollContainer.evaluate((el) => {
@@ -501,7 +502,7 @@ test.describe('Execution Page', () => {
     if (isScrollable) {
       // Scroll-to-bottom button should be visible when scrolled up
       await expect(executionPage.scrollToBottomButton).toBeVisible({
-        timeout: TEST_TIMEOUTS.NAVIGATION,
+        timeout: TEST_TIMEOUTS.PERMISSION_MODAL,
       });
 
       // Capture screenshot
@@ -579,12 +580,13 @@ test.describe('Execution Page', () => {
       // Scroll to top
       await scrollContainer.evaluate((el) => {
         el.scrollTop = 0;
+        el.dispatchEvent(new Event('scroll'));
       });
-      await window.waitForTimeout(TEST_TIMEOUTS.STATE_UPDATE);
+      await window.waitForTimeout(TEST_TIMEOUTS.STATE_UPDATE * 4);
 
       // Verify button is visible
       await expect(executionPage.scrollToBottomButton).toBeVisible({
-        timeout: TEST_TIMEOUTS.NAVIGATION,
+        timeout: TEST_TIMEOUTS.PERMISSION_MODAL,
       });
 
       // Click the scroll-to-bottom button
