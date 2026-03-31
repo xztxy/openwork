@@ -15,7 +15,7 @@ import type { TaskBridge } from './taskBridge.js';
 export function wireStatusListeners(
   service: WhatsAppService,
   storage: StorageAPI,
-  bridge: TaskBridge,
+  _bridge: TaskBridge,
 ): void {
   service.on('phoneNumber', (phoneNumber: string) => {
     const config = storage.getMessagingConfig();
@@ -35,9 +35,7 @@ export function wireStatusListeners(
     });
   });
 
-  service.on('ownerLid', (lid: string) => {
-    bridge.setOwnerLid(lid);
-  });
+  // ownerLid wiring is handled by wireTaskBridge — this module focuses on storage persistence.
 
   // When status changes to connected, persist the state
   service.on('status', (status: string) => {

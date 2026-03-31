@@ -125,20 +125,22 @@ export function wireTaskBridge(
 
     try {
       bridge.setActiveTask(senderId, taskId);
+
+      const existingSessionId = bridge.getSessionForSender(senderId);
+
+      // Subscribe to taskService events BEFORE starting the task so no events
+      // are missed if startTask resolves synchronously or very fast.
+      taskService.on('message', onMessage);
+      taskService.on('permission', onPermission);
+      taskService.on('complete', onComplete);
+      taskService.on('error', onError);
+
       service
         .sendMessage(
           senderId,
           `\u23f3 Task started: "${text.slice(0, 80)}${text.length > 80 ? '\u2026' : ''}"`,
         )
         .catch(() => {});
-
-      const existingSessionId = bridge.getSessionForSender(senderId);
-
-      // Subscribe to taskService events for this task
-      taskService.on('message', onMessage);
-      taskService.on('permission', onPermission);
-      taskService.on('complete', onComplete);
-      taskService.on('error', onError);
 
       // Start task directly via taskService (no RPC — we're in the daemon)
       await taskService.startTask({

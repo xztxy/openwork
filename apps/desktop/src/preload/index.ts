@@ -807,6 +807,8 @@ const accomplishAPI = {
     status: MessagingConnectionStatus;
     phoneNumber?: string;
     lastConnectedAt?: number;
+    qrCode?: string;
+    qrIssuedAt?: number;
   } | null> => ipcRenderer.invoke('integrations:whatsapp:get-config'),
 
   connectWhatsApp: (): Promise<void> => ipcRenderer.invoke('integrations:whatsapp:connect'),
