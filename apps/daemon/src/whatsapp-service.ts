@@ -68,8 +68,31 @@ export class WhatsAppDaemonService extends EventEmitter {
     this.service = service;
 
     // Wire task bridge (direct calls to taskService, not RPC)
-    const { bridge } = wireTaskBridge(service, this.taskService, this.permissionService);
+    const { bridge } = wireTaskBridge(
+      service,
+      this.taskService,
+      this.permissionService,
+      this.storage,
+    );
     this.bridge = bridge;
+
+    // Initialize watermark on first connect (or first post-upgrade connect).
+    // For upgrades: use lastConnectedAt so messages since the last session are caught up.
+    // For fresh installs: use Date.now() to skip history replay.
+    const config0 = this.storage.getMessagingConfig();
+    const wa0 = config0?.integrations?.whatsapp;
+    if (!wa0?.lastProcessedAt) {
+      const initialWatermark = (wa0?.lastConnectedAt as number) ?? Date.now();
+      this.storage.setMessagingConfig({
+        integrations: {
+          ...(config0?.integrations ?? {}),
+          whatsapp: {
+            ...(wa0 ?? { platform: 'whatsapp', enabled: true, tunnelEnabled: false }),
+            lastProcessedAt: initialWatermark,
+          },
+        },
+      });
+    }
 
     // Wire storage sync (phone number, status persistence, ownerLid)
     wireStatusListeners(service, this.storage, bridge);

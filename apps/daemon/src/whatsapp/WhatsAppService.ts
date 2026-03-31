@@ -34,6 +34,8 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
   private manualDisconnect = false;
   private qrCode: string | null = null;
   private qrIssuedAt: number | null = null;
+  /** Track message IDs sent by this daemon to filter out echo upserts. */
+  private sentMessageIds = new Set<string>();
 
   constructor(dataDir: string) {
     super();
@@ -132,10 +134,18 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
           ),
       );
       this.socket.ev.on('messages.upsert', (upsert: { type: string; messages: unknown[] }) => {
-        if (upsert.type !== 'notify') {
-          return;
-        }
+        // Process both 'notify' (real-time) and 'append' (offline sync) messages.
+        // The TaskBridge guards (self-chat-only, rate limiting, watermark) prevent
+        // old history messages from being processed as new tasks.
         for (const raw of upsert.messages as Array<Record<string, unknown>>) {
+          // Skip echoes of messages this daemon sent (prevents feedback loops
+          // where outbound replies trigger new inbound message processing).
+          const key = raw.key as Record<string, unknown> | undefined;
+          const msgId = key?.id as string | undefined;
+          if (msgId && this.sentMessageIds.has(msgId)) {
+            this.sentMessageIds.delete(msgId);
+            continue;
+          }
           const msg = normalizeMessage(raw);
           if (msg) {
             this.emit('message', msg);
@@ -152,7 +162,18 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
     if (!this.socket) {
       throw new Error('WhatsApp is not connected');
     }
-    await this.socket.sendMessage(recipientId, { text });
+    const result = await this.socket.sendMessage(recipientId, { text });
+    // Track the sent message ID so the upsert handler can skip the echo
+    if (result?.key?.id) {
+      this.sentMessageIds.add(result.key.id as string);
+      // Prevent unbounded growth — keep only the last 100
+      if (this.sentMessageIds.size > 100) {
+        const first = this.sentMessageIds.values().next().value;
+        if (first) {
+          this.sentMessageIds.delete(first);
+        }
+      }
+    }
   }
 
   getQrCode(): string | null {
