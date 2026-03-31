@@ -43,6 +43,8 @@ export class TaskBridge {
     senderId: string,
     senderName: string | undefined,
     text: string,
+    messageId: string,
+    timestamp: number,
   ) => Promise<void>;
   private messageHandler: (msg: InboundMessage) => void;
   private ownerJid: string | null = null;
@@ -55,6 +57,8 @@ export class TaskBridge {
       senderId: string,
       senderName: string | undefined,
       text: string,
+      messageId: string,
+      timestamp: number,
     ) => Promise<void>,
   ) {
     this.transport = transport;
@@ -184,7 +188,13 @@ export class TaskBridge {
     this.setActiveTask(msg.senderId, 'pending');
 
     try {
-      await this.onTaskRequest(msg.senderId, safeSenderName, sanitizedText);
+      await this.onTaskRequest(
+        msg.senderId,
+        safeSenderName,
+        sanitizedText,
+        msg.messageId,
+        msg.timestamp,
+      );
     } catch (err) {
       console.error('[TaskBridge] Failed to create task:', err);
       this.clearActiveTask(msg.senderId);

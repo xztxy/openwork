@@ -132,9 +132,9 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
           ),
       );
       this.socket.ev.on('messages.upsert', (upsert: { type: string; messages: unknown[] }) => {
-        if (upsert.type !== 'notify') {
-          return;
-        }
+        // Process both 'notify' (real-time) and 'append' (offline sync) messages.
+        // The TaskBridge guards (self-chat-only, rate limiting, age check) prevent
+        // old history messages from being processed as new tasks.
         for (const raw of upsert.messages as Array<Record<string, unknown>>) {
           const msg = normalizeMessage(raw);
           if (msg) {

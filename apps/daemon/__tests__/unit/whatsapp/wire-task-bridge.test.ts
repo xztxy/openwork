@@ -72,6 +72,26 @@ function createMockPermissionService() {
   };
 }
 
+function createMockStorage() {
+  let messagingConfig: Record<string, unknown> | null = {
+    integrations: {
+      whatsapp: {
+        platform: 'whatsapp',
+        enabled: true,
+        tunnelEnabled: false,
+        lastProcessedAt: 0,
+        lastProcessedMessageId: null,
+      },
+    },
+  };
+  return {
+    getMessagingConfig: vi.fn(() => messagingConfig),
+    setMessagingConfig: vi.fn((config: Record<string, unknown>) => {
+      messagingConfig = config;
+    }),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -80,19 +100,26 @@ describe('wireTaskBridge (daemon version)', () => {
   let service: MockWhatsAppService;
   let taskService: MockTaskService;
   let permissionService: ReturnType<typeof createMockPermissionService>;
+  let mockStorage: ReturnType<typeof createMockStorage>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     service = new MockWhatsAppService();
     taskService = new MockTaskService();
     permissionService = createMockPermissionService();
+    mockStorage = createMockStorage();
   });
 
   // Helper to create the bridge via dynamic import (avoids mock ordering issues)
   async function createBridge() {
     const { wireTaskBridge } = await import('../../../src/whatsapp/wireTaskBridge.js');
     /* eslint-disable @typescript-eslint/no-explicit-any */
-    return wireTaskBridge(service as any, taskService as any, permissionService as any);
+    return wireTaskBridge(
+      service as any,
+      taskService as any,
+      permissionService as any,
+      mockStorage as any,
+    );
     /* eslint-enable @typescript-eslint/no-explicit-any */
   }
 
@@ -282,6 +309,139 @@ describe('wireTaskBridge (daemon version)', () => {
       // Verify session was stored (by checking the bridge internals via getSessionForSender)
       const nextSessionId = bridge.getSessionForSender('1234@s.whatsapp.net');
       expect(nextSessionId).toBe('sess-abc');
+    });
+  });
+
+  describe('message watermark (offline dedup)', () => {
+    it('should skip messages older than the stored watermark', async () => {
+      // Set watermark to "now" — any message before this should be skipped
+      const now = Date.now();
+      mockStorage.setMessagingConfig({
+        integrations: {
+          whatsapp: {
+            platform: 'whatsapp',
+            enabled: true,
+            tunnelEnabled: false,
+            lastProcessedAt: now,
+            lastProcessedMessageId: null,
+          },
+        },
+      });
+
+      const { bridge } = await createBridge();
+      bridge.setEnabled(true);
+      bridge.setOwnerJid('1234@s.whatsapp.net');
+
+      // Send a message with timestamp BEFORE the watermark
+      service.emit('message', {
+        messageId: 'old-msg',
+        senderId: '1234@s.whatsapp.net',
+        text: 'old message',
+        timestamp: now - 10_000, // 10 seconds before watermark
+        isGroup: false,
+        isFromMe: true,
+      });
+
+      // Give it time to process
+      await new Promise((r) => setTimeout(r, 100));
+
+      // Task should NOT have been started
+      expect(taskService.startTaskMock).not.toHaveBeenCalled();
+    });
+
+    it('should process messages newer than the stored watermark', async () => {
+      const now = Date.now();
+      mockStorage.setMessagingConfig({
+        integrations: {
+          whatsapp: {
+            platform: 'whatsapp',
+            enabled: true,
+            tunnelEnabled: false,
+            lastProcessedAt: now - 60_000, // watermark is 1 minute ago
+            lastProcessedMessageId: null,
+          },
+        },
+      });
+
+      const { bridge } = await createBridge();
+      bridge.setEnabled(true);
+      bridge.setOwnerJid('1234@s.whatsapp.net');
+
+      service.emit('message', {
+        messageId: 'new-msg',
+        senderId: '1234@s.whatsapp.net',
+        text: 'new message',
+        timestamp: now, // newer than watermark
+        isGroup: false,
+        isFromMe: true,
+      });
+
+      await vi.waitFor(() => {
+        expect(taskService.startTaskMock).toHaveBeenCalled();
+      });
+    });
+
+    it('should skip exact duplicate (same timestamp + messageId)', async () => {
+      const now = Date.now();
+      mockStorage.setMessagingConfig({
+        integrations: {
+          whatsapp: {
+            platform: 'whatsapp',
+            enabled: true,
+            tunnelEnabled: false,
+            lastProcessedAt: now,
+            lastProcessedMessageId: 'dup-msg-id',
+          },
+        },
+      });
+
+      const { bridge } = await createBridge();
+      bridge.setEnabled(true);
+      bridge.setOwnerJid('1234@s.whatsapp.net');
+
+      service.emit('message', {
+        messageId: 'dup-msg-id',
+        senderId: '1234@s.whatsapp.net',
+        text: 'duplicate',
+        timestamp: now, // exact same timestamp as watermark
+        isGroup: false,
+        isFromMe: true,
+      });
+
+      await new Promise((r) => setTimeout(r, 100));
+      expect(taskService.startTaskMock).not.toHaveBeenCalled();
+    });
+
+    it('should advance watermark after successful task creation', async () => {
+      const { bridge } = await createBridge();
+      bridge.setEnabled(true);
+      bridge.setOwnerJid('1234@s.whatsapp.net');
+
+      const msgTimestamp = Date.now();
+      service.emit('message', {
+        messageId: 'watermark-msg',
+        senderId: '1234@s.whatsapp.net',
+        text: 'advance watermark',
+        timestamp: msgTimestamp,
+        isGroup: false,
+        isFromMe: true,
+      });
+
+      await vi.waitFor(() => {
+        expect(taskService.startTaskMock).toHaveBeenCalled();
+      });
+
+      // Watermark should have been updated in storage
+      expect(mockStorage.setMessagingConfig).toHaveBeenCalledWith(
+        expect.objectContaining({
+          integrations: expect.objectContaining({
+            whatsapp: expect.objectContaining({
+              lastProcessedAt: msgTimestamp,
+              lastProcessedMessageId: 'watermark-msg',
+            }),
+          }),
+        }),
+      );
     });
   });
 
