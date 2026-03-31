@@ -188,6 +188,12 @@ export function wireTaskBridge(
         taskService.on('complete', onComplete);
         taskService.on('error', onError);
 
+        // Claim-then-fire: advance watermark BEFORE starting the task.
+        // If daemon crashes after watermark but before task creation, we lose
+        // one message (safe). If we did it after, a crash after task creation
+        // but before watermark would cause a duplicate task on next reconnect.
+        setWatermark(storage, timestamp, messageId);
+
         service
           .sendMessage(
             senderId,
@@ -201,10 +207,6 @@ export function wireTaskBridge(
           taskId,
           sessionId: existingSessionId ?? undefined,
         });
-
-        // Advance watermark after successful task creation — prevents
-        // this message from being reprocessed on next reconnect.
-        setWatermark(storage, timestamp, messageId);
       } catch (err) {
         // Clean up handlers on failure — prevents leak when task.start rejects
         cleanup();

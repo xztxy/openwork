@@ -76,17 +76,19 @@ export class WhatsAppDaemonService extends EventEmitter {
     );
     this.bridge = bridge;
 
-    // Initialize watermark on first connect: only process messages from now on.
-    // Prevents history replay from creating tasks for old messages.
+    // Initialize watermark on first connect (or first post-upgrade connect).
+    // For upgrades: use lastConnectedAt so messages since the last session are caught up.
+    // For fresh installs: use Date.now() to skip history replay.
     const config0 = this.storage.getMessagingConfig();
     const wa0 = config0?.integrations?.whatsapp;
     if (!wa0?.lastProcessedAt) {
+      const initialWatermark = (wa0?.lastConnectedAt as number) ?? Date.now();
       this.storage.setMessagingConfig({
         integrations: {
           ...(config0?.integrations ?? {}),
           whatsapp: {
             ...(wa0 ?? { platform: 'whatsapp', enabled: true, tunnelEnabled: false }),
-            lastProcessedAt: Date.now(),
+            lastProcessedAt: initialWatermark,
           },
         },
       });
