@@ -756,11 +756,10 @@ test.describe('Execution Page', () => {
     expect(clipboardText).toBeTruthy();
     expect(clipboardText.length).toBeGreaterThan(0);
 
-    // Verify visual feedback - button should have green background
-    // User messages use !text-green-300, assistant messages use !text-green-600
-    // Both use bg-green-500 variants, so check for that common pattern
+    // Verify visual feedback - button should show copied state
+    // The copy button uses bg-accent for the copied state
     const buttonClasses = await firstCopyButton.getAttribute('class');
-    expect(buttonClasses).toContain('bg-green-500');
+    expect(buttonClasses).toContain('bg-accent');
   });
 
   test('should display code blocks with syntax highlighting and copy buttons', async ({
