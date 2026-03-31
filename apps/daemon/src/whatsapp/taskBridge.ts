@@ -38,6 +38,8 @@ export class TaskBridge {
   private rateLimitState: RateLimitState = createRateLimitState();
   private activeTasks = new Map<string, string>();
   private senderSessions = new Map<string, SenderSession>();
+  /** Per-sender message queue for messages that arrive while a task is running. */
+  private pendingMessages = new Map<string, InboundMessage[]>();
   private transport: MessageTransport;
   private onTaskRequest: (
     senderId: string,
@@ -98,6 +100,20 @@ export class TaskBridge {
 
   clearActiveTask(senderId: string): void {
     this.activeTasks.delete(senderId);
+
+    // Process next queued message for this sender (if any).
+    // Handles offline batches where multiple messages arrived while a task was running.
+    const queue = this.pendingMessages.get(senderId);
+    if (queue && queue.length > 0) {
+      const next = queue.shift()!;
+      if (queue.length === 0) {
+        this.pendingMessages.delete(senderId);
+      }
+      // Re-enter handleMessage for the queued message
+      this.handleMessage(next).catch((err) => {
+        console.error('[TaskBridge] Error processing queued message:', err);
+      });
+    }
   }
 
   setSessionForSender(senderId: string, sessionId: string): void {
@@ -169,12 +185,11 @@ export class TaskBridge {
     }
 
     if (this.hasActiveTask(msg.senderId)) {
-      await this.transport
-        .sendMessage(
-          msg.senderId,
-          'Your previous task is still running. Please wait for it to complete.',
-        )
-        .catch(() => {});
+      // Queue the message instead of dropping it — process when current task completes.
+      // This handles offline message batches where multiple messages arrive at once.
+      const queue = this.pendingMessages.get(msg.senderId) ?? [];
+      queue.push(msg);
+      this.pendingMessages.set(msg.senderId, queue);
       return;
     }
 
@@ -213,5 +228,6 @@ export class TaskBridge {
     this.rateLimitState.globalTimestamps = [];
     this.activeTasks.clear();
     this.senderSessions.clear();
+    this.pendingMessages.clear();
   }
 }
