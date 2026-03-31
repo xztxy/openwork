@@ -488,18 +488,19 @@ test.describe('Execution Page', () => {
     // Scroll to top to simulate user scrolling up
     await scrollContainer.evaluate((el) => {
       el.scrollTop = 0;
-      el.dispatchEvent(new Event('scroll'));
     });
 
-    // Wait for scroll state + AnimatePresence to propagate (Docker can be slow)
+    // Wait for scroll state to propagate
     await window.waitForTimeout(TEST_TIMEOUTS.STATE_UPDATE * 4);
 
-    // Check if the container is scrollable (has content taller than viewport)
-    const isScrollable = await scrollContainer.evaluate((el) => {
-      return el.scrollHeight > el.clientHeight;
+    // Check if the content is tall enough to trigger the scroll-to-bottom button.
+    // The app uses a 150px threshold: isAtBottom = scrollTop + clientHeight >= scrollHeight - 150
+    // So the button only appears when scrollHeight - clientHeight > 150
+    const hasEnoughScroll = await scrollContainer.evaluate((el) => {
+      return el.scrollHeight - el.clientHeight > 150;
     });
 
-    if (isScrollable) {
+    if (hasEnoughScroll) {
       // Scroll-to-bottom button should be visible when scrolled up
       await expect(executionPage.scrollToBottomButton).toBeVisible({
         timeout: TEST_TIMEOUTS.PERMISSION_MODAL,
@@ -571,16 +572,16 @@ test.describe('Execution Page', () => {
     const scrollContainer = executionPage.messagesScrollContainer;
     await scrollContainer.waitFor({ state: 'visible', timeout: TEST_TIMEOUTS.NAVIGATION });
 
-    // Check if the container is scrollable
-    const isScrollable = await scrollContainer.evaluate((el) => {
-      return el.scrollHeight > el.clientHeight;
+    // Check if content is tall enough to trigger the scroll-to-bottom button
+    // (app uses 150px threshold for isAtBottom detection)
+    const hasEnoughScroll = await scrollContainer.evaluate((el) => {
+      return el.scrollHeight - el.clientHeight > 150;
     });
 
-    if (isScrollable) {
+    if (hasEnoughScroll) {
       // Scroll to top
       await scrollContainer.evaluate((el) => {
         el.scrollTop = 0;
-        el.dispatchEvent(new Event('scroll'));
       });
       await window.waitForTimeout(TEST_TIMEOUTS.STATE_UPDATE * 4);
 
