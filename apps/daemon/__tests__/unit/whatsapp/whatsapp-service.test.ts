@@ -295,7 +295,12 @@ describe('WhatsAppDaemonService', () => {
   describe('dispose()', () => {
     it('should clean up without error', async () => {
       await service.connect();
-      expect(() => service.dispose()).not.toThrow();
+      service.dispose();
+
+      // After dispose, getConfig should return null (no live service)
+      const config = service.getConfig();
+      // Config may still exist in storage, but service is null
+      expect(config).toBeNull();
     });
   });
 });
