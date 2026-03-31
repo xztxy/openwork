@@ -1,23 +1,24 @@
 /**
- * wireTaskBridge — connects WhatsAppService events to task creation
+ * wireTaskBridge — connects WhatsAppService events to task creation (daemon version)
  *
- * Contributed by aryan877 (PR #595 feat/whatsapp-integration).
- * Wraps task-manager integration and relays progress back to WhatsApp.
+ * Calls taskService.startTask() directly instead of going through daemon RPC.
+ * Subscribes to taskService events for progress/completion notifications.
+ * Auto-denies both file permissions and question requests for safety.
  * Storage persistence helpers live in whatsappStorageSync.ts.
- *
- * Uses daemon RPC for task execution.
  */
-import type { WhatsAppService } from './WhatsAppService';
-import type { DaemonClient } from '@accomplish_ai/agent-core';
-import type { TaskMessage, TaskResult } from '@accomplish_ai/agent-core';
-import { TaskBridge, MAX_MESSAGE_LENGTH } from './taskBridge';
+import type { WhatsAppService } from './WhatsAppService.js';
+import type { TaskService } from '../task-service.js';
+import type { PermissionService } from '../permission-service.js';
+import { TaskBridge, MAX_MESSAGE_LENGTH } from './taskBridge.js';
 import { createTaskId } from '@accomplish_ai/agent-core';
-import { getDaemonClient } from '../../daemon-bootstrap';
-import { getLogCollector } from '../../logging';
 
-export { wireStatusListeners } from './whatsappStorageSync';
+export { wireStatusListeners } from './whatsappStorageSync.js';
 
-export function wireTaskBridge(service: WhatsAppService): { bridge: TaskBridge } {
+export function wireTaskBridge(
+  service: WhatsAppService,
+  taskService: TaskService,
+  permissionService: PermissionService,
+): { bridge: TaskBridge } {
   const bridge = new TaskBridge(service, async (senderId, senderName, text) => {
     const taskId = createTaskId();
     const sender = senderName ? ` from ${senderName}` : '';
@@ -33,10 +34,11 @@ export function wireTaskBridge(service: WhatsAppService): { bridge: TaskBridge }
     let lastAssistantContent = '';
     let lastProgressSentAt = 0;
 
-    // Define handlers and cleanup at function scope so catch can call cleanup
-    let daemonClient: DaemonClient | null = null;
-
-    const onMessage = (data: { taskId: string; messages: TaskMessage[] }): void => {
+    // Per-task event handlers — cleaned up on completion/error/failure
+    const onMessage = (data: {
+      taskId: string;
+      messages: Array<{ type: string; content?: string }>;
+    }): void => {
       if (data.taskId !== taskId) {
         return;
       }
@@ -70,30 +72,31 @@ export function wireTaskBridge(service: WhatsAppService): { bridge: TaskBridge }
         data.request && typeof data.request === 'object' && 'id' in data.request
           ? (data.request as { id: string }).id
           : undefined;
-      if (requestId && daemonClient) {
-        daemonClient
-          .call('permission.respond', {
-            requestId,
-            taskId,
-            decision: 'deny' as const,
-          })
-          .catch(() => {});
+      if (requestId) {
+        // Auto-deny both file permissions and question requests
+        if (permissionService.isFilePermissionRequest(requestId)) {
+          permissionService.resolvePermission(requestId, false);
+        } else if (permissionService.isQuestionRequest(requestId)) {
+          permissionService.resolveQuestion(requestId, { denied: true });
+        }
       }
     };
 
-    const onComplete = (data: { taskId: string; result: TaskResult }): void => {
+    const onComplete = (data: { taskId: string }): void => {
       if (data.taskId !== taskId) {
         return;
       }
       cleanup();
-      if (data.result.sessionId && data.result.status === 'success') {
-        bridge.setSessionForSender(senderId, data.result.sessionId);
+      // Read session from storage for conversation continuity
+      const task = taskService.listTasks().find((t) => t.id === taskId);
+      if (task?.sessionId && task.status === 'completed') {
+        bridge.setSessionForSender(senderId, task.sessionId);
       }
       let replyText =
         lastAssistantContent ||
-        (data.result.status === 'success'
+        (task?.status === 'completed'
           ? 'Task completed successfully.'
-          : `Task finished with status: ${data.result.status}`);
+          : `Task finished with status: ${task?.status ?? 'unknown'}`);
       if (replyText.length > MAX_MESSAGE_LENGTH) {
         replyText = replyText.substring(0, MAX_MESSAGE_LENGTH - 22) + '\n\n[Response truncated]';
       }
@@ -113,12 +116,10 @@ export function wireTaskBridge(service: WhatsAppService): { bridge: TaskBridge }
     };
 
     const cleanup = (): void => {
-      if (daemonClient) {
-        daemonClient.offNotification('task.message', onMessage);
-        daemonClient.offNotification('permission.request', onPermission);
-        daemonClient.offNotification('task.complete', onComplete);
-        daemonClient.offNotification('task.error', onError);
-      }
+      taskService.removeListener('message', onMessage);
+      taskService.removeListener('permission', onPermission);
+      taskService.removeListener('complete', onComplete);
+      taskService.removeListener('error', onError);
     };
 
     try {
@@ -131,16 +132,15 @@ export function wireTaskBridge(service: WhatsAppService): { bridge: TaskBridge }
         .catch(() => {});
 
       const existingSessionId = bridge.getSessionForSender(senderId);
-      daemonClient = getDaemonClient();
 
-      // Subscribe to daemon notifications for this task
-      daemonClient.onNotification('task.message', onMessage);
-      daemonClient.onNotification('permission.request', onPermission);
-      daemonClient.onNotification('task.complete', onComplete);
-      daemonClient.onNotification('task.error', onError);
+      // Subscribe to taskService events for this task
+      taskService.on('message', onMessage);
+      taskService.on('permission', onPermission);
+      taskService.on('complete', onComplete);
+      taskService.on('error', onError);
 
-      // Start task via daemon RPC
-      await daemonClient.call('task.start', {
+      // Start task directly via taskService (no RPC — we're in the daemon)
+      await taskService.startTask({
         prompt,
         taskId,
         sessionId: existingSessionId ?? undefined,
@@ -148,7 +148,7 @@ export function wireTaskBridge(service: WhatsAppService): { bridge: TaskBridge }
     } catch (err) {
       // Clean up handlers on failure — prevents leak when task.start rejects
       cleanup();
-      getLogCollector().logEnv('ERROR', '[WhatsApp] Task creation failed:', { error: String(err) });
+      console.error('[WhatsApp] Task creation failed:', err);
       await service
         .sendMessage(senderId, 'Sorry, I could not process your request.')
         .catch(() => {});
@@ -156,7 +156,7 @@ export function wireTaskBridge(service: WhatsAppService): { bridge: TaskBridge }
     }
   });
 
-  // Wire ownerJid/ownerLid for access control
+  // Wire ownerJid/ownerLid for self-chat-only access control
   service.on('phoneNumber', (phoneNumber: string) => {
     bridge.setOwnerJid(`${phoneNumber}@s.whatsapp.net`);
   });

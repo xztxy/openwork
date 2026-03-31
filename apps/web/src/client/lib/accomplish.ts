@@ -121,6 +121,8 @@ interface AccomplishAPI {
     status: MessagingConnectionStatus;
     phoneNumber?: string;
     lastConnectedAt?: number;
+    qrCode?: string;
+    qrIssuedAt?: number;
   } | null>;
   connectWhatsApp(): Promise<void>;
   disconnectWhatsApp(): Promise<void>;

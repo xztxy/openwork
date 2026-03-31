@@ -1,19 +1,17 @@
 /**
- * WhatsAppService — Baileys-based WhatsApp channel adapter
+ * WhatsAppService — Baileys-based WhatsApp channel adapter (daemon version)
  *
- * Contributed by aryan877 (PR #595 feat/whatsapp-integration).
  * Handles connection lifecycle, QR-code authentication, and message reception.
+ * Runs in the daemon process (no electron imports).
  *
  * Implementation split across:
  *   normalizeMessage.ts   — inbound message parsing
  *   reconnection.ts       — exponential-backoff reconnect logic
  *   authCleanup.ts        — auth-state filesystem helpers
- *   connectionHandler.ts  — connection.update event handler
  *   whatsapp-session.ts   — onConnectionUpdate handler logic
  */
 import { EventEmitter } from 'events';
 import path from 'path';
-import { app } from 'electron';
 import type {
   MessagingConnectionStatus,
   MessagingProviderId,
@@ -35,10 +33,11 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
   private disposed = false;
   private manualDisconnect = false;
   private qrCode: string | null = null;
+  private qrIssuedAt: number | null = null;
 
-  constructor() {
+  constructor(dataDir: string) {
     super();
-    this.authStatePath = path.join(app.getPath('userData'), 'whatsapp-auth');
+    this.authStatePath = path.join(dataDir, 'whatsapp-auth');
   }
 
   getStatus(): MessagingConnectionStatus {
@@ -121,6 +120,7 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
               setStatus: (s) => this.setStatus(s),
               setQrCode: (qr) => {
                 this.qrCode = qr;
+                this.qrIssuedAt = Date.now();
               },
               emitQr: (qr) => this.emit('qr', qr),
               emitPhoneNumber: (p) => this.emit('phoneNumber', p),
@@ -159,6 +159,10 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
     return this.qrCode;
   }
 
+  getQrIssuedAt(): number | null {
+    return this.qrIssuedAt;
+  }
+
   async disconnect(): Promise<void> {
     this.manualDisconnect = true;
     this.reconnect.scheduled = false;
@@ -173,12 +177,15 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
       this.socket = null;
     }
     this.qrCode = null;
+    this.qrIssuedAt = null;
     cleanupAuthState(this.authStatePath);
     this.setStatus('disconnected');
   }
 
   dispose(): void {
     this.disposed = true;
+    this.qrCode = null;
+    this.qrIssuedAt = null;
     clearReconnectTimer(this.reconnect);
     this.disposeSocket();
     this.removeAllListeners();

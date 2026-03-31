@@ -22,6 +22,7 @@ import { HealthService, VERSION } from './health.js';
 import { parseArgs } from './cli.js';
 import { registerRpcMethods, safeHandler } from './daemon-routes.js';
 import { registerTaskEventForwarding } from './task-event-forwarding.js';
+import { WhatsAppDaemonService } from './whatsapp-service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -104,6 +105,12 @@ async function main(): Promise<void> {
   const schedulerService = new SchedulerService(storage, (prompt, workspaceId) => {
     void taskService.startTask({ prompt, workspaceId });
   });
+  const whatsappService = new WhatsAppDaemonService(
+    storage,
+    userDataPath,
+    taskService,
+    permissionService,
+  );
 
   // 6. Create RPC server — socket path derived from dataDir for profile isolation
   const socketPath = args.socketPath || getSocketPath(dataDir);
@@ -135,6 +142,7 @@ async function main(): Promise<void> {
     healthService,
     storageService,
     schedulerService,
+    whatsappService,
   };
   registerRpcMethods(routeServices);
   registerTaskEventForwarding(routeServices);
@@ -167,6 +175,9 @@ async function main(): Promise<void> {
   // Start scheduler after RPC server is ready
   schedulerService.start();
   console.log('[Daemon] Scheduler started');
+
+  // Auto-connect WhatsApp if previously enabled
+  whatsappService.autoConnectIfEnabled();
 
   console.log(`[Daemon] Listening on ${socketPath}`);
 
@@ -214,6 +225,7 @@ async function main(): Promise<void> {
       });
     }
 
+    whatsappService.dispose();
     thoughtStreamService.close();
     permissionService.close();
     taskService.dispose();
