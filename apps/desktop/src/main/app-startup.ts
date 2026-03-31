@@ -194,28 +194,34 @@ export async function startApp(
           cancelId: 2, // "Cancel" maps to Escape key
           noLink: true,
         })
-        .then(({ response }) => {
+        .then(async ({ response }) => {
           if (response === 0) {
             // Close app, daemon keeps running
             logMain('INFO', '[Main] Closing app (daemon keeps running)');
             isQuittingRef.value = true;
             app.quit();
           } else if (response === 1) {
-            // Close app AND stop daemon
+            // Close app AND stop daemon — wait for drain before quitting
             logMain('INFO', '[Main] Closing app and stopping daemon');
             try {
               const client = getDaemonClient();
-              void client
-                .call('daemon.shutdown')
-                .catch(() => {})
-                .finally(() => {
-                  isQuittingRef.value = true;
-                  app.quit();
-                });
+              await client.call('daemon.shutdown');
+
+              // Wait for daemon to finish draining (same pattern as daemon:stop)
+              const drainDeadline = Date.now() + 10_000;
+              while (Date.now() < drainDeadline) {
+                await new Promise((r) => setTimeout(r, 500));
+                try {
+                  await client.ping();
+                } catch {
+                  break; // Daemon exited
+                }
+              }
             } catch {
-              isQuittingRef.value = true;
-              app.quit();
+              // Daemon may already be down
             }
+            isQuittingRef.value = true;
+            app.quit();
           }
           // response === 2 (Cancel) — do nothing, window stays open
         });
