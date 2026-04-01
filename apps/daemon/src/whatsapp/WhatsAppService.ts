@@ -21,6 +21,7 @@ import { normalizeMessage } from './normalizeMessage.js';
 import { cleanupAuthState } from './authCleanup.js';
 import { createReconnectState, clearReconnectTimer, type ReconnectState } from './reconnection.js';
 import { handleConnectionUpdate, type WhatsAppServiceEvents } from './whatsapp-session.js';
+import { log } from '../logger.js';
 export type { WhatsAppServiceEvents };
 
 export class WhatsAppService extends EventEmitter implements ChannelAdapter {
@@ -83,7 +84,7 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
       try {
         version = (await fetchLatestBaileysVersion()).version;
       } catch (err) {
-        console.warn('[WhatsApp] Failed to fetch latest version, using default:', err);
+        log.warn('[WhatsApp] Failed to fetch latest version, using default:', err);
       }
 
       const { state, saveCreds } = await useMultiFileAuthState(this.authStatePath);
@@ -128,7 +129,7 @@ export class WhatsAppService extends EventEmitter implements ChannelAdapter {
               emitPhoneNumber: (p) => this.emit('phoneNumber', p),
               emitOwnerLid: (lid) => this.emit('ownerLid', lid),
               reconnect_connect: () => {
-                this.connect().catch((e) => console.error('[WhatsApp] Reconnect failed:', e));
+                this.connect().catch((e) => log.error('[WhatsApp] Reconnect failed:', e));
               },
             },
           ),

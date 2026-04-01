@@ -12,6 +12,7 @@ import type { PermissionService } from '../permission-service.js';
 import type { StorageAPI } from '@accomplish_ai/agent-core';
 import { TaskBridge, MAX_MESSAGE_LENGTH } from './taskBridge.js';
 import { createTaskId } from '@accomplish_ai/agent-core';
+import { log } from '../logger.js';
 
 export { wireStatusListeners } from './whatsappStorageSync.js';
 
@@ -213,7 +214,7 @@ export function wireTaskBridge(
       } catch (err) {
         // Clean up handlers on failure — prevents leak when task.start rejects
         cleanup();
-        console.error('[WhatsApp] Task creation failed:', err);
+        log.error('[WhatsApp] Task creation failed:', err);
         await service
           .sendMessage(senderId, 'Sorry, I could not process your request.')
           .catch(() => {});

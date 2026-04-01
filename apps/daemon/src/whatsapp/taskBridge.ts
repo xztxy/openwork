@@ -8,6 +8,7 @@
  * - Prompt injection protection (sanitizeString)
  */
 import { sanitizeString } from '@accomplish_ai/agent-core';
+import { log } from '../logger.js';
 import {
   type InboundMessage,
   type MessageTransport,
@@ -68,7 +69,7 @@ export class TaskBridge {
 
     this.messageHandler = (msg) => {
       this.handleMessage(msg).catch((err) => {
-        console.error('[TaskBridge] Error handling message:', err);
+        log.error('[TaskBridge] Error handling message:', err);
       });
     };
     this.transport.on('message', this.messageHandler);
@@ -111,7 +112,7 @@ export class TaskBridge {
       }
       // Re-enter handleMessage for the queued message
       this.handleMessage(next).catch((err) => {
-        console.error('[TaskBridge] Error processing queued message:', err);
+        log.error('[TaskBridge] Error processing queued message:', err);
       });
     }
   }
@@ -211,7 +212,7 @@ export class TaskBridge {
         msg.timestamp,
       );
     } catch (err) {
-      console.error('[TaskBridge] Failed to create task:', err);
+      log.error('[TaskBridge] Failed to create task:', err);
       this.clearActiveTask(msg.senderId);
       await this.transport
         .sendMessage(

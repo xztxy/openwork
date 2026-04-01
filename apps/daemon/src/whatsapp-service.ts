@@ -21,6 +21,7 @@ import {
 } from './whatsapp/index.js';
 import type { TaskService } from './task-service.js';
 import type { PermissionService } from './permission-service.js';
+import { log } from './logger.js';
 
 export interface WhatsAppDaemonConfig {
   providerId: 'whatsapp';
@@ -214,9 +215,9 @@ export class WhatsAppDaemonService extends EventEmitter {
       return;
     }
 
-    console.log('[WhatsApp] Auto-connecting (previously enabled)...');
+    log.info('[WhatsApp] Auto-connecting (previously enabled)...');
     this.connect().catch((err) => {
-      console.error('[WhatsApp] Auto-connect failed:', err);
+      log.error('[WhatsApp] Auto-connect failed:', err);
     });
   }
 
