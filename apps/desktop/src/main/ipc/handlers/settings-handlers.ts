@@ -91,29 +91,29 @@ export function registerSettingsHandlers(): void {
     // Suppress auto-reconnect during intentional restart
     suppressReconnect();
     try {
-      let client: ReturnType<typeof getDaemonClient> | null = null;
       try {
-        client = getDaemonClient();
-        // Wait for daemon to acknowledge shutdown (RPC returns before exit)
-        await client.call('daemon.shutdown');
+        const client = getDaemonClient();
+        // Tell daemon to shut down — don't await, it exits asynchronously
+        client.call('daemon.shutdown').catch(() => {});
       } catch {
-        // Daemon may already be down — that's fine
+        // Daemon may already be down
       }
-      // Poll until daemon is actually dead — 100ms intervals, 10s cap.
-      // Must confirm it's gone before spawning a new one, otherwise
-      // bootstrapDaemon connects to the dying daemon.
-      if (client) {
-        const deadline = Date.now() + 10_000;
-        while (Date.now() < deadline) {
-          await new Promise((r) => setTimeout(r, 100));
-          try {
-            await client.ping();
-          } catch {
-            break; // Daemon is dead
-          }
-        }
-      }
+      // Close client and remove socket file so bootstrapDaemon doesn't
+      // reconnect to the dying daemon. The new daemon creates a fresh socket.
       shutdownDaemon();
+      try {
+        const { getSocketPath } = await import('@accomplish_ai/agent-core');
+        const { getDataDir } = await import('../../daemon/daemon-connector');
+        const fs = await import('fs');
+        const socketPath = getSocketPath(getDataDir());
+        if (fs.existsSync(socketPath)) {
+          fs.unlinkSync(socketPath);
+        }
+      } catch {
+        // Best effort — socket cleanup is not critical
+      }
+      // Small delay for the daemon process to release the PID lock
+      await new Promise((r) => setTimeout(r, 500));
       await bootstrapDaemon();
       return { success: true };
     } finally {
