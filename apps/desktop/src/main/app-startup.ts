@@ -194,21 +194,18 @@ export async function startApp(
           app.quit();
         } else if (decision === 'stop-daemon') {
           logMain('INFO', '[Main] Closing app and stopping daemon');
+          // Suppress auto-reconnect so the disconnect doesn't trigger the toast
+          try {
+            const { suppressReconnect } = await import('./daemon/daemon-connector');
+            suppressReconnect();
+          } catch {
+            /* connector may not be loaded */
+          }
+          // Fire-and-forget: tell daemon to shut down, then quit immediately.
+          // The daemon handles its own drain phase independently.
           try {
             const client = getDaemonClient();
-            await client.call('daemon.shutdown');
-
-            // Wait for daemon to finish draining — matches daemon's 30s
-            // DRAIN_TIMEOUT_MS plus a 5s buffer, same as daemon:stop.
-            const drainDeadline = Date.now() + 35_000;
-            while (Date.now() < drainDeadline) {
-              await new Promise((r) => setTimeout(r, 500));
-              try {
-                await client.ping();
-              } catch {
-                break; // Daemon exited
-              }
-            }
+            client.call('daemon.shutdown').catch(() => {});
           } catch {
             // Daemon may already be down
           }
