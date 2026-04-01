@@ -157,12 +157,38 @@ export function registerSettingsHandlers(): void {
     suppressReconnect();
     try {
       const client = getDaemonClient();
-      // Fire-and-forget: daemon handles its own drain phase independently.
       client.call('daemon.shutdown').catch(() => {});
     } catch {
       // Daemon may already be down
     }
     shutdownDaemon();
+
+    // Wait for the daemon to fully exit before reporting success.
+    // Same PID polling approach as restart.
+    try {
+      const { getPidFilePath } = await import('@accomplish_ai/agent-core');
+      const { getDataDir } = await import('../../daemon/daemon-connector');
+      const fs = await import('fs');
+      const pidPath = getPidFilePath(getDataDir());
+
+      const deadline = Date.now() + 10_000;
+      while (Date.now() < deadline) {
+        if (!fs.existsSync(pidPath)) {
+          break;
+        }
+        try {
+          const content = fs.readFileSync(pidPath, 'utf8');
+          const pid = JSON.parse(content).pid;
+          process.kill(pid, 0);
+          await new Promise((r) => setTimeout(r, 100));
+        } catch {
+          break; // Process dead
+        }
+      }
+    } catch {
+      // Best effort
+    }
+
     return { success: true };
   });
 
