@@ -93,12 +93,13 @@ export function registerSettingsHandlers(): void {
     try {
       try {
         const client = getDaemonClient();
-        await client.call('daemon.shutdown');
+        // Tell daemon to shut down gracefully
+        client.call('daemon.shutdown').catch(() => {});
 
-        // Wait for daemon to exit before spawning a new one — prevents
-        // bootstrap from reconnecting to the old draining daemon.
-        // Poll every 200ms, cap at 5s (daemon usually exits in <1s when idle).
-        const deadline = Date.now() + 5_000;
+        // Poll until daemon exits — 200ms intervals, 2s cap.
+        // If daemon is idle it exits in <100ms. If draining, the PID lock
+        // prevents the new daemon from starting until the old one releases it.
+        const deadline = Date.now() + 2_000;
         while (Date.now() < deadline) {
           await new Promise((r) => setTimeout(r, 200));
           try {
