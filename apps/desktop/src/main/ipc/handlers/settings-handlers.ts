@@ -95,12 +95,12 @@ export function registerSettingsHandlers(): void {
         const client = getDaemonClient();
         await client.call('daemon.shutdown');
 
-        // Wait for daemon to finish draining before starting a new one.
-        // Same pattern as daemon:stop — prevents bootstrap from reconnecting
-        // to the old draining daemon instead of spawning a fresh one.
-        const drainDeadline = Date.now() + 35_000;
-        while (Date.now() < drainDeadline) {
-          await new Promise((r) => setTimeout(r, 500));
+        // Wait for daemon to exit before spawning a new one — prevents
+        // bootstrap from reconnecting to the old draining daemon.
+        // Poll every 200ms, cap at 5s (daemon usually exits in <1s when idle).
+        const deadline = Date.now() + 5_000;
+        while (Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 200));
           try {
             await client.ping();
           } catch {
@@ -126,21 +126,8 @@ export function registerSettingsHandlers(): void {
     suppressReconnect();
     try {
       const client = getDaemonClient();
-      await client.call('daemon.shutdown');
-
-      // Wait for daemon to finish draining before clearing the local client.
-      // During drain, the daemon is still reachable and workspace guards can
-      // query task.getActiveCount. We clear client only after daemon exits.
-      const drainDeadline = Date.now() + 35_000; // 30s drain + 5s buffer
-      while (Date.now() < drainDeadline) {
-        await new Promise((r) => setTimeout(r, 500));
-        try {
-          await client.ping();
-        } catch {
-          // Daemon exited — drain complete
-          break;
-        }
-      }
+      // Fire-and-forget: daemon handles its own drain phase independently.
+      client.call('daemon.shutdown').catch(() => {});
     } catch {
       // Daemon may already be down
     }
