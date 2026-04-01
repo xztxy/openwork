@@ -568,6 +568,10 @@ interface AccomplishAPI {
   getCloseBehavior(): Promise<string>;
   setCloseBehavior(behavior: string): Promise<void>;
 
+  // App close dialog
+  onCloseRequested?(callback: () => void): () => void;
+  respondToClose?(decision: 'keep-daemon' | 'stop-daemon' | 'cancel'): void;
+
   // Daemon connection events
   onDaemonDisconnected(callback: () => void): () => void;
   onDaemonReconnected(callback: () => void): () => void;

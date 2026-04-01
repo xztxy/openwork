@@ -5,7 +5,7 @@
  * top-level bootstrap (single-instance lock, env, window factory).
  */
 
-import { app, BrowserWindow, dialog, nativeImage, nativeTheme } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, nativeTheme } from 'electron';
 import path from 'path';
 import { FutureSchemaError } from '@accomplish_ai/agent-core';
 import type { ProviderId } from '@accomplish_ai/agent-core';
@@ -178,54 +178,46 @@ export async function startApp(
         return;
       }
 
-      // Always prevent default and show a confirmation dialog
+      // Show a themed close dialog in the renderer instead of a native OS dialog.
+      // The renderer sends back the user's decision via IPC.
       event.preventDefault();
 
-      void dialog
-        .showMessageBox(mainWindow, {
-          type: 'question',
-          title: 'Close Accomplish',
-          message: 'The background daemon will keep running.',
-          detail:
-            'Tasks and scheduled jobs will continue in the background. ' +
-            'You can reopen the app from the system tray.',
-          buttons: ['Close', 'Close & Stop Daemon', 'Cancel'],
-          defaultId: 0, // "Close" is the default
-          cancelId: 2, // "Cancel" maps to Escape key
-          noLink: true,
-        })
-        .then(async ({ response }) => {
-          if (response === 0) {
-            // Close app, daemon keeps running
-            logMain('INFO', '[Main] Closing app (daemon keeps running)');
-            isQuittingRef.value = true;
-            app.quit();
-          } else if (response === 1) {
-            // Close app AND stop daemon — wait for drain before quitting
-            logMain('INFO', '[Main] Closing app and stopping daemon');
-            try {
-              const client = getDaemonClient();
-              await client.call('daemon.shutdown');
+      mainWindow.webContents.send('app:close-requested');
 
-              // Wait for daemon to finish draining — matches daemon's 30s
-              // DRAIN_TIMEOUT_MS plus a 5s buffer, same as daemon:stop.
-              const drainDeadline = Date.now() + 35_000;
-              while (Date.now() < drainDeadline) {
-                await new Promise((r) => setTimeout(r, 500));
-                try {
-                  await client.ping();
-                } catch {
-                  break; // Daemon exited
-                }
+      // One-time listener for the response
+      const handler = async (_evt: Electron.IpcMainEvent, decision: string) => {
+        ipcMain.removeListener('app:close-response', handler);
+
+        if (decision === 'keep-daemon') {
+          logMain('INFO', '[Main] Closing app (daemon keeps running)');
+          isQuittingRef.value = true;
+          app.quit();
+        } else if (decision === 'stop-daemon') {
+          logMain('INFO', '[Main] Closing app and stopping daemon');
+          try {
+            const client = getDaemonClient();
+            await client.call('daemon.shutdown');
+
+            // Wait for daemon to finish draining — matches daemon's 30s
+            // DRAIN_TIMEOUT_MS plus a 5s buffer, same as daemon:stop.
+            const drainDeadline = Date.now() + 35_000;
+            while (Date.now() < drainDeadline) {
+              await new Promise((r) => setTimeout(r, 500));
+              try {
+                await client.ping();
+              } catch {
+                break; // Daemon exited
               }
-            } catch {
-              // Daemon may already be down
             }
-            isQuittingRef.value = true;
-            app.quit();
+          } catch {
+            // Daemon may already be down
           }
-          // response === 2 (Cancel) — do nothing, window stays open
-        });
+          isQuittingRef.value = true;
+          app.quit();
+        }
+        // decision === 'cancel' — do nothing, window stays open
+      };
+      ipcMain.on('app:close-response', handler);
     });
 
     createTray(mainWindow);
