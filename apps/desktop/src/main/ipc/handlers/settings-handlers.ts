@@ -98,9 +98,38 @@ export function registerSettingsHandlers(): void {
       } catch {
         // Daemon may already be down
       }
-      // Close client and remove socket file so bootstrapDaemon doesn't
-      // reconnect to the dying daemon. The new daemon creates a fresh socket.
       shutdownDaemon();
+
+      // Wait for the old daemon to fully exit by checking the PID file.
+      // The daemon deletes its PID lock on exit. Once the PID file is gone
+      // (or its PID is no longer alive), it's safe to spawn a new one.
+      try {
+        const { getPidFilePath } = await import('@accomplish_ai/agent-core');
+        const { getDataDir } = await import('../../daemon/daemon-connector');
+        const fs = await import('fs');
+        const pidPath = getPidFilePath(getDataDir());
+
+        const deadline = Date.now() + 10_000;
+        while (Date.now() < deadline) {
+          if (!fs.existsSync(pidPath)) {
+            break; // PID file gone — daemon exited
+          }
+          // PID file exists — check if the process is still alive
+          try {
+            const content = fs.readFileSync(pidPath, 'utf8');
+            const pid = JSON.parse(content).pid;
+            process.kill(pid, 0); // signal 0 = check if alive
+            // Still alive — wait and retry
+            await new Promise((r) => setTimeout(r, 100));
+          } catch {
+            break; // Process dead or PID file unreadable — safe to proceed
+          }
+        }
+      } catch {
+        // Best effort — fall through to bootstrap which handles retries
+      }
+
+      // Remove stale socket file so bootstrapDaemon spawns fresh
       try {
         const { getSocketPath } = await import('@accomplish_ai/agent-core');
         const { getDataDir } = await import('../../daemon/daemon-connector');
@@ -110,10 +139,9 @@ export function registerSettingsHandlers(): void {
           fs.unlinkSync(socketPath);
         }
       } catch {
-        // Best effort — socket cleanup is not critical
+        // Best effort
       }
-      // Small delay for the daemon process to release the PID lock
-      await new Promise((r) => setTimeout(r, 500));
+
       await bootstrapDaemon();
       return { success: true };
     } finally {
