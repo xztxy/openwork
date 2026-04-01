@@ -93,25 +93,16 @@ export function registerSettingsHandlers(): void {
     try {
       try {
         const client = getDaemonClient();
-        // Tell daemon to shut down gracefully
-        client.call('daemon.shutdown').catch(() => {});
-
-        // Poll until daemon exits — 200ms intervals, 2s cap.
-        // If daemon is idle it exits in <100ms. If draining, the PID lock
-        // prevents the new daemon from starting until the old one releases it.
-        const deadline = Date.now() + 2_000;
-        while (Date.now() < deadline) {
-          await new Promise((r) => setTimeout(r, 200));
-          try {
-            await client.ping();
-          } catch {
-            break; // Daemon exited
-          }
-        }
+        // Wait for daemon to acknowledge shutdown (RPC returns before exit)
+        await client.call('daemon.shutdown');
       } catch {
         // Daemon may already be down — that's fine
       }
+      // Close our client immediately — don't wait for the old daemon to
+      // fully exit. The PID lock ensures the new daemon waits if needed.
       shutdownDaemon();
+      // Small delay for socket cleanup before spawning new daemon
+      await new Promise((r) => setTimeout(r, 300));
       await bootstrapDaemon();
       return { success: true };
     } finally {
