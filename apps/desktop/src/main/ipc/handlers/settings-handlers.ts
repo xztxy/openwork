@@ -91,18 +91,29 @@ export function registerSettingsHandlers(): void {
     // Suppress auto-reconnect during intentional restart
     suppressReconnect();
     try {
+      let client: ReturnType<typeof getDaemonClient> | null = null;
       try {
-        const client = getDaemonClient();
+        client = getDaemonClient();
         // Wait for daemon to acknowledge shutdown (RPC returns before exit)
         await client.call('daemon.shutdown');
       } catch {
         // Daemon may already be down — that's fine
       }
-      // Close our client immediately — don't wait for the old daemon to
-      // fully exit. The PID lock ensures the new daemon waits if needed.
+      // Poll until daemon is actually dead — 100ms intervals, 10s cap.
+      // Must confirm it's gone before spawning a new one, otherwise
+      // bootstrapDaemon connects to the dying daemon.
+      if (client) {
+        const deadline = Date.now() + 10_000;
+        while (Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 100));
+          try {
+            await client.ping();
+          } catch {
+            break; // Daemon is dead
+          }
+        }
+      }
       shutdownDaemon();
-      // Small delay for socket cleanup before spawning new daemon
-      await new Promise((r) => setTimeout(r, 300));
       await bootstrapDaemon();
       return { success: true };
     } finally {
