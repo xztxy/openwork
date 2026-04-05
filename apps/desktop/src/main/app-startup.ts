@@ -126,6 +126,24 @@ export async function startApp(
     logMain('ERROR', '[Main] Provider validation failed', { err: String(err) });
   }
 
+  // Clean up stale accomplish-ai provider if free mode is no longer available.
+  // Handles the case where a user switches from Free to OSS build.
+  try {
+    const { isFreeMode } = await import('./config/build-config');
+    if (!isFreeMode()) {
+      const provider = storage.getConnectedProvider('accomplish-ai');
+      if (provider) {
+        storage.removeConnectedProvider('accomplish-ai');
+        if (storage.getActiveProviderId() === 'accomplish-ai') {
+          storage.setActiveProvider(null);
+        }
+        logMain('INFO', '[Main] Removed stale accomplish-ai provider (free mode not available)');
+      }
+    }
+  } catch {
+    // best-effort cleanup
+  }
+
   // Initialize analytics — no-op when build.env is absent (OSS builds)
   try {
     if (isAnalyticsEnabled()) {
