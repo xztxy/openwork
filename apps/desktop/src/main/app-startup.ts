@@ -26,6 +26,9 @@ import {
 } from './daemon-bootstrap';
 import { registerIPCHandlers } from './ipc/handlers';
 import { drainProtocolUrlQueue } from './protocol-handlers';
+import { getBuildConfig, isAnalyticsEnabled } from './config/build-config';
+import { initAnalytics, initDeviceFingerprint } from './analytics/analytics-service';
+import { initMixpanel } from './analytics/mixpanel-service';
 
 function logMain(level: 'INFO' | 'WARN' | 'ERROR', msg: string, data?: Record<string, unknown>) {
   try {
@@ -121,6 +124,19 @@ export async function startApp(
     }
   } catch (err) {
     logMain('ERROR', '[Main] Provider validation failed', { err: String(err) });
+  }
+
+  // Initialize analytics — no-op when build.env is absent (OSS builds)
+  try {
+    if (isAnalyticsEnabled()) {
+      initAnalytics();
+      initDeviceFingerprint();
+    }
+    if (getBuildConfig().mixpanelToken) {
+      initMixpanel();
+    }
+  } catch (err) {
+    logMain('WARN', '[Main] Analytics initialization failed', { err: String(err) });
   }
 
   await skillsManager.initialize();

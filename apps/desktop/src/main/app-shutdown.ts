@@ -15,6 +15,8 @@ import { getLogCollector, shutdownLogCollector } from './logging';
 import { stopHuggingFaceServer } from './providers/huggingface-local';
 import { destroyTray } from './tray';
 import { shutdownDaemon } from './daemon-bootstrap';
+import { flushAnalytics } from './analytics/analytics-service';
+import { flushMixpanel } from './analytics/mixpanel-service';
 
 type AppLogger = ReturnType<typeof getLogCollector> | null;
 
@@ -71,6 +73,14 @@ export async function shutdownApp(logger: AppLogger): Promise<void> {
     workspaceManager.close();
   } catch (error: unknown) {
     logger?.logEnv('ERROR', `[Main] Error during workspaceManager.close: ${String(error)}`);
+  }
+
+  // Flush analytics before closing storage — best effort
+  try {
+    flushAnalytics();
+    flushMixpanel();
+  } catch (error: unknown) {
+    logger?.logEnv('ERROR', `[Main] Error during analytics flush: ${String(error)}`);
   }
 
   try {
