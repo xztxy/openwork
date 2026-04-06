@@ -2,11 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence, motion } from 'framer-motion';
 import { getAccomplish } from '@/lib/accomplish';
-import type {
-  ConnectedProvider,
-  CreditUsage,
-  ModelCapability,
-} from '@accomplish_ai/agent-core/common';
+import type { ConnectedProvider, CreditUsage } from '@accomplish_ai/agent-core/common';
 import { DEFAULT_PROVIDERS } from '@accomplish_ai/agent-core/common';
 import { ProviderFormHeader } from '../shared';
 import { PROVIDER_LOGOS } from '@/lib/provider-logos';
@@ -19,11 +15,9 @@ const ACCOMPLISH_CONFIG = DEFAULT_PROVIDERS.find((p) => p.id === 'accomplish-ai'
 if (!ACCOMPLISH_CONFIG || ACCOMPLISH_CONFIG.models.length === 0) {
   throw new Error('Accomplish provider configuration is missing required models');
 }
-const ACCOMPLISH_CAPABILITIES: ModelCapability[] = ['tools', 'vision', 'thinking'];
 const STATIC_MODELS = ACCOMPLISH_CONFIG.models.map((m) => ({
   id: m.fullId,
   name: m.displayName,
-  capabilities: ACCOMPLISH_CAPABILITIES,
 }));
 const ACCOMPLISH_LOGO = PROVIDER_LOGOS['accomplish-ai'];
 
@@ -207,12 +201,10 @@ export function AccomplishAiProviderForm({
   );
 
   // Refresh availableModels with current capabilities if stale (e.g. DB saved before capabilities existed)
+  // Refresh availableModels if stale (e.g. DB saved before models were populated)
   useEffect(() => {
     if (connectedProvider?.connectionStatus !== 'connected') return;
-    const hasCapabilities = connectedProvider.availableModels?.some(
-      (m) => m.capabilities && m.capabilities.length > 0,
-    );
-    if (!hasCapabilities) {
+    if (!connectedProvider.availableModels || connectedProvider.availableModels.length === 0) {
       const update = onUpdateProviderRef.current ?? onConnectRef.current;
       update({ ...connectedProvider, availableModels: STATIC_MODELS });
     }
