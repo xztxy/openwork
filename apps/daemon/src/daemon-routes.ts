@@ -21,6 +21,7 @@ import type { ThoughtStreamService } from './thought-stream-service.js';
 import type { HealthService } from './health.js';
 import type { StorageService } from './storage-service.js';
 import type { SchedulerService } from './scheduler-service.js';
+import type { WhatsAppDaemonService } from './whatsapp-service.js';
 
 const taskIdSchema = z.object({ taskId: z.string().min(1) });
 // taskConfigSchema already includes modelId — no extension needed
@@ -60,6 +61,7 @@ export interface RouteServices {
   storageService: StorageService;
   schedulerService: SchedulerService;
   accomplishRuntime: AccomplishRuntime;
+  whatsappService: WhatsAppDaemonService;
 }
 
 /**
@@ -73,6 +75,7 @@ export function registerRpcMethods(services: RouteServices): void {
     healthService,
     schedulerService,
     accomplishRuntime,
+    whatsappService,
   } = services;
   const storage = services.storageService.getStorage();
 
@@ -279,4 +282,26 @@ export function registerRpcMethods(services: RouteServices): void {
   accomplishRuntime.onUsageUpdate((usage) => {
     rpc.notify('accomplish-ai.usage-update', usage);
   });
+
+  // ── WhatsApp ─────────────────────────────────────────────────────────────
+  rpc.registerMethod(
+    'whatsapp.connect',
+    safeHandler(() => whatsappService.connect()),
+  );
+  rpc.registerMethod(
+    'whatsapp.disconnect',
+    safeHandler(() => whatsappService.disconnect()),
+  );
+  rpc.registerMethod(
+    'whatsapp.getConfig',
+    safeHandler(() => Promise.resolve(whatsappService.getConfig())),
+  );
+  rpc.registerMethod(
+    'whatsapp.setEnabled',
+    safeHandler((params) => {
+      const validated = validate(z.object({ enabled: z.boolean() }), params);
+      whatsappService.setEnabled(validated.enabled);
+      return Promise.resolve();
+    }),
+  );
 }

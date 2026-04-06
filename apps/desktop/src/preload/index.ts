@@ -807,6 +807,8 @@ const accomplishAPI = {
     status: MessagingConnectionStatus;
     phoneNumber?: string;
     lastConnectedAt?: number;
+    qrCode?: string;
+    qrIssuedAt?: number;
   } | null> => ipcRenderer.invoke('integrations:whatsapp:get-config'),
 
   connectWhatsApp: (): Promise<void> => ipcRenderer.invoke('integrations:whatsapp:connect'),
@@ -855,6 +857,16 @@ const accomplishAPI = {
   // ── Build Capabilities ───────────────────────────────────────────────────
   getBuildCapabilities: (): Promise<{ hasFreeMode: boolean; hasAnalytics: boolean }> =>
     ipcRenderer.invoke('app:get-build-capabilities'),
+
+  // ── App Close Dialog ────────────────────────────────────────────────────
+  onCloseRequested: (callback: () => void): (() => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('app:close-requested', listener);
+    return () => ipcRenderer.removeListener('app:close-requested', listener);
+  },
+  respondToClose: (decision: 'keep-daemon' | 'stop-daemon' | 'cancel'): void => {
+    ipcRenderer.send('app:close-response', decision);
+  },
 };
 
 // Expose the API to the renderer

@@ -10,7 +10,7 @@ import type { Database } from 'better-sqlite3';
 import type { Migration } from './index.js';
 
 export const migration: Migration = {
-  version: 24,
+  version: 25,
   up: (db: Database) => {
     db.exec(`
       CREATE TABLE IF NOT EXISTS accomplish_ai_credits (
