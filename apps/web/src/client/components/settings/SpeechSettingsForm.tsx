@@ -41,7 +41,9 @@ export function SpeechSettingsForm({ onSave, onChange }: SpeechSettingsFormProps
       setSaveResult({ success: true, message: t('speech.apiKeySaved') });
       setIsConfigured(true);
       setApiKey('');
-      window.dispatchEvent(new CustomEvent('speech-config-updated', { detail: { isConfigured: true } }));
+      window.dispatchEvent(
+        new CustomEvent('speech-config-updated', { detail: { isConfigured: true } }),
+      );
       onChange?.({ apiKey, enabled: true });
       onSave?.();
     } catch (error) {
