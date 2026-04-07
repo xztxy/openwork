@@ -37,6 +37,11 @@
       "types": "./dist/common.d.ts",
       "import": "./dist/common.js",
       "default": "./dist/common.js"
+    },
+    "./runtime-types": {
+      "types": "./dist/accomplish-runtime-types.d.ts",
+      "import": "./dist/accomplish-runtime-types.js",
+      "default": "./dist/accomplish-runtime-types.js"
     }
   },
   "files": [
