@@ -3,6 +3,10 @@
   "version": "0.3.8",
   "private": true,
   "homepage": "https://accomplish.ai",
+  "author": {
+    "name": "Accomplish Inc",
+    "email": "support@accomplish.ai"
+  },
   "type": "module",
   "description": "Accomplish Desktop App",
   "main": "dist-electron/main/index.js",
