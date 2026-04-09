@@ -28,6 +28,8 @@ export function createTaskExecutionActions(set: SetFn, get: GetFn) {
           message: 'UI start task',
           context: { prompt: config.prompt, taskId: config.taskId, files: config.files?.length },
         });
+        // Analytics: track task submission from UI
+        accomplish.analytics?.trackSubmitTask().catch(() => {});
         const task = await accomplish.startTask(config);
         const currentState = get();
         if (!hasTaskStateToken(currentState, taskStateToken)) {

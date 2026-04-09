@@ -17,6 +17,7 @@
     "clean": "node -e \"import('fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\""
   },
   "dependencies": {
+    "@accomplish/llm-gateway-client": "file:/Users/yanai/dev/accomplish/llm-gateway-client",
     "@accomplish_ai/agent-core": "workspace:*",
     "@whiskeysockets/baileys": "7.0.0-rc.9",
     "better-sqlite3": "^12.6.2",

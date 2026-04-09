@@ -21,6 +21,12 @@ import type {
 } from '@accomplish_ai/agent-core';
 import type { CloudBrowserConfig } from '@accomplish_ai/agent-core/common';
 
+// Safe analytics IPC invoke — silently catches "No handler" errors for OSS builds
+// where analytics IPC handlers are not registered.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const analyticsInvoke = (channel: string, ...args: any[]): Promise<void> =>
+  ipcRenderer.invoke(channel, ...args).catch(() => {});
+
 // Expose the accomplish API to the renderer
 const accomplishAPI = {
   // Utility for safely extracting native paths from DOM File objects in drop events
@@ -877,17 +883,19 @@ const accomplishAPI = {
 
   // ── Analytics ─────────────────────────────────────────────────────────────
   // Renderer-side analytics bridge. Each method invokes a main-process IPC handler
-  // that calls the corresponding typed event helper. All no-op when analytics disabled.
+  // that calls the corresponding typed event helper.
+  // When analytics is disabled (OSS builds), handlers aren't registered — the
+  // analyticsInvoke wrapper catches the "No handler" rejection silently.
   analytics: {
     track: (eventName: string, params?: Record<string, string | number | boolean>): Promise<void> =>
-      ipcRenderer.invoke('analytics:track', eventName, params),
+      analyticsInvoke('analytics:track', eventName, params),
     trackPageView: (pagePath: string, pageTitle?: string): Promise<void> =>
-      ipcRenderer.invoke('analytics:page-view', pagePath, pageTitle),
+      analyticsInvoke('analytics:page-view', pagePath, pageTitle),
 
     // Engagement
-    trackSubmitTask: (): Promise<void> => ipcRenderer.invoke('analytics:submit-task'),
-    trackNewTask: (): Promise<void> => ipcRenderer.invoke('analytics:new-task'),
-    trackOpenSettings: (): Promise<void> => ipcRenderer.invoke('analytics:open-settings'),
+    trackSubmitTask: (): Promise<void> => analyticsInvoke('analytics:submit-task'),
+    trackNewTask: (): Promise<void> => analyticsInvoke('analytics:new-task'),
+    trackOpenSettings: (): Promise<void> => analyticsInvoke('analytics:open-settings'),
 
     // Settings
     trackSaveApiKey: (
@@ -895,17 +903,17 @@ const accomplishAPI = {
       success: boolean,
       connectionMethod?: string,
     ): Promise<void> =>
-      ipcRenderer.invoke('analytics:save-api-key', provider, success, connectionMethod),
+      analyticsInvoke('analytics:save-api-key', provider, success, connectionMethod),
     trackSelectProvider: (provider: string): Promise<void> =>
-      ipcRenderer.invoke('analytics:select-provider', provider),
+      analyticsInvoke('analytics:select-provider', provider),
     trackSelectModel: (model: string, provider?: string): Promise<void> =>
-      ipcRenderer.invoke('analytics:select-model', model, provider),
+      analyticsInvoke('analytics:select-model', model, provider),
     trackToggleDebugMode: (enabled: boolean): Promise<void> =>
-      ipcRenderer.invoke('analytics:toggle-debug-mode', enabled),
+      analyticsInvoke('analytics:toggle-debug-mode', enabled),
 
     // Task Lifecycle
     trackTaskStart: (taskId: string, sessionId: string, taskType: string): Promise<void> =>
-      ipcRenderer.invoke('analytics:task-start', taskId, sessionId, taskType),
+      analyticsInvoke('analytics:task-start', taskId, sessionId, taskType),
     trackTaskComplete: (
       taskId: string,
       sessionId: string,
@@ -974,7 +982,7 @@ const accomplishAPI = {
       taskType: string,
       toolName: string,
     ): Promise<void> =>
-      ipcRenderer.invoke('analytics:tool-used', taskId, sessionId, taskType, toolName),
+      analyticsInvoke('analytics:tool-used', taskId, sessionId, taskType, toolName),
     trackUserInteraction: (
       taskId: string,
       sessionId: string,
@@ -992,9 +1000,9 @@ const accomplishAPI = {
       ),
 
     // Session
-    trackAppClose: (): Promise<void> => ipcRenderer.invoke('analytics:app-close'),
-    trackAppBackgrounded: (): Promise<void> => ipcRenderer.invoke('analytics:app-backgrounded'),
-    trackAppForegrounded: (): Promise<void> => ipcRenderer.invoke('analytics:app-foregrounded'),
+    trackAppClose: (): Promise<void> => analyticsInvoke('analytics:app-close'),
+    trackAppBackgrounded: (): Promise<void> => analyticsInvoke('analytics:app-backgrounded'),
+    trackAppForegrounded: (): Promise<void> => analyticsInvoke('analytics:app-foregrounded'),
 
     // Model Selection
     trackModelSelectionStep: (
@@ -1003,29 +1011,29 @@ const accomplishAPI = {
       provider?: string,
       model?: string,
     ): Promise<void> =>
-      ipcRenderer.invoke('analytics:model-selection-step', step, isOnboarding, provider, model),
+      analyticsInvoke('analytics:model-selection-step', step, isOnboarding, provider, model),
     trackModelSelectionComplete: (
       provider: string,
       isOnboarding: boolean,
       model?: string,
     ): Promise<void> =>
-      ipcRenderer.invoke('analytics:model-selection-complete', provider, isOnboarding, model),
+      analyticsInvoke('analytics:model-selection-complete', provider, isOnboarding, model),
     trackModelSelectionAbandoned: (lastStep: string, isOnboarding: boolean): Promise<void> =>
-      ipcRenderer.invoke('analytics:model-selection-abandoned', lastStep, isOnboarding),
+      analyticsInvoke('analytics:model-selection-abandoned', lastStep, isOnboarding),
 
     // Feature Usage
-    trackHistoryViewed: (): Promise<void> => ipcRenderer.invoke('analytics:history-viewed'),
-    trackTaskFromHistory: (): Promise<void> => ipcRenderer.invoke('analytics:task-from-history'),
-    trackHistoryCleared: (): Promise<void> => ipcRenderer.invoke('analytics:history-cleared'),
+    trackHistoryViewed: (): Promise<void> => analyticsInvoke('analytics:history-viewed'),
+    trackTaskFromHistory: (): Promise<void> => analyticsInvoke('analytics:task-from-history'),
+    trackHistoryCleared: (): Promise<void> => analyticsInvoke('analytics:history-cleared'),
     trackTaskDetailsExpanded: (): Promise<void> =>
-      ipcRenderer.invoke('analytics:task-details-expanded'),
-    trackOutputCopied: (): Promise<void> => ipcRenderer.invoke('analytics:output-copied'),
+      analyticsInvoke('analytics:task-details-expanded'),
+    trackOutputCopied: (): Promise<void> => analyticsInvoke('analytics:output-copied'),
 
     // Provider Lifecycle
     trackProviderDisconnected: (provider: string): Promise<void> =>
-      ipcRenderer.invoke('analytics:provider-disconnected', provider),
+      analyticsInvoke('analytics:provider-disconnected', provider),
     trackHelpLinkClicked: (provider: string): Promise<void> =>
-      ipcRenderer.invoke('analytics:help-link-clicked', provider),
+      analyticsInvoke('analytics:help-link-clicked', provider),
 
     // Skills
     trackSkillAction: (params: {
@@ -1034,19 +1042,19 @@ const accomplishAPI = {
       enabled?: boolean;
       filter?: string;
       source?: string;
-    }): Promise<void> => ipcRenderer.invoke('analytics:skill-action', params),
+    }): Promise<void> => analyticsInvoke('analytics:skill-action', params),
 
     // Voice
     trackSaveVoiceApiKey: (success: boolean): Promise<void> =>
-      ipcRenderer.invoke('analytics:save-voice-api-key', success),
+      analyticsInvoke('analytics:save-voice-api-key', success),
 
     // Debug
-    trackExportLogs: (): Promise<void> => ipcRenderer.invoke('analytics:export-logs'),
-    trackThreadExported: (): Promise<void> => ipcRenderer.invoke('analytics:thread-exported'),
+    trackExportLogs: (): Promise<void> => analyticsInvoke('analytics:export-logs'),
+    trackThreadExported: (): Promise<void> => analyticsInvoke('analytics:thread-exported'),
 
     // Task Launcher
     trackTaskLauncherAction: (action: string): Promise<void> =>
-      ipcRenderer.invoke('analytics:task-launcher-action', action),
+      analyticsInvoke('analytics:task-launcher-action', action),
 
     // Task Feedback
     trackTaskFeedback: (
@@ -1071,14 +1079,14 @@ const accomplishAPI = {
 
     // Agent Control
     trackStopAgent: (taskId: string, sessionId: string): Promise<void> =>
-      ipcRenderer.invoke('analytics:stop-agent', taskId, sessionId),
+      analyticsInvoke('analytics:stop-agent', taskId, sessionId),
 
     // Provider Box
     trackProviderBoxClicked: (params: {
       provider_id: string;
       is_connected: boolean;
       is_onboarding: boolean;
-    }): Promise<void> => ipcRenderer.invoke('analytics:provider-box-clicked', params),
+    }): Promise<void> => analyticsInvoke('analytics:provider-box-clicked', params),
   },
 };
 

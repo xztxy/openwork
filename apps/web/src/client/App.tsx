@@ -34,6 +34,20 @@ function AnimatedOutlet() {
  */
 function AnimatedOutletWrapper() {
   const location = useLocation();
+
+  // Analytics: track page views on route changes
+  useEffect(() => {
+    if (isRunningInElectron()) {
+      try {
+        getAccomplish()
+          .analytics?.trackPageView(location.pathname)
+          .catch(() => {});
+      } catch {
+        /* not in Electron or analytics unavailable */
+      }
+    }
+  }, [location.pathname]);
+
   return (
     <AnimatePresence mode="wait">
       <motion.div

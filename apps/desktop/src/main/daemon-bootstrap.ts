@@ -9,6 +9,12 @@
 import type { BrowserWindow } from 'electron';
 import type { DaemonClient } from '@accomplish_ai/agent-core';
 import { trackTaskComplete, trackTaskError, classifyErrorCategory } from './analytics/events';
+
+/** Per-task context for analytics — populated on task.start notification, consumed on complete/error. */
+const taskContextMap = new Map<
+  string,
+  { startTime: number; sessionId: string; taskType: string }
+>();
 import { createSocketTransport } from '@accomplish_ai/agent-core';
 import {
   ensureDaemonRunning,
@@ -144,6 +150,14 @@ function registerNotificationHandlers(
   // Task execution events
   client.onNotification('task.progress', (data) => {
     forward('task:progress', data);
+    // Analytics: capture start time on first progress for this task
+    if (data.taskId && !taskContextMap.has(data.taskId)) {
+      taskContextMap.set(data.taskId, {
+        startTime: Date.now(),
+        sessionId: ((data as unknown as Record<string, unknown>).sessionId as string) ?? '',
+        taskType: 'chat',
+      });
+    }
   });
 
   client.onNotification('task.message', (data) => {
@@ -152,14 +166,17 @@ function registerNotificationHandlers(
 
   client.onNotification('task.complete', (data) => {
     forward('task:update', { taskId: data.taskId, type: 'complete', result: data.result });
-    // Analytics: track task completion from daemon notification
+    // Analytics: track task completion with recovered context
     try {
+      const ctx = taskContextMap.get(data.taskId);
+      const durationMs = ctx ? Date.now() - ctx.startTime : 0;
       trackTaskComplete(
-        { taskId: data.taskId, sessionId: '', taskType: 'chat' },
-        0, // durationMs — not available in notification payload
+        { taskId: data.taskId, sessionId: ctx?.sessionId ?? '', taskType: ctx?.taskType ?? 'chat' },
+        durationMs,
         0, // totalSteps — not available in notification payload
         false, // hadErrors
       );
+      taskContextMap.delete(data.taskId);
     } catch {
       /* best-effort analytics */
     }
@@ -167,14 +184,17 @@ function registerNotificationHandlers(
 
   client.onNotification('task.error', (data) => {
     forward('task:update', { taskId: data.taskId, type: 'error', error: data.error });
-    // Analytics: track task error from daemon notification
+    // Analytics: track task error with recovered context
     try {
+      const ctx = taskContextMap.get(data.taskId);
+      const durationMs = ctx ? Date.now() - ctx.startTime : 0;
       trackTaskError(
-        { taskId: data.taskId, sessionId: '', taskType: 'chat' },
-        0, // durationMs — not available in notification payload
+        { taskId: data.taskId, sessionId: ctx?.sessionId ?? '', taskType: ctx?.taskType ?? 'chat' },
+        durationMs,
         0, // totalSteps — not available in notification payload
         classifyErrorCategory(data.error ?? 'unknown'),
       );
+      taskContextMap.delete(data.taskId);
     } catch {
       /* best-effort analytics */
     }
