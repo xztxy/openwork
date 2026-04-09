@@ -72,9 +72,6 @@ importers:
 
   apps/daemon:
     dependencies:
-      '@accomplish/llm-gateway-client':
-        specifier: file:/Users/yanai/dev/accomplish/llm-gateway-client
-        version: file:../llm-gateway-client(@accomplish_ai/agent-core@packages+agent-core)
       '@accomplish_ai/agent-core':
         specifier: workspace:*
         version: link:../../packages/agent-core
@@ -454,11 +451,6 @@ packages:
 
   7zip-bin@5.2.0:
     resolution: {integrity: sha512-ukTPVhqG4jNzMro2qA9HSCSSVJN3aN7tlb+hfqYCt3ER0yWroeA2VR38MNrOHLQ/cVj+DaIMad0kFCtWWowh/A==}
-
-  '@accomplish/llm-gateway-client@file:../llm-gateway-client':
-    resolution: {directory: ../llm-gateway-client, type: directory}
-    peerDependencies:
-      '@accomplish_ai/agent-core': ^0.4.0
 
   '@adobe/css-tools@4.4.4':
     resolution: {integrity: sha512-Elp+iwUx5rN5+Y8xLt5/GRoG20WGoDCQ/1Fb+1LiGtvwbDavuSk0jhD/eZdckHAuzcDzccnkv+rEjyWfRx18gg==}
@@ -6751,10 +6743,6 @@ ignoredOptionalDependencies:
 snapshots:
 
   7zip-bin@5.2.0: {}
-
-  '@accomplish/llm-gateway-client@file:../llm-gateway-client(@accomplish_ai/agent-core@packages+agent-core)':
-    dependencies:
-      '@accomplish_ai/agent-core': link:packages/agent-core
 
   '@adobe/css-tools@4.4.4': {}
 
