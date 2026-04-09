@@ -101,7 +101,9 @@ export function isAnalyticsEnabled(): boolean {
   return !!(bc.mixpanelToken || bc.gaApiSecret || bc.sentryDsn);
 }
 
-/** Returns 'free' when build.env is present, 'oss' otherwise. */
-export function getAppTier(): 'free' | 'oss' {
-  return getBuildConfig().buildEnvVersion ? 'free' : 'oss';
+/** Returns 'lite' when build.env is present (Free/signed build), 'oss' otherwise.
+ *  Uses 'lite' to maintain continuity with existing Mixpanel data from
+ *  the commercial repo's Free tier (which also used 'lite'). */
+export function getAppTier(): 'lite' | 'oss' {
+  return getBuildConfig().buildEnvVersion ? 'lite' : 'oss';
 }
