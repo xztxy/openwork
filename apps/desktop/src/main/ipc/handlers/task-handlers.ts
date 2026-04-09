@@ -1,5 +1,6 @@
 import { BrowserWindow } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
+import { trackTaskStart } from '../../analytics/events';
 import {
   startBrowserPreviewStream,
   stopBrowserPreviewStream,
@@ -72,6 +73,16 @@ export function registerTaskHandlers(): void {
       sessionId: config.sessionId,
       attachments: sanitizedAttachments,
     });
+
+    // Analytics: track task start
+    try {
+      trackTaskStart(
+        { taskId, sessionId: config.sessionId || '', taskType: 'chat' },
+        config.modelId,
+      );
+    } catch {
+      /* best-effort analytics */
+    }
 
     return task;
   });

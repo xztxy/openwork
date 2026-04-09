@@ -16,6 +16,7 @@ import { clearSecureStorage } from './store/secureStorage';
 import { resetStorageSingleton } from './store/storage';
 import { startApp } from './app-startup';
 import { shutdownApp } from './app-shutdown';
+import { trackAppCrash } from './analytics/events';
 import {
   handleProtocolUrlFromArgs,
   registerProtocolEventHandlers,
@@ -103,6 +104,7 @@ process.on('uncaughtException', (error) => {
       name: error.name,
       stack: error.stack,
     });
+    trackAppCrash(error.name || 'uncaughtException', error.message || 'Unknown error');
   } catch {
     /* ignore */
   }
@@ -110,6 +112,7 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (reason) => {
   try {
     getLogCollector()?.log?.('ERROR', 'main', 'Unhandled promise rejection', { reason });
+    trackAppCrash('unhandledRejection', String(reason).substring(0, 500));
   } catch {
     /* ignore */
   }

@@ -8,6 +8,7 @@
 
 import type { BrowserWindow } from 'electron';
 import type { DaemonClient } from '@accomplish_ai/agent-core';
+import { trackTaskComplete, trackTaskError, classifyErrorCategory } from './analytics/events';
 import { createSocketTransport } from '@accomplish_ai/agent-core';
 import {
   ensureDaemonRunning,
@@ -151,10 +152,32 @@ function registerNotificationHandlers(
 
   client.onNotification('task.complete', (data) => {
     forward('task:update', { taskId: data.taskId, type: 'complete', result: data.result });
+    // Analytics: track task completion from daemon notification
+    try {
+      trackTaskComplete(
+        { taskId: data.taskId, sessionId: '', taskType: 'chat' },
+        0, // durationMs — not available in notification payload
+        0, // totalSteps — not available in notification payload
+        false, // hadErrors
+      );
+    } catch {
+      /* best-effort analytics */
+    }
   });
 
   client.onNotification('task.error', (data) => {
     forward('task:update', { taskId: data.taskId, type: 'error', error: data.error });
+    // Analytics: track task error from daemon notification
+    try {
+      trackTaskError(
+        { taskId: data.taskId, sessionId: '', taskType: 'chat' },
+        0, // durationMs — not available in notification payload
+        0, // totalSteps — not available in notification payload
+        classifyErrorCategory(data.error ?? 'unknown'),
+      );
+    } catch {
+      /* best-effort analytics */
+    }
   });
 
   client.onNotification('task.statusChange', (data) => {

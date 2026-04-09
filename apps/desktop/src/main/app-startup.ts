@@ -29,6 +29,7 @@ import { drainProtocolUrlQueue } from './protocol-handlers';
 import { getBuildConfig, isAnalyticsEnabled } from './config/build-config';
 import { initAnalytics, initDeviceFingerprint } from './analytics/analytics-service';
 import { initMixpanel } from './analytics/mixpanel-service';
+import { trackAppLaunched } from './analytics/events';
 
 function logMain(level: 'INFO' | 'WARN' | 'ERROR', msg: string, data?: Record<string, unknown>) {
   try {
@@ -146,13 +147,20 @@ export async function startApp(
   }
 
   // Initialize analytics — no-op when build.env is absent (OSS builds)
+  let isFirstLaunch = false;
   try {
     if (isAnalyticsEnabled()) {
-      initAnalytics();
+      const result = initAnalytics();
+      isFirstLaunch = result.isFirstLaunch;
       initDeviceFingerprint();
     }
     if (getBuildConfig().mixpanelToken) {
       initMixpanel();
+    }
+    if (isAnalyticsEnabled()) {
+      trackAppLaunched(isFirstLaunch).catch((err) =>
+        logMain('WARN', '[Main] trackAppLaunched failed', { err: String(err) }),
+      );
     }
   } catch (err) {
     logMain('WARN', '[Main] Analytics initialization failed', { err: String(err) });
