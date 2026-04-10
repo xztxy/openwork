@@ -105,18 +105,38 @@ export const migration: Migration = {
       db.exec(`CREATE INDEX IF NOT EXISTS idx_task_todos_task_id ON task_todos(task_id)`);
     }
 
-    // v009: task_favorites
-    if (!hasTable(db, 'task_favorites')) {
+    // v009: task_favorites — must match OSS schema (not commercial schema)
+    // OSS uses: task_id PK, prompt, summary, favorited_at
+    // If table exists with wrong schema (from commercial or earlier v027), recreate it
+    if (hasTable(db, 'task_favorites')) {
+      const cols = db.prepare('PRAGMA table_info(task_favorites)').all() as Array<{ name: string }>;
+      const hasPrompt = cols.some((c) => c.name === 'prompt');
+      if (!hasPrompt) {
+        // Wrong schema — drop and recreate with correct OSS schema
+        db.exec('DROP TABLE task_favorites');
+        db.exec(`
+          CREATE TABLE task_favorites (
+            task_id TEXT PRIMARY KEY,
+            prompt TEXT NOT NULL,
+            summary TEXT,
+            favorited_at TEXT NOT NULL
+          )
+        `);
+        db.exec(
+          'CREATE INDEX IF NOT EXISTS idx_task_favorites_favorited_at ON task_favorites(favorited_at)',
+        );
+      }
+    } else {
       db.exec(`
         CREATE TABLE task_favorites (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          task_id TEXT NOT NULL,
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
-          FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+          task_id TEXT PRIMARY KEY,
+          prompt TEXT NOT NULL,
+          summary TEXT,
+          favorited_at TEXT NOT NULL
         )
       `);
       db.exec(
-        `CREATE UNIQUE INDEX IF NOT EXISTS idx_task_favorites_task_id ON task_favorites(task_id)`,
+        'CREATE INDEX IF NOT EXISTS idx_task_favorites_favorited_at ON task_favorites(favorited_at)',
       );
     }
 
