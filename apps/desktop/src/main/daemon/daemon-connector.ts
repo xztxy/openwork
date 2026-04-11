@@ -211,19 +211,16 @@ export function spawnDaemon(dataDir: string): void {
     daemonEnv.ACCOMPLISH_RESOURCES_PATH = path.join(app.getAppPath(), 'resources');
   }
 
-  // In dev mode, redirect daemon output to a log file so it can be tailed
-  // by any Electron process (including restarts). In production, use 'ignore'.
+  // Always redirect daemon stdout/stderr to daemon.log — essential for
+  // debugging in both dev and production. Without this, packaged daemon
+  // crashes are invisible (stdio: 'ignore' sends output nowhere).
+  const logPath = getDaemonLogPath(dataDir);
+  const logFd = fs.openSync(logPath, 'a');
   const spawnOptions: Parameters<typeof spawn>[2] = {
     detached: true,
-    stdio: 'ignore',
+    stdio: ['ignore', logFd, logFd],
     env: daemonEnv,
   };
-
-  if (!app.isPackaged) {
-    const logPath = getDaemonLogPath(dataDir);
-    const logFd = fs.openSync(logPath, 'a');
-    spawnOptions.stdio = ['ignore', logFd, logFd];
-  }
 
   const child = spawn(nodeBin, [entryPath, '--data-dir', dataDir], spawnOptions);
 
