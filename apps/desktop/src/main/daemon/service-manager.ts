@@ -209,9 +209,9 @@ function getLaunchAgentContent(): string {
 
   lines.push(
     '  <key>StandardOutPath</key>',
-    `  <string>${path.join(dataDir, 'logs', `daemon-${new Date().toISOString().slice(0, 10)}.log`)}</string>`,
+    `  <string>${path.join(dataDir, 'logs', 'daemon-service.log')}</string>`,
     '  <key>StandardErrorPath</key>',
-    `  <string>${path.join(dataDir, 'logs', `daemon-${new Date().toISOString().slice(0, 10)}.log`)}</string>`,
+    `  <string>${path.join(dataDir, 'logs', 'daemon-service.log')}</string>`,
     '</dict>',
     '</plist>',
     '',
