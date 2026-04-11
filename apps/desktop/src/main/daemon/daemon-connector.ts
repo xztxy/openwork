@@ -130,9 +130,11 @@ async function tryConnectBuildChecked(dataDir: string): Promise<DaemonClient | n
     await waitForDaemonExit(dataDir, 30_000);
 
     return null; // Caller will spawn a new daemon
-  } catch {
-    // Ping failed or shutdown failed — close and let caller handle
+  } catch (err) {
     client.close();
+    // Let DaemonRestartError propagate — it surfaces the user-facing dialog
+    if (err instanceof DaemonRestartError) throw err;
+    // Other errors (ping failed, shutdown failed) — treat as "no daemon"
     return null;
   }
 }
