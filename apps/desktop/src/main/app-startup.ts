@@ -205,7 +205,9 @@ export async function startApp(
           type: 'warning',
           title: 'Background Service Update',
           message:
-            'The background service from a previous version could not be stopped. Please restart the application.',
+            'The background service from a previous version could not be stopped. ' +
+            'Please fully quit the application (check the system tray), wait a few seconds, ' +
+            'and reopen it. If the issue persists, restart your computer.',
         });
       } else {
         logMain('WARN', '[Main] Daemon bootstrap failed — GUI will open without daemon', {

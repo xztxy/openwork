@@ -449,7 +449,18 @@ async function reconnectWithBackoff(): Promise<void> {
     }
 
     const dataDir = getDataDir();
-    const client = await tryConnectBuildChecked(dataDir);
+    let client: DaemonClient | null = null;
+    try {
+      client = await tryConnectBuildChecked(dataDir);
+    } catch (err) {
+      if (err instanceof DaemonRestartError) {
+        // Stale daemon couldn't be stopped — broadcast failure and stop retrying
+        log('ERROR', `[DaemonConnector] ${String(err)}`);
+        broadcastToRenderer('daemon:reconnect-failed');
+        return;
+      }
+      // Other errors — continue retry loop
+    }
 
     if (client) {
       log('INFO', '[DaemonConnector] Reconnected to daemon');

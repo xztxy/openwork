@@ -119,7 +119,9 @@ export function getAppTier(): 'lite' | 'oss' {
  *
  * Priority:
  * 1. Packaged builds: ACCOMPLISH_BUILD_ID from build.env (injected by release pipeline)
- * 2. Dev builds: git commit SHA (changes with every committed change)
+ * 2. Dev builds: git commit SHA (changes with every committed change / git pull).
+ *    NOTE: does not detect uncommitted edits or stale daemon artifacts from
+ *    bundled-input changes — developers must rebuild the daemon explicitly.
  * 3. Fallback: app version (weakest, but covers basic version upgrades)
  */
 let cachedBuildId: string | null = null;
