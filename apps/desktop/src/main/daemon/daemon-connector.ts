@@ -216,16 +216,19 @@ export function spawnDaemon(dataDir: string): void {
   // crashes are invisible (stdio: 'ignore' sends output nowhere).
   const logPath = getDaemonLogPath(dataDir);
   const logFd = fs.openSync(logPath, 'a');
-  const spawnOptions: Parameters<typeof spawn>[2] = {
-    detached: true,
-    stdio: ['ignore', logFd, logFd],
-    env: daemonEnv,
-  };
-
-  const child = spawn(nodeBin, [entryPath, '--data-dir', dataDir], spawnOptions);
-
-  child.unref();
-  log('INFO', `[DaemonConnector] Daemon spawned (detached, pid=${child.pid})`);
+  try {
+    const child = spawn(nodeBin, [entryPath, '--data-dir', dataDir], {
+      detached: true,
+      stdio: ['ignore', logFd, logFd],
+      env: daemonEnv,
+    });
+    child.unref();
+    log('INFO', `[DaemonConnector] Daemon spawned (detached, pid=${child.pid})`);
+  } finally {
+    // Close the parent's copy of the log fd — child inherited it.
+    // try/finally ensures cleanup even if spawn() throws.
+    fs.closeSync(logFd);
+  }
 }
 
 /**
