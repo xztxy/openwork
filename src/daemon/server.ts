@@ -36,10 +36,11 @@ export class DaemonServer {
   constructor(options: DaemonServerOptions) {
     this.transport = options.transport;
 
-    // Register built-in health check
+    // Register built-in health check (buildId used for version-guard on app upgrade)
     this.registerMethod('daemon.ping', () => ({
       status: 'ok' as const,
       uptime: Date.now() - this.startTime,
+      buildId: process.env.ACCOMPLISH_BUILD_ID,
     }));
 
     this.transport.onMessage((msg) => {
