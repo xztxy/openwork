@@ -109,7 +109,7 @@ export class DaemonClient {
   /**
    * Health check — ping the daemon.
    */
-  async ping(): Promise<{ status: 'ok'; uptime: number }> {
+  async ping(): Promise<{ status: 'ok'; uptime: number; buildId?: string }> {
     return this.call('daemon.ping');
   }
 

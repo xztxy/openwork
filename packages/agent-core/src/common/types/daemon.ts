@@ -250,7 +250,7 @@ export interface DaemonMethodMap {
   'whatsapp.setEnabled': { params: { enabled: boolean }; result: void };
 
   // Health & lifecycle
-  'daemon.ping': { params: undefined; result: { status: 'ok'; uptime: number } };
+  'daemon.ping': { params: undefined; result: { status: 'ok'; uptime: number; buildId?: string } };
   'daemon.shutdown': { params: undefined; result: void };
   'health.check': { params: undefined; result: HealthCheckResult };
 
