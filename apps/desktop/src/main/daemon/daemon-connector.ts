@@ -229,10 +229,32 @@ export function spawnDaemon(dataDir: string): void {
 }
 
 /**
- * Get the path to the daemon log file.
+ * Get the path to today's daemon log file (date-rotated, matches app log pattern).
+ * Also cleans up old daemon logs (keeps last 7 days).
  */
 function getDaemonLogPath(dataDir: string): string {
-  return path.join(dataDir, 'daemon.log');
+  const logsDir = path.join(dataDir, 'logs');
+  fs.mkdirSync(logsDir, { recursive: true });
+
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const logPath = path.join(logsDir, `daemon-${today}.log`);
+
+  // Clean up old daemon logs (keep last 7 days)
+  try {
+    const files = fs
+      .readdirSync(logsDir)
+      .filter((f) => f.startsWith('daemon-') && f.endsWith('.log'));
+    if (files.length > 7) {
+      files.sort();
+      for (const old of files.slice(0, files.length - 7)) {
+        fs.unlinkSync(path.join(logsDir, old));
+      }
+    }
+  } catch {
+    // Best-effort cleanup
+  }
+
+  return logPath;
 }
 
 /** Active log tail watcher — only one at a time */
