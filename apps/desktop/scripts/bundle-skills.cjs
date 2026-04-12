@@ -147,7 +147,14 @@ function verifyBundleOutputs() {
   }
 }
 
-async function bundleSkill({ name, entry, outfile, external = [], banner: needsBanner, format: outputFormat }) {
+async function bundleSkill({
+  name,
+  entry,
+  outfile,
+  external = [],
+  banner: needsBanner,
+  format: outputFormat,
+}) {
   const skillDir = path.join(skillsDir, name);
   const absEntry = path.join(skillDir, entry);
   const absOutfile = path.join(skillDir, outfile);
