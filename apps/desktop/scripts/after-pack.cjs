@@ -224,15 +224,23 @@ async function copyNodeBinary(context, platform, arch) {
   }
 
   // Determine destination based on platform
+  // Use {platform}-{arch} directory name to match bundled-node.ts lookup
+  const platformArch = `${platform}-${arch}`;
   let destDir;
   if (platformName === 'mac') {
-    // For universal builds, we need to include the arch in the path
     // macOS app bundle structure: <AppName>.app/Contents/Resources/
     const appName = packager.appInfo.productFilename;
-    destDir = path.join(appOutDir, `${appName}.app`, 'Contents', 'Resources', 'nodejs', arch);
+    destDir = path.join(
+      appOutDir,
+      `${appName}.app`,
+      'Contents',
+      'Resources',
+      'nodejs',
+      platformArch,
+    );
   } else {
     // Windows/Linux: <app>/resources/
-    destDir = path.join(appOutDir, 'resources', 'nodejs', arch);
+    destDir = path.join(appOutDir, 'resources', 'nodejs', platformArch);
   }
 
   console.log(`[after-pack] Copying Node.js ${arch}: ${sourceDir} -> ${destDir}`);
