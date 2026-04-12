@@ -19,6 +19,7 @@ export default tseslint.config(
       '**/out/**',
       '.claude/**',
       '**/mcp-tools/dev-browser/server.cjs',
+      '**/mcp-tools/dev-browser/server.mjs',
     ],
   },
   eslint.configs.recommended,

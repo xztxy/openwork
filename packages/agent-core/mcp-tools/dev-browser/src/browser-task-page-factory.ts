@@ -26,7 +26,9 @@ export class BrowserTaskPageFactory {
     if (page && isReusableStartupPageUrl(page.url())) {
       this.reusableStartupPage = page;
       page.once('close', () => {
-        if (this.reusableStartupPage === page) { this.reusableStartupPage = null; }
+        if (this.reusableStartupPage === page) {
+          this.reusableStartupPage = null;
+        }
       });
       return;
     }
@@ -103,7 +105,9 @@ export class BrowserTaskPageFactory {
   }
 
   async recycleOrClosePage(page: Page): Promise<void> {
-    if (page.isClosed()) { return; }
+    if (page.isClosed()) {
+      return;
+    }
     const activeContext = await this.options.ensureBrowserContext();
     if (!(await this.isLastOpenPage(page, activeContext))) {
       await page.close();
@@ -128,7 +132,9 @@ export class BrowserTaskPageFactory {
     browserContext?: BrowserContext,
   ): Promise<void> {
     if (page.isClosed()) {
-      if (this.reusableStartupPage === page) { this.reusableStartupPage = null; }
+      if (this.reusableStartupPage === page) {
+        this.reusableStartupPage = null;
+      }
       return;
     }
     if (!isReusableStartupPageUrl(page.url())) {
@@ -151,7 +157,9 @@ export class BrowserTaskPageFactory {
           continue;
         }
         try {
-          if ((await this.options.windowController.getTargetId(candidate, activeContext)) === targetId) {
+          if (
+            (await this.options.windowController.getTargetId(candidate, activeContext)) === targetId
+          ) {
             return candidate;
           }
         } catch (error) {
@@ -277,14 +285,14 @@ export class BrowserTaskPageFactory {
   }): Promise<CreatedTaskPage> {
     return this.options.withPreservedForeground(async () => {
       const cdpSession = await options.browserContext.newCDPSession(options.anchorPage);
-      let createdTargetId: string | null = null;
+      let _createdTargetId: string | null = null;
       let page: Page | null = null;
       try {
         const { targetId } = (await cdpSession.send('Target.createTarget', {
           url: options.initialUrl ?? 'about:blank',
           background: options.launchMode !== 'foreground',
         })) as { targetId: string };
-        createdTargetId = targetId;
+        _createdTargetId = targetId;
         page = await this.waitForPageByTargetId(targetId);
         if (options.viewport) {
           await page.setViewportSize(options.viewport);
