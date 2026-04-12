@@ -61,26 +61,27 @@ export class BrowserManager {
     return this.connectingPromise;
   }
 
-  resetConnection(): void {
-    this.browser = null;
-    this.connectingPromise = null;
-    this.cachedServerMode = null;
+  async resetConnection(): Promise<void> {
     // Gracefully close all pages in the local registry before clearing
+    const closePromises: Promise<void>[] = [];
     for (const page of this.localPageRegistry.values()) {
       try {
         if (!page.isClosed()) {
-          // Close page asynchronously, don't await
-          page.close().catch(() => {});
+          closePromises.push(page.close().catch(() => {}));
         }
       } catch {
         // Ignore errors when closing pages during reset
       }
     }
+    await Promise.all(closePromises);
     this.localPageRegistry.clear();
+    this.browser = null;
+    this.connectingPromise = null;
+    this.cachedServerMode = null;
   }
 
-  clearCachedBrowser(): void {
-    this.resetConnection();
+  async clearCachedBrowser(): Promise<void> {
+    await this.resetConnection();
   }
 
   async withConnectionRecovery<T>(
@@ -104,7 +105,7 @@ export class BrowserManager {
         if (!allowRetry || !isRecoverableConnectionError(error) || attempt >= maxAttempts - 1) {
           throw error;
         }
-        this.resetConnection();
+        await this.resetConnection();
         await new Promise((r) => setTimeout(r, baseDelayMs * Math.pow(2, attempt)));
         console.error(`[browser-manager] Retrying ${label} after connection error...`);
       }

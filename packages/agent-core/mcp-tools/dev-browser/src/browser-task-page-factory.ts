@@ -43,6 +43,18 @@ export class BrowserTaskPageFactory {
     this.reusableStartupPage = null;
   }
 
+  async closeReusableStartupPage(): Promise<void> {
+    const page = this.takeReusableStartupPage();
+    if (!page) {
+      return;
+    }
+    try {
+      await page.close();
+    } catch {
+      // Ignore errors when closing the reusable startup page
+    }
+  }
+
   private takeReusableStartupPage(): Page | null {
     if (!this.reusableStartupPage || this.reusableStartupPage.isClosed()) {
       this.reusableStartupPage = null;
