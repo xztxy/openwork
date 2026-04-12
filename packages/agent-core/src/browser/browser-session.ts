@@ -60,7 +60,7 @@ export async function waitForDevBrowserServer(
 export async function startDevBrowserServer(
   config: BrowserServerConfig,
 ): Promise<ServerStartResult> {
-  const serverScript = path.join(config.mcpToolsPath, 'dev-browser', 'server.cjs');
+  const serverScript = path.join(config.mcpToolsPath, 'dev-browser', 'server.mjs');
   const serverCwd = path.join(config.mcpToolsPath, 'dev-browser');
   if (!fs.existsSync(serverScript)) {
     throw new Error(

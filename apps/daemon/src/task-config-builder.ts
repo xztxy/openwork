@@ -16,6 +16,7 @@ import {
   syncApiKeysToOpenCodeAuth,
   getOpenCodeAuthPath,
   getBundledNodePaths,
+  getEnabledSkills,
   BedrockCredentials,
   type TaskConfig,
   type StorageAPI,
@@ -162,6 +163,8 @@ export async function onBeforeStart(
   const questionApiPort = getPort('ACCOMPLISH_QUESTION_API_PORT');
   const whatsappApiPort = getPort('ACCOMPLISH_WHATSAPP_API_PORT');
 
+  const skills = getEnabledSkills();
+
   const result = generateConfig({
     platform: process.platform,
     mcpToolsPath: opts.mcpToolsPath,
@@ -176,6 +179,7 @@ export async function onBeforeStart(
     authToken: process.env.ACCOMPLISH_DAEMON_AUTH_TOKEN,
     model: modelOverride?.model,
     smallModel: modelOverride?.smallModel,
+    skills,
   });
 
   return {
