@@ -87,13 +87,16 @@ const bundles = [
     external: ['playwright'],
   },
   {
-    // Main HTTP server — must output to package root as server.cjs (referenced by
-    // packages/agent-core/src/browser/server.ts:34 via hardcoded path)
+    // Main HTTP server — output as ESM (.mjs) since start-server.ts uses top-level await
+    // and import.meta.url which are incompatible with CJS format.
+    // Referenced by packages/agent-core/src/browser/server.ts via hardcoded path.
+    // Entry must be start-server.ts (calls serve() + keeps process alive), NOT src/index.ts
+    // (which only exports serve without calling it — causes immediate exit with no listener).
     name: 'dev-browser',
-    entry: 'src/index.ts',
-    outfile: 'server.cjs',
+    entry: 'scripts/start-server.ts',
+    outfile: 'server.mjs',
     external: ['playwright'],
-    format: 'cjs',
+    banner: true,
   },
   {
     name: 'dev-browser',

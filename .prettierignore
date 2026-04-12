@@ -10,8 +10,5 @@ coverage/
 # Auto-generated files not tracked by git
 **/public/theme-init.js
 # Build artifacts
-**/mcp-tools/dev-browser/server.cjs
+**/mcp-tools/dev-browser/server.mjs
 **/mcp-tools/dev-browser/.browser-data/
-# Source reference documents (large, unformatted)
-BROWSER_FEATURE_COMPLETE_SOURCE.md
-BROWSER_FEATURE_REPLICATION_GUIDE.md
