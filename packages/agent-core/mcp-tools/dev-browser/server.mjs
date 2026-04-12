@@ -23273,14 +23273,14 @@ var BrowserTaskPageFactory = class {
   async createAnchoredTaskPage(options) {
     return this.options.withPreservedForeground(async () => {
       const cdpSession = await options.browserContext.newCDPSession(options.anchorPage);
-      let createdTargetId = null;
+      let _createdTargetId = null;
       let page = null;
       try {
         const { targetId } = await cdpSession.send("Target.createTarget", {
           url: options.initialUrl ?? "about:blank",
           background: options.launchMode !== "foreground"
         });
-        createdTargetId = targetId;
+        _createdTargetId = targetId;
         page = await this.waitForPageByTargetId(targetId);
         if (options.viewport) {
           await page.setViewportSize(options.viewport);
