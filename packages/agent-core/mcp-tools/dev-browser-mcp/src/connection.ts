@@ -10,13 +10,23 @@ export { isRecoverableConnectionError };
 
 export type ConnectionMode = 'builtin' | 'remote';
 
-export interface ConnectionConfig {
-  mode: ConnectionMode;
-  devBrowserUrl?: string; // builtin: URL of dev-browser HTTP server
-  cdpEndpoint?: string; // remote: full CDP WS endpoint
-  cdpHeaders?: Record<string, string>;
-  taskId: string; // isolates pages: pages are named "{taskId}-{pageName}"
+export interface BuiltinConnectionConfig {
+  mode: 'builtin';
+  devBrowserUrl: string;
+  taskId: string;
+  cdpHeaders?: never;
+  cdpEndpoint?: never;
 }
+
+export interface RemoteConnectionConfig {
+  mode: 'remote';
+  cdpEndpoint: string;
+  cdpHeaders?: Record<string, string>;
+  taskId: string;
+  devBrowserUrl?: never;
+}
+
+export type ConnectionConfig = BuiltinConnectionConfig | RemoteConnectionConfig;
 
 // ─── Singleton state ────────────────────────────────────────────────────────
 
@@ -42,22 +52,22 @@ function buildConfigFromEnv(): ConnectionConfig {
 }
 
 // Read from environment and update singleton config
-export function configureFromEnv(): ConnectionConfig {
+export async function configureFromEnv(): Promise<ConnectionConfig> {
   _config = buildConfigFromEnv();
-  _manager.clearCachedBrowser();
+  await _manager.clearCachedBrowser();
   return _config;
 }
 
 // Update singleton config directly (for testing or runtime reconfiguration)
-export function configure(config: ConnectionConfig): void {
+export async function configure(config: ConnectionConfig): Promise<void> {
   _config = config;
-  _manager.clearCachedBrowser();
+  await _manager.clearCachedBrowser();
 }
 
 // Reset singleton state (for testing)
-export function resetConnection(): void {
+export async function resetConnection(): Promise<void> {
   _config = buildConfigFromEnv();
-  _manager.resetConnection();
+  await _manager.resetConnection();
 }
 
 // Page name isolation: always prefix with taskId
@@ -141,7 +151,7 @@ export async function getCDPSession(pageName?: string): Promise<CDPSession> {
 
 async function connectBrowser(config: ConnectionConfig): Promise<Browser> {
   if (config.mode === 'remote') {
-    return chromium.connectOverCDP(config.cdpEndpoint!, {
+    return chromium.connectOverCDP(config.cdpEndpoint, {
       headers: config.cdpHeaders,
     });
   }
@@ -203,6 +213,10 @@ async function getRemotePage(fullName: string): Promise<Page> {
   const context = browser.contexts()[0] ?? (await browser.newContext());
   const page = await context.newPage();
   registry.set(fullName, page);
-  page.on('close', () => registry.delete(fullName));
+  page.on('close', () => {
+    if (registry.get(fullName) === page) {
+      registry.delete(fullName);
+    }
+  });
   return page;
 }

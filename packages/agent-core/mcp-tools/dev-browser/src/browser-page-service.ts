@@ -212,6 +212,11 @@ export class BrowserPageService {
     this.registry.clear();
     this.knownTaskPages.clear();
     this.releasedPageUrls.clear();
+    try {
+      await this.pageFactory.closeReusableStartupPage();
+    } catch {
+      /* intentionally empty */
+    }
     this.pageFactory.reset();
   }
 
