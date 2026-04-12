@@ -79,11 +79,16 @@ export class BrowserManager {
     this.localPageRegistry.clear();
   }
 
+  clearCachedBrowser(): void {
+    this.resetConnection();
+  }
+
   async withConnectionRecovery<T>(
     fn: () => Promise<T>,
     label: string,
     maxAttempts = 2,
     baseDelayMs = 100,
+    allowRetry = false,
   ): Promise<T> {
     // Validate maxAttempts
     if (!Number.isFinite(maxAttempts) || maxAttempts <= 0) {
@@ -96,7 +101,9 @@ export class BrowserManager {
         return await fn();
       } catch (error) {
         lastError = error;
-        if (!isRecoverableConnectionError(error) || attempt >= maxAttempts - 1) throw error;
+        if (!allowRetry || !isRecoverableConnectionError(error) || attempt >= maxAttempts - 1) {
+          throw error;
+        }
         this.resetConnection();
         await new Promise((r) => setTimeout(r, baseDelayMs * Math.pow(2, attempt)));
         console.error(`[browser-manager] Retrying ${label} after connection error...`);

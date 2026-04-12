@@ -1,14 +1,14 @@
 import type { BrowserContext, Page } from 'playwright';
-import { isClosedPageError, withTimeout } from './browser-runtime-utils';
-import { navigatePageToUrl } from './browser-page-navigator';
+import { isClosedPageError, withTimeout } from './browser-runtime-utils.js';
+import { navigatePageToUrl } from './browser-page-navigator.js';
 import {
   selectReusableStartupPage,
   type CreatedTaskPage,
   type TaskPageLaunchMode,
-} from './browser-page-service-state';
-import { BrowserWindowController } from './browser-window-controller';
-import { isReusableStartupPageUrl } from './navigation-url';
-import type { ViewportSize } from './types';
+} from './browser-page-service-state.js';
+import { BrowserWindowController } from './browser-window-controller.js';
+import { isReusableStartupPageUrl } from './navigation-url.js';
+import type { ViewportSize } from './types.js';
 
 export interface BrowserTaskPageFactoryOptions {
   headless: boolean;
@@ -147,12 +147,17 @@ export class BrowserTaskPageFactory {
     const startTime = Date.now();
     while (Date.now() - startTime < 30000) {
       for (const candidate of activeContext.pages()) {
-        if (candidate.isClosed()) { continue; }
+        if (candidate.isClosed()) {
+          continue;
+        }
         try {
-          if ((await this.options.windowController.getTargetId(candidate)) === targetId)
+          if ((await this.options.windowController.getTargetId(candidate, activeContext)) === targetId) {
             return candidate;
+          }
         } catch (error) {
-          if (!isClosedPageError(error)) throw error;
+          if (!isClosedPageError(error)) {
+            throw error;
+          }
         }
       }
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -169,24 +174,39 @@ export class BrowserTaskPageFactory {
     viewport?: ViewportSize;
   }): Promise<CreatedTaskPage> {
     const { browserContext, initialUrl, launchMode, name, page, viewport } = options;
-    const targetId = await this.options.windowController.getTargetId(page, browserContext);
+    try {
+      const targetId = await this.options.windowController.getTargetId(page, browserContext);
 
-    if (viewport) await page.setViewportSize(viewport);
+      if (viewport) {
+        await page.setViewportSize(viewport);
+      }
 
-    let navigatedDuringCreate = false;
-    if (initialUrl) {
-      await navigatePageToUrl(name, page, initialUrl);
-      navigatedDuringCreate = true;
+      let navigatedDuringCreate = false;
+      if (initialUrl) {
+        await navigatePageToUrl(name, page, initialUrl);
+        navigatedDuringCreate = true;
+      }
+
+      await this.prepareReusedStartupPageForLaunch({ browserContext, launchMode, page, targetId });
+      return {
+        page,
+        targetId,
+        windowState: 'normal',
+        backgroundAfterFirstFrame: launchMode === 'minimized-once',
+        navigatedDuringCreate,
+      };
+    } catch (error) {
+      // Restore or close reusable startup page if partial modifications occurred
+      if (this.reusableStartupPage === null && !page.isClosed()) {
+        // Try to restore it as reusable startup page, or close it
+        try {
+          await this.prepareReusableStartupPage(page, browserContext);
+        } catch {
+          await page.close().catch(() => {});
+        }
+      }
+      throw error;
     }
-
-    await this.prepareReusedStartupPageForLaunch({ browserContext, launchMode, page, targetId });
-    return {
-      page,
-      targetId,
-      windowState: 'normal',
-      backgroundAfterFirstFrame: launchMode === 'minimized-once',
-      navigatedDuringCreate,
-    };
   }
 
   private async prepareReusedStartupPageForLaunch(options: {
@@ -220,23 +240,31 @@ export class BrowserTaskPageFactory {
         30000,
         'Page creation timed out after 30s',
       );
-      if (options.viewport) await page.setViewportSize(options.viewport);
-      let navigatedDuringCreate = false;
-      if (options.initialUrl) {
-        await navigatePageToUrl(options.name, page, options.initialUrl);
-        navigatedDuringCreate = true;
+      try {
+        if (options.viewport) {
+          await page.setViewportSize(options.viewport);
+        }
+        let navigatedDuringCreate = false;
+        if (options.initialUrl) {
+          await navigatePageToUrl(options.name, page, options.initialUrl);
+          navigatedDuringCreate = true;
+        }
+        const targetId = await this.options.windowController.getTargetId(
+          page,
+          options.browserContext,
+        );
+        return {
+          page,
+          targetId,
+          windowState: 'normal',
+          backgroundAfterFirstFrame: false,
+          navigatedDuringCreate,
+        };
+      } catch (error) {
+        // Close the newly created page on error
+        await page.close().catch(() => {});
+        throw error;
       }
-      const targetId = await this.options.windowController.getTargetId(
-        page,
-        options.browserContext,
-      );
-      return {
-        page,
-        targetId,
-        windowState: 'normal',
-        backgroundAfterFirstFrame: false,
-        navigatedDuringCreate,
-      };
     });
   }
 
@@ -249,13 +277,18 @@ export class BrowserTaskPageFactory {
   }): Promise<CreatedTaskPage> {
     return this.options.withPreservedForeground(async () => {
       const cdpSession = await options.browserContext.newCDPSession(options.anchorPage);
+      let createdTargetId: string | null = null;
+      let page: Page | null = null;
       try {
         const { targetId } = (await cdpSession.send('Target.createTarget', {
           url: options.initialUrl ?? 'about:blank',
           background: options.launchMode !== 'foreground',
         })) as { targetId: string };
-        const page = await this.waitForPageByTargetId(targetId);
-        if (options.viewport) { await page.setViewportSize(options.viewport); }
+        createdTargetId = targetId;
+        page = await this.waitForPageByTargetId(targetId);
+        if (options.viewport) {
+          await page.setViewportSize(options.viewport);
+        }
         return {
           page,
           targetId,
@@ -263,6 +296,12 @@ export class BrowserTaskPageFactory {
           backgroundAfterFirstFrame: false,
           navigatedDuringCreate: !!options.initialUrl,
         };
+      } catch (error) {
+        // Close/remove the created target/page if subsequent operations fail
+        if (page && !page.isClosed()) {
+          await page.close().catch(() => {});
+        }
+        throw error;
       } finally {
         await cdpSession.detach().catch(() => {});
       }

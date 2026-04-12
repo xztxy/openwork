@@ -252,10 +252,14 @@ export class BrowserPageService {
   }
 
   private attachPageCloseHandler(name: string, entry: PageEntry): void {
-    entry.page.on('close', () => {
-      void this.screencastController.stop(entry);
-      this.registry.delete(name);
-    });
+    const closeHandler = () => {
+      // Validate that the registration is still the same PageEntry before acting
+      if (this.registry.get(name) === entry) {
+        void this.screencastController.stop(entry);
+        this.registry.delete(name);
+      }
+    };
+    entry.page.on('close', closeHandler);
   }
 
   private async runPageOperation(

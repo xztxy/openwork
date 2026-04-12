@@ -44,12 +44,14 @@ function buildConfigFromEnv(): ConnectionConfig {
 // Read from environment and update singleton config
 export function configureFromEnv(): ConnectionConfig {
   _config = buildConfigFromEnv();
+  _manager.clearCachedBrowser();
   return _config;
 }
 
 // Update singleton config directly (for testing or runtime reconfiguration)
 export function configure(config: ConnectionConfig): void {
   _config = config;
+  _manager.clearCachedBrowser();
 }
 
 // Reset singleton state (for testing)
