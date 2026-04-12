@@ -40,7 +40,9 @@ export async function fetchWithRetry(
         `fetch timed out for ${url}`,
         () => controller.abort(),
       );
-      if (response.ok) { return response; }
+      if (response.ok) {
+        return response;
+      }
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
@@ -67,11 +69,15 @@ export function withTimeout<T>(
     }, ms);
     promise
       .then((value) => {
-        if (timeoutId) { clearTimeout(timeoutId); }
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
         resolve(value);
       })
       .catch((err) => {
-        if (timeoutId) { clearTimeout(timeoutId); }
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
         reject(err);
       });
   });
