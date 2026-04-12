@@ -22622,11 +22622,21 @@ function isTransientNavigationContextError(error) {
   return /Execution context was destroyed/i.test(message) || /Cannot read properties of null/i.test(message);
 }
 async function fetchWithRetry(url, maxRetries = 5, delayMs = 500) {
+  maxRetries = Math.max(1, Math.floor(maxRetries));
+  delayMs = Math.max(0, delayMs);
   let lastError = null;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const controller = new AbortController();
     try {
-      const response = await fetch(url);
-      if (response.ok) return response;
+      const response = await withTimeout(
+        fetch(url, { signal: controller.signal }),
+        3e4,
+        `fetch timed out for ${url}`,
+        () => controller.abort()
+      );
+      if (response.ok) {
+        return response;
+      }
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
@@ -22637,17 +22647,30 @@ async function fetchWithRetry(url, maxRetries = 5, delayMs = 500) {
   }
   throw new Error(`Failed after ${maxRetries} retries: ${lastError?.message}`);
 }
-function withTimeout(promise, ms, message) {
-  return Promise.race([
-    promise,
-    new Promise(
-      (_, reject) => setTimeout(() => reject(new Error(`Timeout: ${message}`)), ms)
-    )
-  ]);
+function withTimeout(promise, ms, message, onTimeout) {
+  let timeoutId = null;
+  return new Promise((resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      timeoutId = null;
+      onTimeout?.();
+      reject(new Error(`Timeout: ${message}`));
+    }, ms);
+    promise.then((value) => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      resolve(value);
+    }).catch((err) => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      reject(err);
+    });
+  });
 }
 function respondInternalError(res, error) {
   console.error("[dev-browser] internal error", error);
-  res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  res.status(500).json({ error: "Internal server error" });
 }
 
 // src/foreground-application.ts
@@ -22669,7 +22692,8 @@ async function withPreservedForeground(operation) {
   } finally {
     if (frontmostApp) {
       try {
-        (0, import_child_process.execSync)(`osascript -e 'tell application "${frontmostApp}" to activate'`, {
+        const escapedApp = frontmostApp.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+        (0, import_child_process.execSync)(`osascript -e 'tell application "${escapedApp}" to activate'`, {
           encoding: "utf8",
           timeout: 2e3
         });
@@ -22693,7 +22717,7 @@ function isReusableStartupPageUrl(url) {
 // src/browser-page-navigator.ts
 async function navigatePageToUrl(name, page, url) {
   if (!isHttpNavigationUrl(url) && !isBlankPanelNavigationUrl(url)) {
-    throw new Error("url must use http or https");
+    throw new Error("url must be an http/https URL or a blank-panel navigation URL");
   }
   await withTimeout(page.goto(url), 3e4, `Navigation timed out for ${name}`);
 }
@@ -22796,7 +22820,7 @@ var BrowserPageStateReader = class {
       return await readTitle("getPageState:title-retry");
     } catch (error) {
       if (!isTransientNavigationContextError(error)) throw error;
-      return entry.lastKnownTitle;
+      return entry.lastKnownTitle ?? "Untitled";
     }
   }
   logPageOperationFailure(operation, name, entry, error) {
@@ -22853,8 +22877,14 @@ var BrowserScreencastController = class {
     if (!needsRestart) return;
     await this.stop(entry);
     screencast.startPromise = this.startScreencast(entry, quality);
-    await screencast.startPromise;
-    screencast.startPromise = null;
+    try {
+      await screencast.startPromise;
+    } catch (err) {
+      await this.stop(entry);
+      throw err;
+    } finally {
+      screencast.startPromise = null;
+    }
   }
   async startScreencast(entry, quality) {
     const { screencast, page } = entry;
@@ -22917,14 +22947,18 @@ var BrowserWindowController = class {
     }
   }
   async backgroundPage(page, browserContext) {
-    if (this.options.headless) return;
+    if (this.options.headless) {
+      return;
+    }
     await this.setWindowStateForPage(page, "minimized", void 0, browserContext);
   }
   async setNormalWindowState(page, targetId, browserContext) {
     await this.setWindowStateForPage(page, "normal", targetId, browserContext);
   }
   async restorePageWithoutForeground(page, targetId, browserContext) {
-    if (this.options.headless) return;
+    if (this.options.headless) {
+      return;
+    }
     await this.options.withPreservedForeground(async () => {
       await this.setWindowStateForPage(page, "normal", targetId, browserContext);
     });
@@ -22935,7 +22969,9 @@ var BrowserWindowController = class {
   }
   async prepareForegroundedWindow(page, targetId, browserContext) {
     await this.setWindowStateForPage(page, "normal", targetId, browserContext);
-    if (this.options.headless) return;
+    if (this.options.headless) {
+      return;
+    }
     await this.syncWindowToViewport(page, targetId, browserContext);
   }
   async syncWindowToViewport(page, targetId, browserContext) {
@@ -23015,7 +23051,8 @@ var BrowserWindowController = class {
         await this.setWindowBoundsForPage(
           page,
           { width: desiredWidth, height: desiredHeight },
-          targetId
+          targetId,
+          browserContext
         );
       },
       targetId,
@@ -23034,8 +23071,10 @@ var BrowserTaskPageFactory = class {
   attachStartupPage(page) {
     if (page && isReusableStartupPageUrl(page.url())) {
       this.reusableStartupPage = page;
-      page.on("close", () => {
-        if (this.reusableStartupPage === page) this.reusableStartupPage = null;
+      page.once("close", () => {
+        if (this.reusableStartupPage === page) {
+          this.reusableStartupPage = null;
+        }
       });
       return;
     }
@@ -23091,11 +23130,14 @@ var BrowserTaskPageFactory = class {
       anchorPage,
       browserContext: options.browserContext,
       initialUrl: options.initialUrl,
-      launchMode
+      launchMode,
+      viewport: options.viewport
     });
   }
   async recycleOrClosePage(page) {
-    if (page.isClosed()) return;
+    if (page.isClosed()) {
+      return;
+    }
     const activeContext = await this.options.ensureBrowserContext();
     if (!await this.isLastOpenPage(page, activeContext)) {
       await page.close();
@@ -23116,7 +23158,9 @@ var BrowserTaskPageFactory = class {
   }
   async prepareReusableStartupPage(page, browserContext) {
     if (page.isClosed()) {
-      if (this.reusableStartupPage === page) this.reusableStartupPage = null;
+      if (this.reusableStartupPage === page) {
+        this.reusableStartupPage = null;
+      }
       return;
     }
     if (!isReusableStartupPageUrl(page.url())) {
@@ -23134,7 +23178,9 @@ var BrowserTaskPageFactory = class {
     const startTime = Date.now();
     while (Date.now() - startTime < 3e4) {
       for (const candidate of activeContext.pages()) {
-        if (candidate.isClosed()) continue;
+        if (candidate.isClosed()) {
+          continue;
+        }
         try {
           if (await this.options.windowController.getTargetId(candidate) === targetId)
             return candidate;
@@ -23212,6 +23258,9 @@ var BrowserTaskPageFactory = class {
           background: options.launchMode !== "foreground"
         });
         const page = await this.waitForPageByTargetId(targetId);
+        if (options.viewport) {
+          await page.setViewportSize(options.viewport);
+        }
         return {
           page,
           targetId,
@@ -23284,7 +23333,10 @@ var BrowserPageService = class {
     this.releasedPageUrls.delete(name);
     if (!entry) return false;
     await this.screencastController.stop(entry);
-    await entry.page.close();
+    try {
+      await entry.page.close();
+    } catch (_error) {
+    }
     this.registry.delete(name);
     return true;
   }
@@ -23310,7 +23362,10 @@ var BrowserPageService = class {
     try {
       await withTimeout(page.goto(url), 3e4, `Navigation timed out for external page: ${url}`);
     } catch (error) {
-      if (isClosedPageError(error)) throw error;
+      if (isClosedPageError(error)) {
+        return;
+      }
+      throw error;
     }
   }
   async readPageState(name) {
@@ -23447,10 +23502,18 @@ var BrowserPageService = class {
     });
     await this.finishCreatedPageSetup(createdPage, options.viewport);
     const entry = createPageEntry(createdPage);
+    try {
+      await this.finishCreatedPageNavigation(options.name, entry, restoreUrl, createdPage);
+    } catch (error) {
+      try {
+        await entry.page.close();
+      } catch {
+      }
+      throw error;
+    }
     this.registry.set(options.name, entry);
     this.knownTaskPages.add(options.name);
     this.attachPageCloseHandler(options.name, entry);
-    await this.finishCreatedPageNavigation(options.name, entry, restoreUrl, createdPage);
     this.releasedPageUrls.delete(options.name);
     return entry;
   }
@@ -23655,6 +23718,18 @@ async function serve(options = {}) {
     try {
       const name = decodeURIComponent(req.params.name);
       const { url } = req.body;
+      let valid = false;
+      if (typeof url === "string") {
+        try {
+          new URL(url);
+          valid = true;
+        } catch (_e) {
+        }
+      }
+      if (!valid) {
+        res.status(400).json({ error: "invalid url" });
+        return;
+      }
       const state = await pageService.navigatePage(name, url);
       if (!state) {
         res.status(404).json({ error: "page not found" });
