@@ -26,7 +26,7 @@ import {
 } from './daemon-bootstrap';
 import { registerIPCHandlers } from './ipc/handlers';
 import { drainProtocolUrlQueue } from './protocol-handlers';
-import { getBuildConfig, isAnalyticsEnabled } from './config/build-config';
+import { getBuildConfig, getBuildId, isAnalyticsEnabled } from './config/build-config';
 import { initAnalytics, initDeviceFingerprint } from './analytics/analytics-service';
 import { initMixpanel } from './analytics/mixpanel-service';
 import { trackAppLaunched } from './analytics/events';
@@ -51,6 +51,10 @@ export async function startApp(
   isQuittingRef: { value: boolean },
 ): Promise<void> {
   logMain('INFO', `[Main] Electron app ready, version: ${app.getVersion()}`);
+
+  // Set build identity for daemon version-guard (used by in-process DaemonServer
+  // and compared against standalone daemon's ping response)
+  process.env.ACCOMPLISH_BUILD_ID = getBuildId();
 
   if (process.env.CLEAN_START !== '1') {
     try {
@@ -191,9 +195,25 @@ export async function startApp(
       await bootstrapDaemon();
       logMain('INFO', '[Main] Daemon connected');
     } catch (err) {
-      logMain('WARN', '[Main] Daemon bootstrap failed — GUI will open without daemon', {
-        error: String(err),
-      });
+      const { DaemonRestartError } = await import('./daemon/daemon-connector');
+      if (err instanceof DaemonRestartError) {
+        logMain('ERROR', '[Main] Failed to restart daemon after upgrade', {
+          error: String(err),
+        });
+        const { dialog } = await import('electron');
+        dialog.showMessageBox({
+          type: 'warning',
+          title: 'Background Service Update',
+          message:
+            'The background service from a previous version could not be stopped. ' +
+            'Please fully quit the application (check the system tray), wait a few seconds, ' +
+            'and reopen it. If the issue persists, restart your computer.',
+        });
+      } else {
+        logMain('WARN', '[Main] Daemon bootstrap failed — GUI will open without daemon', {
+          error: String(err),
+        });
+      }
     }
   } else {
     logMain('INFO', '[Main] E2E mock mode — skipping daemon bootstrap');

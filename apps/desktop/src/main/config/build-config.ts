@@ -9,6 +9,7 @@
  */
 
 import { parse as dotenvParse } from 'dotenv';
+import { execSync } from 'child_process';
 import { z } from 'zod';
 import { app } from 'electron';
 import path from 'path';
@@ -21,6 +22,7 @@ const buildConfigSchema = z.object({
   gaMeasurementId: z.string().default(''),
   sentryDsn: z.string().default(''),
   accomplishGatewayUrl: z.string().default(''),
+  buildId: z.string().default(''),
 });
 
 export type BuildConfig = z.infer<typeof buildConfigSchema>;
@@ -60,6 +62,7 @@ export function loadBuildConfig(): BuildConfig {
     gaMeasurementId: raw.GA_MEASUREMENT_ID,
     sentryDsn: raw.SENTRY_DSN,
     accomplishGatewayUrl: raw.ACCOMPLISH_GATEWAY_URL,
+    buildId: raw.ACCOMPLISH_BUILD_ID,
   });
 
   if (!parsed.success) {
@@ -106,4 +109,45 @@ export function isAnalyticsEnabled(): boolean {
  *  the commercial repo's Free tier (which also used 'lite'). */
 export function getAppTier(): 'lite' | 'oss' {
   return getBuildConfig().buildEnvVersion ? 'lite' : 'oss';
+}
+
+/**
+ * Get the build identity for daemon version-guard.
+ *
+ * Used to detect stale daemons after app upgrades. The identity changes
+ * with every different build, ensuring the new app restarts the daemon.
+ *
+ * Priority:
+ * 1. Packaged builds: ACCOMPLISH_BUILD_ID from build.env (injected by release pipeline)
+ * 2. Dev builds: git commit SHA (changes with every committed change / git pull).
+ *    NOTE: does not detect uncommitted edits or stale daemon artifacts from
+ *    bundled-input changes — developers must rebuild the daemon explicitly.
+ * 3. Fallback: app version (weakest, but covers basic version upgrades)
+ */
+let cachedBuildId: string | null = null;
+
+export function getBuildId(): string {
+  if (cachedBuildId) return cachedBuildId;
+
+  // 1. From build.env (packaged Free builds)
+  const fromBuildEnv = getBuildConfig().buildId;
+  if (fromBuildEnv) {
+    cachedBuildId = fromBuildEnv;
+    return cachedBuildId;
+  }
+
+  // 2. Git commit SHA (dev builds)
+  try {
+    cachedBuildId = execSync('git rev-parse --short HEAD', {
+      encoding: 'utf8',
+      stdio: 'pipe',
+    }).trim();
+    return cachedBuildId;
+  } catch {
+    // Not in a git repo or git not available
+  }
+
+  // 3. Fallback: app version
+  cachedBuildId = app.getVersion();
+  return cachedBuildId;
 }

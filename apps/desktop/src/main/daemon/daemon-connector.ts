@@ -16,7 +16,8 @@ import { app, BrowserWindow } from 'electron';
 import { DaemonClient, createSocketTransport, getSocketPath } from '@accomplish_ai/agent-core';
 import { getNodePath } from '../utils/bundled-node';
 import { getLogCollector } from '../logging';
-import { getBuildConfig } from '../config/build-config';
+import { getBuildConfig, getBuildId } from '../config/build-config';
+import { getPidFilePath } from '@accomplish_ai/agent-core';
 
 /** How long to wait for the daemon to become ready after spawning. */
 const SPAWN_READY_TIMEOUT_MS = 10_000;
@@ -85,6 +86,94 @@ async function tryConnect(dataDir: string): Promise<DaemonClient | null> {
 }
 
 /**
+ * Error thrown when a stale daemon could not be stopped during version-guard restart.
+ */
+export class DaemonRestartError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DaemonRestartError';
+  }
+}
+
+/**
+ * Try to connect to a daemon with matching build identity.
+ *
+ * If the daemon is reachable but has a different buildId (or no buildId — older version),
+ * sends a shutdown request and waits for the old daemon to exit so the caller can spawn a new one.
+ *
+ * Used by both ensureDaemonRunning() and reconnectWithBackoff() — centralized guard.
+ */
+async function tryConnectBuildChecked(dataDir: string): Promise<DaemonClient | null> {
+  const client = await tryConnect(dataDir);
+  if (!client) return null;
+
+  try {
+    const pingResult = await client.ping();
+    const expectedBuildId = getBuildId();
+
+    if (pingResult.buildId === expectedBuildId) {
+      // Same build — reuse this daemon
+      return client;
+    }
+
+    // Build mismatch (or old daemon without buildId) — restart
+    log(
+      'INFO',
+      `[DaemonConnector] Build mismatch: daemon=${pingResult.buildId ?? 'none'}, app=${expectedBuildId}. Restarting daemon...`,
+    );
+
+    // Await the shutdown RPC ack before closing (daemon defers exit until after reply)
+    await client.call('daemon.shutdown').catch(() => {});
+    client.close();
+
+    // Wait for old daemon to exit (up to 30s — matches daemon's DRAIN_TIMEOUT_MS)
+    await waitForDaemonExit(dataDir, 30_000);
+
+    return null; // Caller will spawn a new daemon
+  } catch (err) {
+    client.close();
+    // Let DaemonRestartError propagate — it surfaces the user-facing dialog
+    if (err instanceof DaemonRestartError) throw err;
+    // Other errors (ping failed, shutdown failed) — treat as "no daemon"
+    return null;
+  }
+}
+
+/**
+ * Wait for the daemon process to exit by polling the PID file.
+ * Throws DaemonRestartError if the daemon doesn't exit within timeoutMs.
+ * Does NOT clean up socket/PID files — the old daemon still owns them if alive.
+ */
+async function waitForDaemonExit(dataDir: string, timeoutMs: number = 30_000): Promise<void> {
+  const pidPath = getPidFilePath(dataDir);
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    // Check if PID file exists
+    if (!fs.existsSync(pidPath)) {
+      return; // Daemon exited and cleaned up
+    }
+
+    // Check if the process is still alive
+    try {
+      const content = fs.readFileSync(pidPath, 'utf8');
+      const { pid } = JSON.parse(content);
+      process.kill(pid, 0); // Signal 0 = check if alive, no actual signal sent
+      // Still alive — wait and retry
+      await sleep(200);
+    } catch {
+      // Process dead or PID file unreadable — daemon is gone
+      return;
+    }
+  }
+
+  // Timeout — daemon didn't exit. Don't clean up its state.
+  throw new DaemonRestartError(
+    'Old daemon did not exit within 30s after shutdown request. Please restart the application.',
+  );
+}
+
+/**
  * Spawn the daemon as a fully detached process.
  * The daemon process survives Electron exit (detached + unref).
  */
@@ -101,6 +190,8 @@ export function spawnDaemon(dataDir: string): void {
     ...process.env,
     // In dev mode, tell Electron to act as plain Node.js
     ELECTRON_RUN_AS_NODE: app.isPackaged ? undefined : '1',
+    // Build identity for version-guard — daemon returns this in ping response
+    ACCOMPLISH_BUILD_ID: getBuildId(),
   };
 
   // Inject gateway URL so the daemon can start the Accomplish AI proxy.
@@ -120,31 +211,53 @@ export function spawnDaemon(dataDir: string): void {
     daemonEnv.ACCOMPLISH_RESOURCES_PATH = path.join(app.getAppPath(), 'resources');
   }
 
-  // In dev mode, redirect daemon output to a log file so it can be tailed
-  // by any Electron process (including restarts). In production, use 'ignore'.
-  const spawnOptions: Parameters<typeof spawn>[2] = {
-    detached: true,
-    stdio: 'ignore',
-    env: daemonEnv,
-  };
-
-  if (!app.isPackaged) {
-    const logPath = getDaemonLogPath(dataDir);
-    const logFd = fs.openSync(logPath, 'a');
-    spawnOptions.stdio = ['ignore', logFd, logFd];
+  // Always redirect daemon stdout/stderr to daemon.log — essential for
+  // debugging in both dev and production. Without this, packaged daemon
+  // crashes are invisible (stdio: 'ignore' sends output nowhere).
+  const logPath = getDaemonLogPath(dataDir);
+  const logFd = fs.openSync(logPath, 'a');
+  try {
+    const child = spawn(nodeBin, [entryPath, '--data-dir', dataDir], {
+      detached: true,
+      stdio: ['ignore', logFd, logFd],
+      env: daemonEnv,
+    });
+    child.unref();
+    log('INFO', `[DaemonConnector] Daemon spawned (detached, pid=${child.pid})`);
+  } finally {
+    // Close the parent's copy of the log fd — child inherited it.
+    // try/finally ensures cleanup even if spawn() throws.
+    fs.closeSync(logFd);
   }
-
-  const child = spawn(nodeBin, [entryPath, '--data-dir', dataDir], spawnOptions);
-
-  child.unref();
-  log('INFO', `[DaemonConnector] Daemon spawned (detached, pid=${child.pid})`);
 }
 
 /**
- * Get the path to the daemon log file.
+ * Get the path to today's daemon log file (date-rotated, matches app log pattern).
+ * Also cleans up old daemon logs (keeps last 7 days).
  */
 function getDaemonLogPath(dataDir: string): string {
-  return path.join(dataDir, 'daemon.log');
+  const logsDir = path.join(dataDir, 'logs');
+  fs.mkdirSync(logsDir, { recursive: true });
+
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const logPath = path.join(logsDir, `daemon-${today}.log`);
+
+  // Clean up old daemon logs (keep last 7 days)
+  try {
+    const files = fs
+      .readdirSync(logsDir)
+      .filter((f) => f.startsWith('daemon-') && f.endsWith('.log'));
+    if (files.length > 7) {
+      files.sort();
+      for (const old of files.slice(0, files.length - 7)) {
+        fs.unlinkSync(path.join(logsDir, old));
+      }
+    }
+  } catch {
+    // Best-effort cleanup
+  }
+
+  return logPath;
 }
 
 /** Active log tail watcher — only one at a time */
@@ -239,7 +352,7 @@ export async function ensureDaemonRunning(): Promise<DaemonClient> {
   const dataDir = getDataDir();
 
   log('INFO', '[DaemonConnector] Attempting connection to existing daemon...');
-  const existing = await tryConnect(dataDir);
+  const existing = await tryConnectBuildChecked(dataDir);
   if (existing) {
     log('INFO', '[DaemonConnector] Connected to existing daemon');
     return existing;
@@ -247,7 +360,7 @@ export async function ensureDaemonRunning(): Promise<DaemonClient> {
 
   log('INFO', '[DaemonConnector] No daemon found, retrying after short delay...');
   await sleep(LOGIN_ITEM_RETRY_DELAY_MS);
-  const retried = await tryConnect(dataDir);
+  const retried = await tryConnectBuildChecked(dataDir);
   if (retried) {
     log('INFO', '[DaemonConnector] Connected to daemon (login item)');
     return retried;
@@ -358,7 +471,18 @@ async function reconnectWithBackoff(): Promise<void> {
     }
 
     const dataDir = getDataDir();
-    const client = await tryConnect(dataDir);
+    let client: DaemonClient | null = null;
+    try {
+      client = await tryConnectBuildChecked(dataDir);
+    } catch (err) {
+      if (err instanceof DaemonRestartError) {
+        // Stale daemon couldn't be stopped — broadcast failure and stop retrying
+        log('ERROR', `[DaemonConnector] ${String(err)}`);
+        broadcastToRenderer('daemon:reconnect-failed');
+        return;
+      }
+      // Other errors — continue retry loop
+    }
 
     if (client) {
       log('INFO', '[DaemonConnector] Reconnected to daemon');
