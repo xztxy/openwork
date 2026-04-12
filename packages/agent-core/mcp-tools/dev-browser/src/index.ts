@@ -1,5 +1,5 @@
 import express, { type Express, type Request, type Response } from 'express';
-import { chromium, type BrowserContext, type Page } from 'playwright';
+import { chromium, type BrowserContext } from 'playwright';
 import { mkdirSync } from 'fs';
 import { join } from 'path';
 import type { Socket } from 'net';
@@ -9,7 +9,10 @@ import type {
   GetPageResponse,
   ListPagesResponse,
   ServerInfoResponse,
-} from './types';
+} from './types.js';
+import { fetchWithRetry, respondInternalError } from './browser-runtime-utils.js';
+import { withPreservedForeground } from './foreground-application.js';
+import { BrowserPageService } from './browser-page-service.js';
 
 export type { ServeOptions, GetPageResponse, ListPagesResponse, ServerInfoResponse };
 
@@ -19,49 +22,6 @@ export interface DevBrowserServer {
   stop: () => Promise<void>;
 }
 
-async function fetchWithRetry(
-  url: string,
-  maxRetries = 5,
-  delayMs = 500,
-  timeoutMs = 30_000,
-): Promise<globalThis.Response> {
-  let lastError: Error | null = null;
-  for (let i = 0; i < maxRetries; i++) {
-    const controller = new AbortController();
-    let timedOut = false;
-    const timeoutId = setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-    }, timeoutMs);
-    try {
-      const res = await fetch(url, { signal: controller.signal });
-      if (res.ok) return res;
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-    } catch (err) {
-      if (timedOut) {
-        lastError = new Error(`Request timed out after ${timeoutMs}ms`);
-      } else {
-        lastError = err instanceof Error ? err : new Error(String(err));
-      }
-      if (i < maxRetries - 1) {
-        await new Promise((resolve) => setTimeout(resolve, delayMs * (i + 1)));
-      }
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-  throw new Error(`Failed after ${maxRetries} retries: ${lastError?.message}`);
-}
-
-function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`Timeout: ${message}`)), ms),
-    ),
-  ]);
-}
-
 export async function serve(options: ServeOptions = {}): Promise<DevBrowserServer> {
   const port = options.port ?? parseInt(process.env.DEV_BROWSER_PORT || '9224', 10);
   const headless = options.headless ?? false;
@@ -69,19 +29,9 @@ export async function serve(options: ServeOptions = {}): Promise<DevBrowserServe
   const profileDir = options.profileDir ?? process.env.DEV_BROWSER_PROFILE;
   const useSystemChrome = options.useSystemChrome ?? true;
 
-  if (!Number.isFinite(port) || port < 1 || port > 65535) {
-    throw new Error(`Invalid port: ${port}. Must be a number between 1 and 65535`);
-  }
-  if (!Number.isFinite(cdpPort) || cdpPort < 1 || cdpPort > 65535) {
-    throw new Error(`Invalid cdpPort: ${cdpPort}. Must be a number between 1 and 65535`);
-  }
-  if (port === cdpPort) {
-    throw new Error('port and cdpPort must be different');
-  }
-
   const baseProfileDir = profileDir ?? join(process.cwd(), '.browser-data');
 
-  let context: BrowserContext;
+  let browserContext: BrowserContext;
   let usedSystemChrome = false;
 
   if (useSystemChrome) {
@@ -89,8 +39,7 @@ export async function serve(options: ServeOptions = {}): Promise<DevBrowserServe
       console.log('Trying to use system Chrome...');
       const chromeUserDataDir = join(baseProfileDir, 'chrome-profile');
       mkdirSync(chromeUserDataDir, { recursive: true });
-
-      context = await chromium.launchPersistentContext(chromeUserDataDir, {
+      browserContext = await chromium.launchPersistentContext(chromeUserDataDir, {
         headless,
         channel: 'chrome',
         ignoreDefaultArgs: ['--enable-automation'],
@@ -100,8 +49,8 @@ export async function serve(options: ServeOptions = {}): Promise<DevBrowserServe
         ],
       });
       usedSystemChrome = true;
-      console.log('Using system Chrome (fast startup!)');
-    } catch (_chromeError) {
+      console.log('Using system Chrome');
+    } catch {
       console.log('System Chrome not available, falling back to Playwright Chromium...');
     }
   }
@@ -109,116 +58,223 @@ export async function serve(options: ServeOptions = {}): Promise<DevBrowserServe
   if (!usedSystemChrome) {
     const playwrightUserDataDir = join(baseProfileDir, 'playwright-profile');
     mkdirSync(playwrightUserDataDir, { recursive: true });
-
-    console.log('Launching browser with Playwright Chromium...');
-    context = await chromium.launchPersistentContext(playwrightUserDataDir, {
+    browserContext = await chromium.launchPersistentContext(playwrightUserDataDir, {
       headless,
       ignoreDefaultArgs: ['--enable-automation'],
       args: [`--remote-debugging-port=${cdpPort}`, '--disable-blink-features=AutomationControlled'],
     });
-    console.log('Browser launched with Playwright Chromium');
   }
-
-  console.log('Browser launched with persistent profile...');
-
-  context.on('close', () => {
-    console.log('Browser context closed (user may have closed Chrome). Exiting server...');
-    process.exit(0);
-  });
 
   const cdpResponse = await fetchWithRetry(`http://127.0.0.1:${cdpPort}/json/version`);
   const cdpInfo = (await cdpResponse.json()) as { webSocketDebuggerUrl: string };
   const wsEndpoint = cdpInfo.webSocketDebuggerUrl;
   console.log(`CDP WebSocket endpoint: ${wsEndpoint}`);
 
-  interface PageEntry {
-    page: Page;
-    targetId: string;
+  const pageService = new BrowserPageService({
+    headless,
+    ensureBrowserContext: () => Promise.resolve(browserContext),
+    withPreservedForeground,
+  });
+
+  // Attach any startup page (blank tab Chrome opens on launch)
+  const startupPages = browserContext.pages();
+  const blankStartup = startupPages.find((p) => p.url() === 'about:blank') ?? null;
+  if (blankStartup) {
+    pageService['pageFactory'].attachStartupPage(blankStartup);
   }
 
-  const registry = new Map<string, PageEntry>();
-
-  async function getTargetId(page: Page): Promise<string> {
-    const cdpSession = await context.newCDPSession(page);
-    try {
-      const { targetInfo } = await cdpSession.send('Target.getTargetInfo');
-      return targetInfo.targetId;
-    } finally {
-      await cdpSession.detach();
-    }
-  }
+  browserContext.on('close', () => {
+    console.log('Browser context closed. Exiting...');
+    process.exit(0);
+  });
 
   const app: Express = express();
   app.use(express.json());
 
+  // ─── Health check ──────────────────────────────────────────────────────────
   app.get('/', (_req: Request, res: Response) => {
-    const response: ServerInfoResponse = { wsEndpoint };
+    const response: ServerInfoResponse = { wsEndpoint, browserReady: true };
     res.json(response);
   });
 
+  // ─── Page list ─────────────────────────────────────────────────────────────
   app.get('/pages', (_req: Request, res: Response) => {
-    const response: ListPagesResponse = {
-      pages: Array.from(registry.keys()),
-    };
+    const response: ListPagesResponse = { pages: pageService.listPageNames() };
     res.json(response);
   });
 
+  // ─── Create / get page ─────────────────────────────────────────────────────
   app.post('/pages', async (req: Request, res: Response) => {
-    const body = req.body as GetPageRequest;
-    const { name, viewport } = body;
-
-    if (!name || typeof name !== 'string') {
-      res.status(400).json({ error: 'name is required and must be a string' });
-      return;
-    }
-
-    if (name.length === 0) {
-      res.status(400).json({ error: 'name cannot be empty' });
-      return;
-    }
-
-    if (name.length > 256) {
-      res.status(400).json({ error: 'name must be 256 characters or less' });
-      return;
-    }
-
-    let entry = registry.get(name);
-    if (!entry) {
-      const page = await withTimeout(context.newPage(), 30000, 'Page creation timed out after 30s');
-
-      if (viewport) {
-        await page.setViewportSize(viewport);
+    try {
+      const body = req.body as GetPageRequest;
+      if (!body.name || typeof body.name !== 'string') {
+        res.status(400).json({ error: 'name is required and must be a string' });
+        return;
       }
-
-      const targetId = await getTargetId(page);
-      entry = { page, targetId };
-      registry.set(name, entry);
-
-      page.on('close', () => {
-        registry.delete(name);
-      });
+      const ensured = await pageService.ensurePage(body);
+      const response: GetPageResponse = {
+        wsEndpoint,
+        name: ensured.name,
+        targetId: ensured.targetId,
+        created: ensured.created,
+      };
+      res.json(response);
+    } catch (error) {
+      respondInternalError(res, error);
     }
-
-    const response: GetPageResponse = { wsEndpoint, name, targetId: entry.targetId };
-    res.json(response);
   });
 
-  app.delete('/pages/:name', async (req: Request<{ name: string }>, res: Response) => {
-    const name = decodeURIComponent(req.params.name);
-    const entry = registry.get(name);
-
-    if (entry) {
-      await entry.page.close();
-      registry.delete(name);
+  // ─── Open external URL in unfocused tab ────────────────────────────────────
+  app.post('/pages/open-external', async (req: Request, res: Response) => {
+    try {
+      const { url } = req.body as { url: string };
+      if (!url) {
+        res.status(400).json({ error: 'url is required' });
+        return;
+      }
+      await pageService.openExternalPage(url);
       res.json({ success: true });
-      return;
+    } catch (error) {
+      respondInternalError(res, error);
     }
-
-    res.status(404).json({ error: 'page not found' });
   });
 
+  // ─── Release page (remember URL, close tab) ────────────────────────────────
+  app.post('/pages/:name/release', async (req: Request<{ name: string }>, res: Response) => {
+    try {
+      const name = decodeURIComponent(req.params.name);
+      const released = await pageService.releasePage(name);
+      res.json({ success: released });
+    } catch (error) {
+      respondInternalError(res, error);
+    }
+  });
+
+  // ─── Delete page ───────────────────────────────────────────────────────────
+  app.delete('/pages/:name', async (req: Request<{ name: string }>, res: Response) => {
+    try {
+      const name = decodeURIComponent(req.params.name);
+      const deleted = await pageService.deletePage(name);
+      if (!deleted) {
+        res.status(404).json({ error: 'page not found' });
+        return;
+      }
+      res.json({ success: true });
+    } catch (error) {
+      respondInternalError(res, error);
+    }
+  });
+
+  // ─── Page state ────────────────────────────────────────────────────────────
+  app.get('/pages/:name/state', async (req: Request<{ name: string }>, res: Response) => {
+    try {
+      const name = decodeURIComponent(req.params.name);
+      const state = await pageService.readPageState(name);
+      if (!state) {
+        res.status(404).json({ error: 'page not found' });
+        return;
+      }
+      res.json(state);
+    } catch (error) {
+      respondInternalError(res, error);
+    }
+  });
+
+  // ─── Navigate ──────────────────────────────────────────────────────────────
+  app.post('/pages/:name/navigate', async (req: Request<{ name: string }>, res: Response) => {
+    try {
+      const name = decodeURIComponent(req.params.name);
+      const { url } = req.body as { url: string };
+      const state = await pageService.navigatePage(name, url);
+      if (!state) {
+        res.status(404).json({ error: 'page not found' });
+        return;
+      }
+      res.json(state);
+    } catch (error) {
+      respondInternalError(res, error);
+    }
+  });
+
+  // ─── History navigation ────────────────────────────────────────────────────
+  app.post('/pages/:name/back', async (req: Request<{ name: string }>, res: Response) => {
+    try {
+      const name = decodeURIComponent(req.params.name);
+      const state = await pageService.goBack(name);
+      if (!state) {
+        res.status(404).json({ error: 'page not found' });
+        return;
+      }
+      res.json(state);
+    } catch (error) {
+      respondInternalError(res, error);
+    }
+  });
+
+  app.post('/pages/:name/forward', async (req: Request<{ name: string }>, res: Response) => {
+    try {
+      const name = decodeURIComponent(req.params.name);
+      const state = await pageService.goForward(name);
+      if (!state) {
+        res.status(404).json({ error: 'page not found' });
+        return;
+      }
+      res.json(state);
+    } catch (error) {
+      respondInternalError(res, error);
+    }
+  });
+
+  // ─── Reload ────────────────────────────────────────────────────────────────
+  app.post('/pages/:name/reload', async (req: Request<{ name: string }>, res: Response) => {
+    try {
+      const name = decodeURIComponent(req.params.name);
+      const state = await pageService.reloadPage(name);
+      if (!state) {
+        res.status(404).json({ error: 'page not found' });
+        return;
+      }
+      res.json(state);
+    } catch (error) {
+      respondInternalError(res, error);
+    }
+  });
+
+  // ─── Focus page ────────────────────────────────────────────────────────────
+  app.post('/pages/:name/focus', async (req: Request<{ name: string }>, res: Response) => {
+    try {
+      const name = decodeURIComponent(req.params.name);
+      const state = await pageService.focusPage(name);
+      if (!state) {
+        res.status(404).json({ error: 'page not found' });
+        return;
+      }
+      res.json(state);
+    } catch (error) {
+      respondInternalError(res, error);
+    }
+  });
+
+  // ─── Screenshot (JPEG binary) ──────────────────────────────────────────────
+  app.get('/pages/:name/screenshot', async (req: Request<{ name: string }>, res: Response) => {
+    try {
+      const name = decodeURIComponent(req.params.name);
+      const quality = parseInt(String(req.query['quality'] ?? '70'), 10);
+      const buffer = await pageService.capturePageScreenshot(name, quality);
+      if (!buffer) {
+        res.status(404).json({ error: 'page not found' });
+        return;
+      }
+      res.setHeader('Content-Type', 'image/jpeg');
+      res.send(buffer);
+    } catch (error) {
+      respondInternalError(res, error);
+    }
+  });
+
+  // ─── HTTP server + graceful shutdown ──────────────────────────────────────
   const server = app.listen(port, () => {
-    console.log(`HTTP API server running on port ${port}`);
+    console.log(`dev-browser HTTP server running on port ${port}`);
   });
 
   const connections = new Set<Socket>();
@@ -228,52 +284,29 @@ export async function serve(options: ServeOptions = {}): Promise<DevBrowserServe
   });
 
   let cleaningUp = false;
-
   const cleanup = async () => {
     if (cleaningUp) return;
     cleaningUp = true;
-
     console.log('\nShutting down...');
-
     for (const socket of connections) {
       socket.destroy();
     }
     connections.clear();
-
-    for (const entry of registry.values()) {
-      try {
-        await entry.page.close();
-      } catch {
-        // intentionally empty
-      }
-    }
-    registry.clear();
-
+    await pageService.closeAllPages();
     try {
-      await context.close();
+      await browserContext.close();
     } catch {
       // intentionally empty
     }
-
     server.close();
     console.log('Server stopped.');
   };
 
-  const syncCleanup = () => {
-    try {
-      context.close();
-    } catch {
-      // intentionally empty
-    }
-  };
-
   const signals = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
-
   const signalHandler = async () => {
     await cleanup();
     process.exit(0);
   };
-
   const errorHandler = async (err: unknown) => {
     console.error('Unhandled error:', err);
     await cleanup();
@@ -283,13 +316,18 @@ export async function serve(options: ServeOptions = {}): Promise<DevBrowserServe
   signals.forEach((sig) => process.on(sig, signalHandler));
   process.on('uncaughtException', errorHandler);
   process.on('unhandledRejection', errorHandler);
-  process.on('exit', syncCleanup);
+  process.on('exit', () => {
+    try {
+      browserContext.close();
+    } catch {
+      /* intentionally empty */
+    }
+  });
 
   const removeHandlers = () => {
     signals.forEach((sig) => process.off(sig, signalHandler));
     process.off('uncaughtException', errorHandler);
     process.off('unhandledRejection', errorHandler);
-    process.off('exit', syncCleanup);
   };
 
   return {

@@ -58,12 +58,7 @@ export function truncateElements<T extends TruncatableElement>(
   const totalElements = elements.length;
 
   if (totalElements <= maxElements) {
-    return {
-      elements,
-      totalElements,
-      includedElements: totalElements,
-      truncated: false,
-    };
+    return { elements, totalElements, includedElements: totalElements, truncated: false };
   }
 
   const scored = elements.map((element) => ({
@@ -72,7 +67,6 @@ export function truncateElements<T extends TruncatableElement>(
   }));
 
   scored.sort((a, b) => b.score - a.score);
-
   const truncatedElements = scored.slice(0, maxElements).map((s) => s.element);
 
   return {

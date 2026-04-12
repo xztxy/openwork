@@ -11,14 +11,9 @@ export function diffSnapshots(
 
   for (const [ref, currentEl] of current.elements) {
     const previousEl = previous.elements.get(ref);
-
     if (!previousEl) {
       addedRefs.push(ref);
-      changes.push({
-        ref,
-        element: currentEl,
-        changeType: 'added',
-      });
+      changes.push({ ref, element: currentEl, changeType: 'added' });
     } else if (hasElementChanged(previousEl, currentEl)) {
       changes.push({
         ref,
@@ -38,26 +33,16 @@ export function diffSnapshots(
   for (const [ref, previousEl] of previous.elements) {
     if (!current.elements.has(ref)) {
       removedRefs.push(ref);
-      changes.push({
-        ref,
-        element: previousEl,
-        changeType: 'removed',
-      });
+      changes.push({ ref, element: previousEl, changeType: 'removed' });
     }
   }
 
+  // If >70% of elements changed it's effectively a new page — send full snapshot instead
   const totalElements = current.elements.size;
   const changedCount = changes.length;
-  if (totalElements > 0 && changedCount / totalElements > 0.7) {
-    return null;
-  }
+  if (totalElements > 0 && changedCount / totalElements > 0.7) return null;
 
-  return {
-    unchangedRefs,
-    changes,
-    addedRefs,
-    removedRefs,
-  };
+  return { unchangedRefs, changes, addedRefs, removedRefs };
 }
 
 function hasElementChanged(previous: SnapshotElement, current: SnapshotElement): boolean {
@@ -75,61 +60,42 @@ function hasElementChanged(previous: SnapshotElement, current: SnapshotElement):
 
 export function formatDiff(diff: SnapshotDiff, url: string, title: string): string {
   const lines: string[] = [];
-
   lines.push(`[Same page: ${title}]`);
   lines.push(`[URL: ${url}]`);
-
   if (diff.unchangedRefs.length > 0) {
-    const compressed = compressRefList(diff.unchangedRefs);
-    lines.push(`[Unchanged: ${compressed}]`);
+    lines.push(`[Unchanged: ${compressRefList(diff.unchangedRefs)}]`);
   }
-
   lines.push('');
-
   if (diff.changes.length > 0) {
     lines.push('Changed:');
-    for (const change of diff.changes) {
-      lines.push(formatChange(change));
-    }
+    for (const change of diff.changes) lines.push(formatChange(change));
   } else {
     lines.push('[No changes detected]');
   }
-
   lines.push('');
   lines.push('[Tip: Use browser_snapshot(full_snapshot=true) if elements seem incorrect]');
-
   return lines.join('\n');
 }
 
 function formatChange(change: ElementChange): string {
   const { ref, element, changeType } = change;
   const lines: string[] = [];
-
   const prefix = changeType === 'added' ? '+ ' : changeType === 'removed' ? '- ' : '';
-  let line = `${prefix}ref: ${ref}`;
-  line += `  role: ${element.role}`;
-  if (element.name) {
-    line += `  name: "${element.name}"`;
-  }
-
+  let line = `${prefix}ref: ${ref}  role: ${element.role}`;
+  if (element.name) line += `  name: "${element.name}"`;
   lines.push(line);
 
   if (changeType === 'modified') {
-    if (element.value !== undefined && element.value !== change.previousValue) {
+    if (element.value !== undefined && element.value !== change.previousValue)
       lines.push(`  value: "${element.value}"  # was: "${change.previousValue || ''}"`);
-    }
-    if (element.disabled !== undefined && element.disabled !== change.previousDisabled) {
+    if (element.disabled !== undefined && element.disabled !== change.previousDisabled)
       lines.push(`  disabled: ${element.disabled}  # was: ${change.previousDisabled || false}`);
-    }
-    if (element.checked !== undefined && element.checked !== change.previousChecked) {
+    if (element.checked !== undefined && element.checked !== change.previousChecked)
       lines.push(`  checked: ${element.checked}  # was: ${change.previousChecked || false}`);
-    }
-    if (element.expanded !== undefined && element.expanded !== change.previousExpanded) {
+    if (element.expanded !== undefined && element.expanded !== change.previousExpanded)
       lines.push(`  expanded: ${element.expanded}  # was: ${change.previousExpanded || false}`);
-    }
-    if (element.selected !== undefined && element.selected !== change.previousSelected) {
+    if (element.selected !== undefined && element.selected !== change.previousSelected)
       lines.push(`  selected: ${element.selected}  # was: ${change.previousSelected || false}`);
-    }
   } else if (changeType === 'added' && element.value) {
     lines.push(`  value: "${element.value}"`);
   }
@@ -139,13 +105,10 @@ function formatChange(change: ElementChange): string {
 
 export function compressRefList(refs: string[]): string {
   if (refs.length === 0) return '';
-
   const numbers = refs.map((ref) => parseInt(ref.replace('e', ''), 10)).sort((a, b) => a - b);
-
   const ranges: string[] = [];
   let rangeStart = numbers[0];
   let rangeEnd = numbers[0];
-
   for (let i = 1; i < numbers.length; i++) {
     if (numbers[i] === rangeEnd + 1) {
       rangeEnd = numbers[i];
@@ -156,6 +119,5 @@ export function compressRefList(refs: string[]): string {
     }
   }
   ranges.push(rangeStart === rangeEnd ? `e${rangeStart}` : `e${rangeStart}-e${rangeEnd}`);
-
   return ranges.join(', ');
 }

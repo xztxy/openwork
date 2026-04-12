@@ -117,18 +117,3 @@ export class SnapshotManager {
     };
   }
 }
-
-let snapshotManagerInstance: SnapshotManager | null = null;
-
-export function getSnapshotManager(): SnapshotManager {
-  if (!snapshotManagerInstance) {
-    snapshotManagerInstance = new SnapshotManager();
-  }
-  return snapshotManagerInstance;
-}
-
-export function resetSnapshotManager(): void {
-  if (snapshotManagerInstance) {
-    snapshotManagerInstance.reset();
-  }
-}

@@ -1,9 +1,9 @@
 export interface ServeOptions {
-  port?: number;
-  headless?: boolean;
-  cdpPort?: number;
-  profileDir?: string;
-  useSystemChrome?: boolean;
+  port?: number; // default 9224
+  headless?: boolean; // default false (shows the browser window)
+  cdpPort?: number; // default 9225 (Chrome DevTools Protocol port)
+  profileDir?: string; // persistent profile directory; defaults to ./.browser-data
+  useSystemChrome?: boolean; // try system Chrome before Playwright Chromium; default true
 }
 
 export interface ViewportSize {
@@ -11,15 +11,25 @@ export interface ViewportSize {
   height: number;
 }
 
+// Describes WHY a page is being opened — drives foreground/background policy.
+// background-normal : shell/recovery work, must not consume released URLs
+// browser-tool-open : only intent allowed to restore released pages & trigger first-open logic
+// foreground        : explicit user-facing open/focus
+export type PageLaunchIntent = 'background-normal' | 'browser-tool-open' | 'foreground';
+
 export interface GetPageRequest {
   name: string;
   viewport?: ViewportSize;
+  initialUrl?: string;
+  launchIntent?: PageLaunchIntent;
+  keepForegroundUntilFirstFrame?: boolean; // legacy compat; prefer launchIntent
 }
 
 export interface GetPageResponse {
   wsEndpoint: string;
   name: string;
   targetId: string;
+  created: boolean;
 }
 
 export interface ListPagesResponse {
@@ -28,33 +38,14 @@ export interface ListPagesResponse {
 
 export interface ServerInfoResponse {
   wsEndpoint: string;
+  browserReady: boolean;
 }
 
-// ─── Screencast types (ENG-695, contributed by david-mamani / PR #553) ──────
-
-export interface ScreencastConfig {
-  format: 'jpeg' | 'png';
-  quality: number;
-  maxWidth: number;
-  maxHeight: number;
-  everyNthFrame: number;
+export interface PageStateResponse {
+  name: string;
+  targetId: string;
+  url: string;
+  title: string;
+  canGoBack: boolean;
+  canGoForward: boolean;
 }
-
-export interface ScreencastFrameMetadata {
-  pageUrl: string;
-  timestamp: number;
-  offsetTop: number;
-  pageScaleFactor: number;
-  deviceWidth: number;
-  deviceHeight: number;
-}
-
-export interface ScreencastFrame {
-  /** Base-64 encoded image data */
-  data: string;
-  /** CDP session ID for acknowledgement */
-  sessionId: number;
-  metadata: ScreencastFrameMetadata;
-}
-
-export type ScreencastStatus = 'idle' | 'starting' | 'streaming' | 'stopping' | 'error';

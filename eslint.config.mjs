@@ -18,6 +18,7 @@ export default tseslint.config(
       '**/public/theme-init.js',
       '**/out/**',
       '.claude/**',
+      '**/mcp-tools/dev-browser/server.cjs',
     ],
   },
   eslint.configs.recommended,

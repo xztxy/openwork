@@ -87,6 +87,15 @@ const bundles = [
     external: ['playwright'],
   },
   {
+    // Main HTTP server — must output to package root as server.cjs (referenced by
+    // packages/agent-core/src/browser/server.ts:34 via hardcoded path)
+    name: 'dev-browser',
+    entry: 'src/index.ts',
+    outfile: 'server.cjs',
+    external: ['playwright'],
+    format: 'cjs',
+  },
+  {
     name: 'dev-browser',
     entry: 'scripts/start-server.ts',
     outfile: 'dist/start-server.mjs',
@@ -138,7 +147,7 @@ function verifyBundleOutputs() {
   }
 }
 
-async function bundleSkill({ name, entry, outfile, external = [], banner: needsBanner }) {
+async function bundleSkill({ name, entry, outfile, external = [], banner: needsBanner, format: outputFormat }) {
   const skillDir = path.join(skillsDir, name);
   const absEntry = path.join(skillDir, entry);
   const absOutfile = path.join(skillDir, outfile);
@@ -164,7 +173,7 @@ async function bundleSkill({ name, entry, outfile, external = [], banner: needsB
     outfile: absOutfile,
     bundle: true,
     platform: 'node',
-    format: 'esm',
+    format: outputFormat || 'esm',
     ...(needsBanner && {
       banner: {
         js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);",

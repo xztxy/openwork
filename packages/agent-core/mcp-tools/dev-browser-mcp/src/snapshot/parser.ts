@@ -28,47 +28,25 @@ export function parseSnapshot(yamlSnapshot: string, url: string, title: string):
     const element: SnapshotElement = { ref, role, name };
 
     const valueMatch = line.match(valueRegex);
-    if (valueMatch) {
-      element.value = valueMatch[1];
-    }
+    if (valueMatch) element.value = valueMatch[1];
 
     const checkedMatch = rest.match(checkedRegex);
-    if (checkedMatch) {
-      element.checked = checkedMatch[1] === 'mixed' ? 'mixed' : true;
-    }
+    if (checkedMatch) element.checked = checkedMatch[1] === 'mixed' ? 'mixed' : true;
 
-    if (disabledRegex.test(rest)) {
-      element.disabled = true;
-    }
-
-    if (expandedRegex.test(rest)) {
-      element.expanded = true;
-    }
-
-    if (selectedRegex.test(rest)) {
-      element.selected = true;
-    }
+    if (disabledRegex.test(rest)) element.disabled = true;
+    if (expandedRegex.test(rest)) element.expanded = true;
+    if (selectedRegex.test(rest)) element.selected = true;
 
     const levelMatch = rest.match(levelRegex);
-    if (levelMatch) {
-      element.level = parseInt(levelMatch[1], 10);
-    }
+    if (levelMatch) element.level = parseInt(levelMatch[1], 10);
 
     const pressedMatch = rest.match(pressedRegex);
-    if (pressedMatch) {
-      element.pressed = pressedMatch[1] === 'mixed' ? 'mixed' : true;
-    }
+    if (pressedMatch) element.pressed = pressedMatch[1] === 'mixed' ? 'mixed' : true;
 
     elements.set(ref, element);
   }
 
-  return {
-    url,
-    title,
-    timestamp: Date.now(),
-    elements,
-    rawYaml: yamlSnapshot,
-  };
+  return { url, title, timestamp: Date.now(), elements, rawYaml: yamlSnapshot };
 }
 
 export function extractTitleFromSnapshot(snapshot: string): string {
