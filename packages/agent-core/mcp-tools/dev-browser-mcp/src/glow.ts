@@ -1,7 +1,9 @@
 import type { Page } from 'playwright';
 
 export async function injectActiveTabGlow(page: Page): Promise<void> {
-  if (page.isClosed()) return;
+  if (page.isClosed()) {
+    return;
+  }
   try {
     await page.evaluate(() => {
       document.getElementById('__dev-browser-active-glow')?.remove();
@@ -32,7 +34,9 @@ export async function injectActiveTabGlow(page: Page): Promise<void> {
 }
 
 export async function removeActiveTabGlow(page: Page): Promise<void> {
-  if (page.isClosed()) return;
+  if (page.isClosed()) {
+    return;
+  }
   try {
     await page.evaluate(() => {
       document.getElementById('__dev-browser-active-glow')?.remove();

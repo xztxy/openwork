@@ -23,7 +23,7 @@ export class BrowserWindowController {
   }
 
   async backgroundPage(page: Page, browserContext?: BrowserContext): Promise<void> {
-    if (this.options.headless) return;
+    if (this.options.headless) { return; }
     await this.setWindowStateForPage(page, 'minimized', undefined, browserContext);
   }
 
@@ -40,7 +40,7 @@ export class BrowserWindowController {
     targetId: string,
     browserContext: BrowserContext,
   ): Promise<void> {
-    if (this.options.headless) return;
+    if (this.options.headless) { return; }
     await this.options.withPreservedForeground(async () => {
       await this.setWindowStateForPage(page, 'normal', targetId, browserContext);
     });
@@ -62,7 +62,7 @@ export class BrowserWindowController {
     browserContext: BrowserContext,
   ): Promise<void> {
     await this.setWindowStateForPage(page, 'normal', targetId, browserContext);
-    if (this.options.headless) return;
+    if (this.options.headless) { return; }
     await this.syncWindowToViewport(page, targetId, browserContext);
   }
 

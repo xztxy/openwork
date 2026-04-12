@@ -5,7 +5,8 @@ import {
   type CDPSession,
   type Page,
 } from 'playwright';
-import { BrowserManager } from './browser-manager.js';
+import { BrowserManager, isRecoverableConnectionError } from './browser-manager.js';
+export { isRecoverableConnectionError };
 
 export type ConnectionMode = 'builtin' | 'remote';
 
@@ -62,22 +63,6 @@ export function getFullPageName(pageName?: string): string {
   return `${_config.taskId}-${pageName || 'main'}`;
 }
 
-// Detect errors that indicate the browser connection was lost and should be retried
-export function isRecoverableConnectionError(err: unknown): boolean {
-  if (!(err instanceof Error)) return false;
-  const msg = err.message.toLowerCase();
-  return (
-    msg.includes('fetch failed') ||
-    msg.includes('socket hang up') ||
-    msg.includes('econnrefused') ||
-    msg.includes('websocket closed') ||
-    msg.includes('connectovercdp') ||
-    msg.includes('target closed') ||
-    msg.includes('session closed') ||
-    msg.includes('page closed')
-  );
-}
-
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 export function getConnectionMode(): ConnectionMode {
@@ -99,6 +84,8 @@ export async function getPage(pageName?: string): Promise<Page> {
 }
 
 export async function listPages(): Promise<string[]> {
+  const prefix = `${_config.taskId}-`;
+
   if (_config.mode === 'builtin') {
     const url = `${_config.devBrowserUrl}/pages`;
     try {
@@ -107,7 +94,7 @@ export async function listPages(): Promise<string[]> {
         throw new Error(`Failed to list pages: HTTP ${res.status} at ${url}`);
       }
       const data = (await res.json()) as { pages: string[] };
-      return data.pages;
+      return data.pages.filter((n) => n.startsWith(prefix)).map((n) => n.slice(prefix.length));
     } catch (err) {
       throw new Error(
         `Error listing pages from dev-browser at ${url}: ${err instanceof Error ? err.message : String(err)}`,
@@ -115,8 +102,10 @@ export async function listPages(): Promise<string[]> {
     }
   }
 
-  // Remote mode: return from local registry
-  return Array.from(_manager.getLocalPageRegistry().keys());
+  // Remote mode: return public page names by stripping the taskId prefix
+  return Array.from(_manager.getLocalPageRegistry().keys())
+    .filter((n) => n.startsWith(prefix))
+    .map((n) => n.slice(prefix.length));
 }
 
 export async function closePage(pageName?: string): Promise<boolean> {

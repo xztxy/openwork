@@ -26,7 +26,9 @@ export function validateToolCall(toolName: string, args: unknown): ValidationRes
     return { valid: false, errors: ['Arguments must be an object'] };
   }
 
-  const required = (schema['required'] as string[]) ?? [];
+  const required = Array.isArray(schema['required'])
+    ? (schema['required'] as unknown[]).filter((f): f is string => typeof f === 'string')
+    : [];
   const errors: string[] = [];
 
   for (const field of required) {

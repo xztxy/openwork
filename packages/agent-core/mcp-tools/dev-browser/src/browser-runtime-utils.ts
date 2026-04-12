@@ -28,11 +28,19 @@ export async function fetchWithRetry(
   maxRetries = 5,
   delayMs = 500,
 ): Promise<Response> {
+  maxRetries = Math.max(1, Math.floor(maxRetries));
+  delayMs = Math.max(0, delayMs);
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const controller = new AbortController();
     try {
-      const response = await withTimeout(fetch(url), 30000, `fetch timed out for ${url}`);
-      if (response.ok) return response;
+      const response = await withTimeout(
+        fetch(url, { signal: controller.signal }),
+        30000,
+        `fetch timed out for ${url}`,
+        () => controller.abort(),
+      );
+      if (response.ok) { return response; }
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
@@ -44,20 +52,26 @@ export async function fetchWithRetry(
   throw new Error(`Failed after ${maxRetries} retries: ${lastError?.message}`);
 }
 
-export function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+export function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  message: string,
+  onTimeout?: () => void,
+): Promise<T> {
   let timeoutId: NodeJS.Timeout | null = null;
   return new Promise<T>((resolve, reject) => {
     timeoutId = setTimeout(() => {
       timeoutId = null;
+      onTimeout?.();
       reject(new Error(`Timeout: ${message}`));
     }, ms);
     promise
       .then((value) => {
-        if (timeoutId) clearTimeout(timeoutId);
+        if (timeoutId) { clearTimeout(timeoutId); }
         resolve(value);
       })
       .catch((err) => {
-        if (timeoutId) clearTimeout(timeoutId);
+        if (timeoutId) { clearTimeout(timeoutId); }
         reject(err);
       });
   });
@@ -68,5 +82,5 @@ export function respondInternalError(
   error: unknown,
 ): void {
   console.error('[dev-browser] internal error', error);
-  res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  res.status(500).json({ error: 'Internal server error' });
 }

@@ -1,21 +1,24 @@
 import { type Browser, type Page } from 'playwright';
 
 const RECOVERABLE_PATTERNS = [
-  'ECONNREFUSED',
-  'ECONNRESET',
-  'EPIPE',
-  'ENOTFOUND',
+  'econnrefused',
+  'econnreset',
+  'epipe',
+  'enotfound',
   'socket hang up',
-  'net::ERR_',
-  'WebSocket',
+  'net::err_',
+  'websocket',
   'connection',
-  'Target closed',
-  'Session closed',
-  'Browser closed',
+  'target closed',
+  'session closed',
+  'browser closed',
+  'fetch failed',
+  'connectovercdp',
+  'page closed',
 ];
 
 export function isRecoverableConnectionError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = String(error).toLowerCase();
   return RECOVERABLE_PATTERNS.some((p) => message.includes(p));
 }
 
@@ -61,6 +64,7 @@ export class BrowserManager {
   resetConnection(): void {
     this.browser = null;
     this.connectingPromise = null;
+    this.cachedServerMode = null;
     // Gracefully close all pages in the local registry before clearing
     for (const page of this.localPageRegistry.values()) {
       try {

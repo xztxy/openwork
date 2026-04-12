@@ -25,8 +25,8 @@ export class BrowserTaskPageFactory {
   attachStartupPage(page: Page | null): void {
     if (page && isReusableStartupPageUrl(page.url())) {
       this.reusableStartupPage = page;
-      page.on('close', () => {
-        if (this.reusableStartupPage === page) this.reusableStartupPage = null;
+      page.once('close', () => {
+        if (this.reusableStartupPage === page) { this.reusableStartupPage = null; }
       });
       return;
     }
@@ -98,11 +98,12 @@ export class BrowserTaskPageFactory {
       browserContext: options.browserContext,
       initialUrl: options.initialUrl,
       launchMode,
+      viewport: options.viewport,
     });
   }
 
   async recycleOrClosePage(page: Page): Promise<void> {
-    if (page.isClosed()) return;
+    if (page.isClosed()) { return; }
     const activeContext = await this.options.ensureBrowserContext();
     if (!(await this.isLastOpenPage(page, activeContext))) {
       await page.close();
@@ -127,7 +128,7 @@ export class BrowserTaskPageFactory {
     browserContext?: BrowserContext,
   ): Promise<void> {
     if (page.isClosed()) {
-      if (this.reusableStartupPage === page) this.reusableStartupPage = null;
+      if (this.reusableStartupPage === page) { this.reusableStartupPage = null; }
       return;
     }
     if (!isReusableStartupPageUrl(page.url())) {
@@ -146,7 +147,7 @@ export class BrowserTaskPageFactory {
     const startTime = Date.now();
     while (Date.now() - startTime < 30000) {
       for (const candidate of activeContext.pages()) {
-        if (candidate.isClosed()) continue;
+        if (candidate.isClosed()) { continue; }
         try {
           if ((await this.options.windowController.getTargetId(candidate)) === targetId)
             return candidate;
@@ -244,6 +245,7 @@ export class BrowserTaskPageFactory {
     browserContext: BrowserContext;
     initialUrl?: string;
     launchMode: TaskPageLaunchMode;
+    viewport?: ViewportSize;
   }): Promise<CreatedTaskPage> {
     return this.options.withPreservedForeground(async () => {
       const cdpSession = await options.browserContext.newCDPSession(options.anchorPage);
@@ -253,6 +255,7 @@ export class BrowserTaskPageFactory {
           background: options.launchMode !== 'foreground',
         })) as { targetId: string };
         const page = await this.waitForPageByTargetId(targetId);
+        if (options.viewport) { await page.setViewportSize(options.viewport); }
         return {
           page,
           targetId,

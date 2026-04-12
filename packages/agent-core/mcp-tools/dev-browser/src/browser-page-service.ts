@@ -124,9 +124,7 @@ export class BrowserPageService {
     try {
       await withTimeout(page.goto(url), 30000, `Navigation timed out for external page: ${url}`);
     } catch (error) {
-      if (!isClosedPageError(error)) {
-        // Log unexpected navigation errors, but do not throw (best-effort navigation)
-        // console.error(`Navigation error for external page ${url}:`, error);
+      if (isClosedPageError(error)) {
         return;
       }
       throw error;
@@ -309,11 +307,22 @@ export class BrowserPageService {
     await this.finishCreatedPageSetup(createdPage, options.viewport);
 
     const entry = createPageEntry(createdPage);
+
+    // Navigate before registering so a failed navigation leaves no partial state.
+    try {
+      await this.finishCreatedPageNavigation(options.name, entry, restoreUrl, createdPage);
+    } catch (error) {
+      try {
+        await entry.page.close();
+      } catch {
+        // ignore cleanup errors
+      }
+      throw error;
+    }
+
     this.registry.set(options.name, entry);
     this.knownTaskPages.add(options.name);
     this.attachPageCloseHandler(options.name, entry);
-
-    await this.finishCreatedPageNavigation(options.name, entry, restoreUrl, createdPage);
     this.releasedPageUrls.delete(options.name);
     return entry;
   }
