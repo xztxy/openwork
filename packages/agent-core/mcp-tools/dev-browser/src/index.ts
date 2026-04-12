@@ -185,6 +185,20 @@ export async function serve(options: ServeOptions = {}): Promise<DevBrowserServe
     try {
       const name = decodeURIComponent(req.params.name);
       const { url } = req.body as { url: string };
+      // Validate url
+      let valid = false;
+      if (typeof url === 'string') {
+        try {
+          new URL(url);
+          valid = true;
+        } catch (_e) {
+          // invalid URL — valid stays false
+        }
+      }
+      if (!valid) {
+        res.status(400).json({ error: 'invalid url' });
+        return;
+      }
       const state = await pageService.navigatePage(name, url);
       if (!state) {
         res.status(404).json({ error: 'page not found' });

@@ -86,3 +86,4 @@ apps/desktop/resources/nodejs/
 packages/agent-core/mcp-tools/*/package-lock.json
 packages/agent-core/mcp-tools/package-lock.json
 /.run/
+packages/agent-core/mcp-tools/dev-browser/

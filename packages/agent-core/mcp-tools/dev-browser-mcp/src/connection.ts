@@ -101,9 +101,18 @@ export async function getPage(pageName?: string): Promise<Page> {
 export async function listPages(): Promise<string[]> {
   if (_config.mode === 'builtin') {
     const url = `${_config.devBrowserUrl}/pages`;
-    const res = await fetch(url);
-    const data = (await res.json()) as { pages: string[] };
-    return data.pages;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error(`Failed to list pages: HTTP ${res.status} at ${url}`);
+      }
+      const data = (await res.json()) as { pages: string[] };
+      return data.pages;
+    } catch (err) {
+      throw new Error(
+        `Error listing pages from dev-browser at ${url}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   // Remote mode: return from local registry
@@ -170,10 +179,7 @@ async function getBuiltinPage(fullName: string): Promise<Page> {
   if (!context) throw new Error('No browser context available');
 
   const pages = context.pages();
-  const match = pages.find((p) => !p.isClosed() && p.url() !== 'about:blank');
-  if (match) return match;
-
-  // Find by targetId via CDP
+  // First, try to match by targetId via CDP
   for (const page of pages) {
     if (page.isClosed()) continue;
     try {
@@ -187,11 +193,13 @@ async function getBuiltinPage(fullName: string): Promise<Page> {
       // try next
     }
   }
-
+  // Fallback: any non-blank, open page
+  const match = pages.find((p) => !p.isClosed() && p.url() !== 'about:blank');
+  if (match) return match;
+  // Last fallback: last open page
   if (pages.length > 0 && !pages[pages.length - 1].isClosed()) {
     return pages[pages.length - 1];
   }
-
   throw new Error(`Page "${fullName}" not found in browser context`);
 }
 

@@ -87,7 +87,12 @@ export class BrowserPageService {
     if (!entry) return false;
 
     await this.screencastController.stop(entry);
-    await entry.page.close();
+    try {
+      await entry.page.close();
+    } catch (_error) {
+      // Log or ignore error, but continue cleanup
+      // console.error(`Error closing page for ${name}:`, _error);
+    }
     this.registry.delete(name);
     return true;
   }
@@ -119,7 +124,12 @@ export class BrowserPageService {
     try {
       await withTimeout(page.goto(url), 30000, `Navigation timed out for external page: ${url}`);
     } catch (error) {
-      if (isClosedPageError(error)) throw error;
+      if (!isClosedPageError(error)) {
+        // Log unexpected navigation errors, but do not throw (best-effort navigation)
+        // console.error(`Navigation error for external page ${url}:`, error);
+        return;
+      }
+      throw error;
     }
   }
 

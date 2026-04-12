@@ -189,6 +189,7 @@ export class BrowserWindowController {
           page,
           { width: desiredWidth, height: desiredHeight },
           targetId,
+          browserContext,
         );
       },
       targetId,

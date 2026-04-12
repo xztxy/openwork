@@ -22669,10 +22669,10 @@ async function withPreservedForeground(operation) {
   } finally {
     if (frontmostApp) {
       try {
-        (0, import_child_process.execSync)(
-          `osascript -e 'tell application "${frontmostApp}" to activate'`,
-          { encoding: "utf8", timeout: 2e3 }
-        );
+        (0, import_child_process.execSync)(`osascript -e 'tell application "${frontmostApp}" to activate'`, {
+          encoding: "utf8",
+          timeout: 2e3
+        });
       } catch {
       }
     }
@@ -22731,7 +22731,8 @@ function shouldLaunchMinimizedOnce(options) {
 }
 function selectReusableStartupPage(reusableStartupPage, registrySize, openPages) {
   if (!reusableStartupPage || reusableStartupPage.isClosed()) return null;
-  if (registrySize !== 0 || openPages.length !== 1 || openPages[0] !== reusableStartupPage) return null;
+  if (registrySize !== 0 || openPages.length !== 1 || openPages[0] !== reusableStartupPage)
+    return null;
   return reusableStartupPage;
 }
 function isScreencastFrameStale(entry) {
@@ -22748,7 +22749,14 @@ var BrowserPageStateReader = class {
   async readPageState(name, entry) {
     const title = await this.readPageTitle(name, entry);
     const { canGoBack, canGoForward } = await this.readNavigationHistory(name, entry);
-    return { name, targetId: entry.targetId, url: entry.page.url(), title, canGoBack, canGoForward };
+    return {
+      name,
+      targetId: entry.targetId,
+      url: entry.page.url(),
+      title,
+      canGoBack,
+      canGoForward
+    };
   }
   async readNavigationHistory(name, entry) {
     const activeContext = await this.options.ensureBrowserContext();
@@ -22883,9 +22891,7 @@ var BrowserScreencastController = class {
       await new Promise((r) => setTimeout(r, SCREENCAST_FRAME_POLL_MS));
     }
     if (screencast.latestFrame) return screencast.latestFrame;
-    throw new Error(
-      `Screencast frame timed out after ${SCREENCAST_FIRST_FRAME_TIMEOUT_MS}ms`
-    );
+    throw new Error(`Screencast frame timed out after ${SCREENCAST_FIRST_FRAME_TIMEOUT_MS}ms`);
   }
   staleGraceExpired(entry) {
     const { screencast, page } = entry;
@@ -22934,10 +22940,22 @@ var BrowserWindowController = class {
   }
   async syncWindowToViewport(page, targetId, browserContext) {
     const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
-    await this.setWindowContentsSizeForPage(page, viewport.width, viewport.height, targetId, browserContext).catch((error) => {
+    await this.setWindowContentsSizeForPage(
+      page,
+      viewport.width,
+      viewport.height,
+      targetId,
+      browserContext
+    ).catch((error) => {
       if (isClosedPageError(error)) throw error;
     });
-    await this.normalizeWindowBoundsForPage(page, viewport.width, viewport.height, targetId, browserContext).catch((error) => {
+    await this.normalizeWindowBoundsForPage(
+      page,
+      viewport.width,
+      viewport.height,
+      targetId,
+      browserContext
+    ).catch((error) => {
       if (isClosedPageError(error)) throw error;
     });
   }
@@ -22994,7 +23012,11 @@ var BrowserWindowController = class {
       async (_cdpSession, _windowId, bounds) => {
         const desiredWidth = width + this.clampWindowSizeDelta((bounds.width ?? width) - width, 0, 64);
         const desiredHeight = height + this.clampWindowSizeDelta((bounds.height ?? height) - height, 80, 220);
-        await this.setWindowBoundsForPage(page, { width: desiredWidth, height: desiredHeight }, targetId);
+        await this.setWindowBoundsForPage(
+          page,
+          { width: desiredWidth, height: desiredHeight },
+          targetId
+        );
       },
       targetId,
       browserContext
@@ -23098,7 +23120,11 @@ var BrowserTaskPageFactory = class {
       return;
     }
     if (!isReusableStartupPageUrl(page.url())) {
-      await withTimeout(page.goto("about:blank"), 3e4, "Navigation timed out while preparing reusable startup page");
+      await withTimeout(
+        page.goto("about:blank"),
+        3e4,
+        "Navigation timed out while preparing reusable startup page"
+      );
     }
     this.attachStartupPage(page);
     await this.options.windowController.backgroundPage(page, browserContext);
@@ -23110,7 +23136,8 @@ var BrowserTaskPageFactory = class {
       for (const candidate of activeContext.pages()) {
         if (candidate.isClosed()) continue;
         try {
-          if (await this.options.windowController.getTargetId(candidate) === targetId) return candidate;
+          if (await this.options.windowController.getTargetId(candidate) === targetId)
+            return candidate;
         } catch (error) {
           if (!isClosedPageError(error)) throw error;
         }
@@ -23129,7 +23156,13 @@ var BrowserTaskPageFactory = class {
       navigatedDuringCreate = true;
     }
     await this.prepareReusedStartupPageForLaunch({ browserContext, launchMode, page, targetId });
-    return { page, targetId, windowState: "normal", backgroundAfterFirstFrame: launchMode === "minimized-once", navigatedDuringCreate };
+    return {
+      page,
+      targetId,
+      windowState: "normal",
+      backgroundAfterFirstFrame: launchMode === "minimized-once",
+      navigatedDuringCreate
+    };
   }
   async prepareReusedStartupPageForLaunch(options) {
     const { browserContext, launchMode, page, targetId } = options;
@@ -23138,19 +23171,36 @@ var BrowserTaskPageFactory = class {
       return;
     }
     if (launchMode === "minimized-once") return;
-    await this.options.windowController.restorePageWithoutForeground(page, targetId, browserContext);
+    await this.options.windowController.restorePageWithoutForeground(
+      page,
+      targetId,
+      browserContext
+    );
   }
   async createStandaloneTaskPage(options) {
     return this.options.withPreservedForeground(async () => {
-      const page = await withTimeout(options.browserContext.newPage(), 3e4, "Page creation timed out after 30s");
+      const page = await withTimeout(
+        options.browserContext.newPage(),
+        3e4,
+        "Page creation timed out after 30s"
+      );
       if (options.viewport) await page.setViewportSize(options.viewport);
       let navigatedDuringCreate = false;
       if (options.initialUrl) {
         await navigatePageToUrl(options.name, page, options.initialUrl);
         navigatedDuringCreate = true;
       }
-      const targetId = await this.options.windowController.getTargetId(page, options.browserContext);
-      return { page, targetId, windowState: "normal", backgroundAfterFirstFrame: false, navigatedDuringCreate };
+      const targetId = await this.options.windowController.getTargetId(
+        page,
+        options.browserContext
+      );
+      return {
+        page,
+        targetId,
+        windowState: "normal",
+        backgroundAfterFirstFrame: false,
+        navigatedDuringCreate
+      };
     });
   }
   async createAnchoredTaskPage(options) {
@@ -23162,7 +23212,13 @@ var BrowserTaskPageFactory = class {
           background: options.launchMode !== "foreground"
         });
         const page = await this.waitForPageByTargetId(targetId);
-        return { page, targetId, windowState: "normal", backgroundAfterFirstFrame: false, navigatedDuringCreate: !!options.initialUrl };
+        return {
+          page,
+          targetId,
+          windowState: "normal",
+          backgroundAfterFirstFrame: false,
+          navigatedDuringCreate: !!options.initialUrl
+        };
       } finally {
         await cdpSession.detach().catch(() => {
         });
@@ -23372,7 +23428,11 @@ var BrowserPageService = class {
   }
   async createAndRegisterPageEntry(options) {
     const browserContext = await this.options.ensureBrowserContext();
-    const restoreUrl = this.resolveRestoreUrl(options.name, options.initialUrl, options.launchIntent);
+    const restoreUrl = this.resolveRestoreUrl(
+      options.name,
+      options.initialUrl,
+      options.launchIntent
+    );
     const createdPage = await this.pageFactory.createTaskPage({
       activeTaskPageCount: this.registry.size,
       browserContext,

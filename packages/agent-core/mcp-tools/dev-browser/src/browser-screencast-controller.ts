@@ -61,8 +61,14 @@ export class BrowserScreencastController {
 
     await this.stop(entry);
     screencast.startPromise = this.startScreencast(entry, quality);
-    await screencast.startPromise;
-    screencast.startPromise = null;
+    try {
+      await screencast.startPromise;
+    } catch (err) {
+      await this.stop(entry);
+      throw err;
+    } finally {
+      screencast.startPromise = null;
+    }
   }
 
   private async startScreencast(entry: PageEntry, quality: number): Promise<void> {

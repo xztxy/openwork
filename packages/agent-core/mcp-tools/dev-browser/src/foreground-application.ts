@@ -21,7 +21,9 @@ export async function withPreservedForeground<T>(operation: () => Promise<T>): P
   } finally {
     if (frontmostApp) {
       try {
-        execSync(`osascript -e 'tell application "${frontmostApp}" to activate'`, {
+        // Escape backslashes and double quotes for AppleScript
+        const escapedApp = frontmostApp.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        execSync(`osascript -e 'tell application "${escapedApp}" to activate'`, {
           encoding: 'utf8',
           timeout: 2000,
         });

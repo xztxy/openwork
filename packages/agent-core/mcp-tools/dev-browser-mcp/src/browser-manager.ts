@@ -61,6 +61,18 @@ export class BrowserManager {
   resetConnection(): void {
     this.browser = null;
     this.connectingPromise = null;
+    // Gracefully close all pages in the local registry before clearing
+    for (const page of this.localPageRegistry.values()) {
+      try {
+        if (!page.isClosed()) {
+          // Close page asynchronously, don't await
+          page.close().catch(() => {});
+        }
+      } catch {
+        // Ignore errors when closing pages during reset
+      }
+    }
+    this.localPageRegistry.clear();
   }
 
   async withConnectionRecovery<T>(
@@ -69,7 +81,12 @@ export class BrowserManager {
     maxAttempts = 2,
     baseDelayMs = 100,
   ): Promise<T> {
-    let lastError: unknown;
+    // Validate maxAttempts
+    if (!Number.isFinite(maxAttempts) || maxAttempts <= 0) {
+      throw new RangeError(`maxAttempts must be a positive integer, got: ${maxAttempts}`);
+    }
+    maxAttempts = Math.max(1, Math.floor(maxAttempts));
+    let lastError: Error | unknown = undefined;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         return await fn();
@@ -81,6 +98,6 @@ export class BrowserManager {
         console.error(`[browser-manager] Retrying ${label} after connection error...`);
       }
     }
-    throw lastError;
+    throw lastError ?? new Error(`Failed to ${label} (no error captured)`);
   }
 }

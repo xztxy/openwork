@@ -31,7 +31,7 @@ export async function fetchWithRetry(
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      const response = await fetch(url);
+      const response = await withTimeout(fetch(url), 30000, `fetch timed out for ${url}`);
       if (response.ok) return response;
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     } catch (error) {
@@ -45,12 +45,22 @@ export async function fetchWithRetry(
 }
 
 export function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`Timeout: ${message}`)), ms),
-    ),
-  ]);
+  let timeoutId: NodeJS.Timeout | null = null;
+  return new Promise<T>((resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      timeoutId = null;
+      reject(new Error(`Timeout: ${message}`));
+    }, ms);
+    promise
+      .then((value) => {
+        if (timeoutId) clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((err) => {
+        if (timeoutId) clearTimeout(timeoutId);
+        reject(err);
+      });
+  });
 }
 
 export function respondInternalError(

@@ -71,7 +71,7 @@ export class BrowserPageStateReader {
       return await readTitle('getPageState:title-retry');
     } catch (error) {
       if (!isTransientNavigationContextError(error)) throw error;
-      return entry.lastKnownTitle;
+      return entry.lastKnownTitle ?? 'Untitled';
     }
   }
 
