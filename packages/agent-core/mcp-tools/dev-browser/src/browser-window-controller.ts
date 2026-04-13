@@ -1,6 +1,6 @@
 import type { BrowserContext, CDPSession, Page } from 'playwright';
-import { isClosedPageError, withTimeout } from './browser-runtime-utils';
-import type { BrowserWindowBounds, BrowserWindowState } from './browser-page-service-state';
+import { isClosedPageError, withTimeout } from './browser-runtime-utils.js';
+import type { BrowserWindowBounds, BrowserWindowState } from './browser-page-service-state.js';
 
 export interface BrowserWindowControllerOptions {
   headless: boolean;

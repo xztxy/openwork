@@ -31,64 +31,89 @@ export async function serve(options: ServeOptions = {}): Promise<DevBrowserServe
 
   const baseProfileDir = profileDir ?? join(process.cwd(), '.browser-data');
 
-  let browserContext: BrowserContext;
-  let usedSystemChrome = false;
+  // ─── Lazy Chrome launch ───────────────────────────────────────────────────
+  // Chrome is NOT started here. It starts on the first POST /pages request so
+  // no Chrome window appears for tasks that never use the browser.
 
-  if (useSystemChrome) {
-    try {
-      console.log('Trying to use system Chrome...');
-      const chromeUserDataDir = join(baseProfileDir, 'chrome-profile');
-      mkdirSync(chromeUserDataDir, { recursive: true });
-      browserContext = await chromium.launchPersistentContext(chromeUserDataDir, {
+  let _wsEndpoint = '';
+  let _browserContext: BrowserContext | null = null;
+  let _launchPromise: Promise<BrowserContext> | null = null;
+
+  async function launchBrowserContext(): Promise<BrowserContext> {
+    let browserContext: BrowserContext;
+    let usedSystemChrome = false;
+
+    if (useSystemChrome) {
+      try {
+        console.log('Trying to use system Chrome...');
+        const chromeUserDataDir = join(baseProfileDir, 'chrome-profile');
+        mkdirSync(chromeUserDataDir, { recursive: true });
+        browserContext = await chromium.launchPersistentContext(chromeUserDataDir, {
+          headless,
+          channel: 'chrome',
+          ignoreDefaultArgs: ['--enable-automation'],
+          args: [
+            `--remote-debugging-port=${cdpPort}`,
+            '--disable-blink-features=AutomationControlled',
+          ],
+        });
+        usedSystemChrome = true;
+        console.log('Using system Chrome');
+      } catch {
+        console.log('System Chrome not available, falling back to Playwright Chromium...');
+      }
+    }
+
+    if (!usedSystemChrome) {
+      const playwrightUserDataDir = join(baseProfileDir, 'playwright-profile');
+      mkdirSync(playwrightUserDataDir, { recursive: true });
+      browserContext = await chromium.launchPersistentContext(playwrightUserDataDir, {
         headless,
-        channel: 'chrome',
         ignoreDefaultArgs: ['--enable-automation'],
         args: [
           `--remote-debugging-port=${cdpPort}`,
           '--disable-blink-features=AutomationControlled',
         ],
       });
-      usedSystemChrome = true;
-      console.log('Using system Chrome');
-    } catch {
-      console.log('System Chrome not available, falling back to Playwright Chromium...');
     }
-  }
 
-  if (!usedSystemChrome) {
-    const playwrightUserDataDir = join(baseProfileDir, 'playwright-profile');
-    mkdirSync(playwrightUserDataDir, { recursive: true });
-    browserContext = await chromium.launchPersistentContext(playwrightUserDataDir, {
-      headless,
-      ignoreDefaultArgs: ['--enable-automation'],
-      args: [`--remote-debugging-port=${cdpPort}`, '--disable-blink-features=AutomationControlled'],
+    const cdpResponse = await fetchWithRetry(`http://127.0.0.1:${cdpPort}/json/version`);
+    const cdpInfo = (await cdpResponse.json()) as { webSocketDebuggerUrl: string };
+    _wsEndpoint = cdpInfo.webSocketDebuggerUrl;
+    console.log(`CDP WebSocket endpoint: ${_wsEndpoint}`);
+
+    _browserContext = browserContext!;
+
+    // Attach any startup page (blank tab Chrome opens on launch)
+    const startupPages = browserContext!.pages();
+    const blankStartup = startupPages.find((p) => p.url() === 'about:blank') ?? null;
+    if (blankStartup) {
+      pageService.attachStartupPage(blankStartup);
+      // Minimize the blank startup tab immediately so no Chrome window appears.
+      // Content is delivered via the in-app screencast preview instead.
+      await pageService.backgroundStartupPage(blankStartup);
+    }
+
+    browserContext!.on('close', () => {
+      console.log('Browser context closed.');
     });
+
+    return browserContext!;
   }
 
-  const cdpResponse = await fetchWithRetry(`http://127.0.0.1:${cdpPort}/json/version`);
-  const cdpInfo = (await cdpResponse.json()) as { webSocketDebuggerUrl: string };
-  const wsEndpoint = cdpInfo.webSocketDebuggerUrl;
-  console.log(`CDP WebSocket endpoint: ${wsEndpoint}`);
+  function ensureBrowserContext(): Promise<BrowserContext> {
+    if (!_launchPromise) {
+      _launchPromise = launchBrowserContext();
+    }
+    return _launchPromise;
+  }
+
+  // ─── Page service ─────────────────────────────────────────────────────────
 
   const pageService = new BrowserPageService({
     headless,
-    ensureBrowserContext: () => Promise.resolve(browserContext),
+    ensureBrowserContext,
     withPreservedForeground,
-  });
-
-  // Attach any startup page (blank tab Chrome opens on launch)
-  const startupPages = browserContext.pages();
-  const blankStartup = startupPages.find((p) => p.url() === 'about:blank') ?? null;
-  if (blankStartup) {
-    pageService['pageFactory'].attachStartupPage(blankStartup);
-    // Minimize the blank startup tab immediately so no Chrome window appears on
-    // server start. Content is delivered via the in-app screencast preview instead.
-    await pageService.backgroundStartupPage(blankStartup);
-  }
-
-  browserContext.on('close', () => {
-    console.log('Browser context closed. Exiting...');
-    process.exit(0);
   });
 
   const app: Express = express();
@@ -96,7 +121,10 @@ export async function serve(options: ServeOptions = {}): Promise<DevBrowserServe
 
   // ─── Health check ──────────────────────────────────────────────────────────
   app.get('/', (_req: Request, res: Response) => {
-    const response: ServerInfoResponse = { wsEndpoint, browserReady: true };
+    const response: ServerInfoResponse = {
+      wsEndpoint: _wsEndpoint,
+      browserReady: !!_browserContext,
+    };
     res.json(response);
   });
 
@@ -116,7 +144,7 @@ export async function serve(options: ServeOptions = {}): Promise<DevBrowserServe
       }
       const ensured = await pageService.ensurePage(body);
       const response: GetPageResponse = {
-        wsEndpoint,
+        wsEndpoint: _wsEndpoint,
         name: ensured.name,
         targetId: ensured.targetId,
         created: ensured.created,
@@ -325,10 +353,12 @@ export async function serve(options: ServeOptions = {}): Promise<DevBrowserServe
     }
     connections.clear();
     await pageService.closeAllPages();
-    try {
-      await browserContext.close();
-    } catch {
-      // intentionally empty
+    if (_browserContext) {
+      try {
+        await _browserContext.close();
+      } catch {
+        // intentionally empty
+      }
     }
     server.close();
     console.log('Server stopped.');
@@ -349,10 +379,12 @@ export async function serve(options: ServeOptions = {}): Promise<DevBrowserServe
   process.on('uncaughtException', errorHandler);
   process.on('unhandledRejection', errorHandler);
   process.on('exit', () => {
-    try {
-      browserContext.close();
-    } catch {
-      /* intentionally empty */
+    if (_browserContext) {
+      try {
+        _browserContext.close();
+      } catch {
+        /* intentionally empty */
+      }
     }
   });
 
@@ -363,7 +395,9 @@ export async function serve(options: ServeOptions = {}): Promise<DevBrowserServe
   };
 
   return {
-    wsEndpoint,
+    get wsEndpoint() {
+      return _wsEndpoint;
+    },
     port,
     async stop() {
       removeHandlers();

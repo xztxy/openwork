@@ -1,7 +1,7 @@
 import type { BrowserContext, Page } from 'playwright';
-import type { GetPageRequest, PageLaunchIntent, PageStateResponse, ViewportSize } from './types';
-import { isClosedPageError, withTimeout } from './browser-runtime-utils';
-import { navigatePageToUrl } from './browser-page-navigator';
+import type { GetPageRequest, PageLaunchIntent, PageStateResponse, ViewportSize } from './types.js';
+import { isClosedPageError, withTimeout } from './browser-runtime-utils.js';
+import { navigatePageToUrl } from './browser-page-navigator.js';
 import {
   createPageEntry,
   resolveRequestedLaunchIntent,
@@ -9,12 +9,12 @@ import {
   type CreatedTaskPage,
   type PageEntry,
   type TaskPageLaunchMode,
-} from './browser-page-service-state';
-import { BrowserPageStateReader } from './browser-page-state-reader';
-import { BrowserScreencastController } from './browser-screencast-controller';
-import { BrowserTaskPageFactory } from './browser-task-page-factory';
-import { BrowserWindowController } from './browser-window-controller';
-import { isHttpNavigationUrl } from './navigation-url';
+} from './browser-page-service-state.js';
+import { BrowserPageStateReader } from './browser-page-state-reader.js';
+import { BrowserScreencastController } from './browser-screencast-controller.js';
+import { BrowserTaskPageFactory } from './browser-task-page-factory.js';
+import { BrowserWindowController } from './browser-window-controller.js';
+import { isHttpNavigationUrl } from './navigation-url.js';
 
 export interface BrowserPageServiceOptions {
   headless: boolean;
@@ -300,20 +300,28 @@ export class BrowserPageService {
       options.initialUrl,
       options.launchIntent,
     );
+    const launchMode = this.resolveTaskPageLaunchMode(
+      options.name,
+      options.launchIntent,
+      options.keepForegroundUntilFirstFrame,
+    );
     const createdPage = await this.pageFactory.createTaskPage({
       activeTaskPageCount: this.registry.size,
       browserContext,
       initialUrl: restoreUrl,
       name: options.name,
-      launchMode: this.resolveTaskPageLaunchMode(
-        options.name,
-        options.launchIntent,
-        options.keepForegroundUntilFirstFrame,
-      ),
+      launchMode,
       viewport: options.viewport,
     });
 
     await this.finishCreatedPageSetup(createdPage, options.viewport);
+
+    // For background-normal mode, ensure the OS window stays minimized after page creation.
+    // Fire-and-forget: window management must NOT block page registration — a hanging CDP
+    // call here would stall POST /pages and cascade-block connectOverCDP in the MCP client.
+    if (launchMode === 'background-normal' && !this.options.headless) {
+      void this.windowController.backgroundPage(createdPage.page, browserContext).catch(() => {});
+    }
 
     const entry = createPageEntry(createdPage);
 
@@ -434,9 +442,19 @@ export class BrowserPageService {
     if (!entry) {
       return null;
     }
-    const ctx = await this.options.ensureBrowserContext();
-    await this.windowController.backgroundPage(entry.page, ctx);
-    entry.windowState = 'minimized';
+
+    try {
+      const ctx = await this.options.ensureBrowserContext();
+      await this.windowController.backgroundPage(entry.page, ctx);
+      entry.windowState = 'minimized';
+    } catch (error) {
+      if (isClosedPageError(error)) {
+        this.deleteStaleEntry(name, entry);
+        return null;
+      }
+      throw error;
+    }
+
     return this.getPageState(name, entry);
   }
 }

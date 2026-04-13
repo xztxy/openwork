@@ -158,7 +158,9 @@ export async function closePage(pageName?: string): Promise<boolean> {
  * Called when auth/interaction detection requires user to see the browser.
  */
 export async function focusPageWindow(pageName?: string): Promise<void> {
-  if (_config.mode !== 'builtin') return;
+  if (_config.mode !== 'builtin') {
+    return;
+  }
   const fullName = getFullPageName(pageName);
   const url = `${_config.devBrowserUrl}/pages/${encodeURIComponent(fullName)}/focus`;
   await fetch(url, { method: 'POST' }).catch(() => {
@@ -171,7 +173,9 @@ export async function focusPageWindow(pageName?: string): Promise<void> {
  * Called when the user has completed an interaction and the page is no longer auth-gated.
  */
 export async function backgroundPageWindow(pageName?: string): Promise<void> {
-  if (_config.mode !== 'builtin') return;
+  if (_config.mode !== 'builtin') {
+    return;
+  }
   const fullName = getFullPageName(pageName);
   const url = `${_config.devBrowserUrl}/pages/${encodeURIComponent(fullName)}/background`;
   await fetch(url, { method: 'POST' }).catch(() => {

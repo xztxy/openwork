@@ -253,11 +253,8 @@ export class BrowserTaskPageFactory {
     if (launchMode === 'minimized-once') {
       return;
     }
-    await this.options.windowController.restorePageWithoutForeground(
-      page,
-      targetId,
-      browserContext,
-    );
+    // background-normal: the startup page was minimized at server start; keep it that way.
+    // Do NOT restore to normal — that would make the Chrome window visible.
   }
 
   private async createStandaloneTaskPage(options: {
