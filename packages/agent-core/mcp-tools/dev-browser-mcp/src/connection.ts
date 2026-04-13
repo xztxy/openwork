@@ -28,8 +28,8 @@ export type ConnectionConfig = BuiltinConnectionConfig | RemoteConnectionConfig;
 let _config: ConnectionConfig = buildConfigFromEnv();
 const _manager = new BrowserManager();
 
-// Cache CDP sessions per page to ensure same session is reused for handlers
-const _cdpSessionCache = new WeakMap<Page, CDPSession>();
+// Cache CDP session promises per page to prevent concurrent creation races
+const _cdpSessionCache = new WeakMap<Page, Promise<CDPSession>>();
 
 // ─── Configuration helpers ──────────────────────────────────────────────────
 
@@ -53,24 +53,23 @@ function buildConfigFromEnv(): ConnectionConfig {
   return { mode: 'builtin', devBrowserUrl: `http://localhost:${port}`, taskId };
 }
 
-// Internal helper: fire-and-forget async cleanup with error handling
-function clearCachedBrowserAsync(): void {
-  _manager.clearCachedBrowser().catch((err) => {
-    console.error('Failed to clear cached browser during configuration:', err);
-  });
+// Internal helper: async cleanup that propagates errors
+async function clearCachedBrowser(): Promise<void> {
+  await _manager.clearCachedBrowser();
 }
 
 // Read from environment and update singleton config
-export function configureFromEnv(): ConnectionConfig {
-  _config = buildConfigFromEnv();
-  clearCachedBrowserAsync();
+export async function configureFromEnv(): Promise<ConnectionConfig> {
+  const newConfig = buildConfigFromEnv();
+  await clearCachedBrowser();
+  _config = newConfig;
   return _config;
 }
 
 // Update singleton config directly (for testing or runtime reconfiguration)
-export function configure(config: ConnectionConfig): void {
+export async function configure(config: ConnectionConfig): Promise<void> {
+  await clearCachedBrowser();
   _config = config;
-  clearCachedBrowserAsync();
 }
 
 // Reset singleton state (for testing)
@@ -186,26 +185,35 @@ export async function backgroundPageWindow(pageName?: string): Promise<void> {
 export async function getCDPSession(pageName?: string): Promise<CDPSession> {
   const page = await getPage(pageName);
 
-  // Return cached session if available
+  // Return cached promise if available (prevents concurrent creation races)
   const cached = _cdpSessionCache.get(page);
   if (cached) {
     return cached;
   }
 
-  // Create new session and cache it
+  // Create new session promise and cache it immediately
   const context = page.context();
   if (!context) {
     throw new Error('No browser context available for page');
   }
-  const session = await context.newCDPSession(page);
-  _cdpSessionCache.set(page, session);
 
-  // Clean up cache entry when page closes
-  page.once('close', () => {
-    _cdpSessionCache.delete(page);
-  });
+  const sessionPromise = context.newCDPSession(page).then(
+    (session) => {
+      // Clean up cache entry when page closes
+      page.once('close', () => {
+        _cdpSessionCache.delete(page);
+      });
+      return session;
+    },
+    (error) => {
+      // Remove failed promise from cache to allow retry
+      _cdpSessionCache.delete(page);
+      throw error;
+    }
+  );
 
-  return session;
+  _cdpSessionCache.set(page, sessionPromise);
+  return sessionPromise;
 }
 
 // ─── Internal helpers ────────────────────────────────────────────────────────
@@ -256,7 +264,27 @@ async function getBuiltinPage(fullName: string): Promise<Page> {
     }
     let session: CDPSession | undefined;
     try {
-      session = await context.newCDPSession(page);
+      // Check cache first to reuse existing session
+      const cachedSessionPromise = _cdpSessionCache.get(page);
+      if (cachedSessionPromise) {
+        session = await cachedSessionPromise;
+      } else {
+        // Create and cache new session promise
+        const sessionPromise = context.newCDPSession(page).then(
+          (s) => {
+            page.once('close', () => {
+              _cdpSessionCache.delete(page);
+            });
+            return s;
+          },
+          (error) => {
+            _cdpSessionCache.delete(page);
+            throw error;
+          }
+        );
+        _cdpSessionCache.set(page, sessionPromise);
+        session = await sessionPromise;
+      }
       const { targetInfo } = (await session.send('Target.getTargetInfo')) as {
         targetInfo: { targetId: string };
       };
