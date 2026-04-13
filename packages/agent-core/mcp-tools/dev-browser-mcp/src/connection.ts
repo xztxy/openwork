@@ -143,9 +143,14 @@ export async function closePage(pageName?: string): Promise<boolean> {
   const registry = _manager.getLocalPageRegistry();
   const page = registry.get(fullName);
   if (!page) return false;
-  await page.close().catch(() => {});
-  registry.delete(fullName);
-  return true;
+  try {
+    await page.close();
+    registry.delete(fullName);
+    return true;
+  } catch (err) {
+    console.error(`Failed to close page "${fullName}":`, err);
+    return false;
+  }
 }
 
 export async function getCDPSession(pageName?: string): Promise<CDPSession> {
@@ -212,14 +217,8 @@ async function getBuiltinPage(fullName: string): Promise<Page> {
       }
     }
   }
-  // Fallback: any non-blank, open page
-  const match = pages.find((p) => !p.isClosed() && p.url() !== 'about:blank');
-  if (match) return match;
-  // Last fallback: last open page
-  if (pages.length > 0 && !pages[pages.length - 1].isClosed()) {
-    return pages[pages.length - 1];
-  }
-  throw new Error(`Page "${fullName}" not found in browser context`);
+  // Target ID was specified but not found - throw error instead of falling back
+  throw new Error(`Page "${fullName}" with targetId "${data.targetId}" not found in browser context`);
 }
 
 async function getRemotePage(fullName: string): Promise<Page> {
