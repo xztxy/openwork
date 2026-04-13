@@ -1,9 +1,4 @@
-import {
-  chromium,
-  type Browser,
-  type CDPSession,
-  type Page,
-} from 'playwright';
+import { chromium, type Browser, type CDPSession, type Page } from 'playwright';
 import { BrowserManager, isRecoverableConnectionError } from './browser-manager.js';
 export { isRecoverableConnectionError };
 
@@ -142,7 +137,9 @@ export async function closePage(pageName?: string): Promise<boolean> {
 
   const registry = _manager.getLocalPageRegistry();
   const page = registry.get(fullName);
-  if (!page) return false;
+  if (!page) {
+    return false;
+  }
   try {
     await page.close();
     registry.delete(fullName);
@@ -174,7 +171,9 @@ async function connectBrowser(config: ConnectionConfig): Promise<Browser> {
   // Builtin: fetch wsEndpoint from dev-browser HTTP server, then connect via CDP
   const infoUrl = `${config.devBrowserUrl}/`;
   const res = await fetch(infoUrl);
-  if (!res.ok) throw new Error(`dev-browser health check failed: ${res.status}`);
+  if (!res.ok) {
+    throw new Error(`dev-browser health check failed: ${res.status}`);
+  }
   const info = (await res.json()) as { wsEndpoint: string };
   return chromium.connectOverCDP(info.wsEndpoint);
 }
@@ -186,13 +185,17 @@ async function getBuiltinPage(fullName: string): Promise<Page> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: fullName }),
   });
-  if (!res.ok) throw new Error(`Failed to get page "${fullName}": ${res.status}`);
+  if (!res.ok) {
+    throw new Error(`Failed to get page "${fullName}": ${res.status}`);
+  }
   const data = (await res.json()) as { wsEndpoint: string; targetId: string };
 
   const browser = await ensureConnected();
   const contexts = browser.contexts();
   const context = contexts[0];
-  if (!context) throw new Error('No browser context available');
+  if (!context) {
+    throw new Error('No browser context available');
+  }
 
   const pages = context.pages();
   // First, try to match by targetId via CDP
@@ -218,13 +221,17 @@ async function getBuiltinPage(fullName: string): Promise<Page> {
     }
   }
   // Target ID was specified but not found - throw error instead of falling back
-  throw new Error(`Page "${fullName}" with targetId "${data.targetId}" not found in browser context`);
+  throw new Error(
+    `Page "${fullName}" with targetId "${data.targetId}" not found in browser context`,
+  );
 }
 
 async function getRemotePage(fullName: string): Promise<Page> {
   const registry = _manager.getLocalPageRegistry();
   const existing = registry.get(fullName);
-  if (existing && !existing.isClosed()) return existing;
+  if (existing && !existing.isClosed()) {
+    return existing;
+  }
 
   const browser = await ensureConnected();
   const context = browser.contexts()[0] ?? (await browser.newContext());
