@@ -130,7 +130,10 @@ async function ensureBrowserServer(callbacks?: Pick<TaskCallbacks, 'onProgress'>
 
 export async function stopDevBrowserServer(): Promise<void> {
   logOC('INFO', '[Browser] Sending shutdown request to dev-browser server...');
-  await shutdownDevBrowserServer({ devBrowserPort: DEV_BROWSER_PORT, devBrowserCdpPort: DEV_BROWSER_CDP_PORT });
+  await shutdownDevBrowserServer({
+    devBrowserPort: DEV_BROWSER_PORT,
+    devBrowserCdpPort: DEV_BROWSER_CDP_PORT,
+  });
 }
 
 export async function recoverDevBrowserServer(

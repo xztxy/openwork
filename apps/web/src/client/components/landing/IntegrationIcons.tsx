@@ -64,6 +64,8 @@ export function getFaviconUrl(domain: string): string | null {
 
 export function IntegrationIcon({ domain, className }: { domain: string; className?: string }) {
   const src = getFaviconUrl(domain);
-  if (!src) { return null; }
+  if (!src) {
+    return null;
+  }
   return <img alt={domain} src={src} className={className} loading="lazy" />;
 }

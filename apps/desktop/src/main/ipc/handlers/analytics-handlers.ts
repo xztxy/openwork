@@ -324,12 +324,9 @@ export function registerAnalyticsHandlers(): void {
   });
 
   // Provider Lifecycle
-  ha(
-    'analytics:provider-disconnected',
-    async (_event: IpcMainInvokeEvent, provider: string) => {
-      trackProviderDisconnected(provider);
-    },
-  );
+  ha('analytics:provider-disconnected', async (_event: IpcMainInvokeEvent, provider: string) => {
+    trackProviderDisconnected(provider);
+  });
 
   ha('analytics:help-link-clicked', async (_event: IpcMainInvokeEvent, provider: string) => {
     trackHelpLinkClicked(provider);
