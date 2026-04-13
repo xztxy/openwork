@@ -37,7 +37,9 @@ export class BrowserTaskPageFactory {
 
   async acquirePageForExternalOpen(browserContext: BrowserContext): Promise<Page> {
     const reusableStartupPage = this.takeReusableStartupPage();
-    if (reusableStartupPage) return reusableStartupPage;
+    if (reusableStartupPage) {
+      return reusableStartupPage;
+    }
     return withTimeout(browserContext.newPage(), 30000, 'Page creation timed out after 30s');
   }
 
@@ -129,12 +131,16 @@ export class BrowserTaskPageFactory {
     try {
       await this.prepareReusableStartupPage(page, activeContext);
     } catch (error) {
-      if (!isClosedPageError(error)) await page.close().catch(() => {});
+      if (!isClosedPageError(error)) {
+        await page.close().catch(() => {});
+      }
     }
   }
 
   private clearUnavailableReusableStartupPage(activeTaskPageCount: number): void {
-    if (!this.reusableStartupPage) return;
+    if (!this.reusableStartupPage) {
+      return;
+    }
     if (this.reusableStartupPage.isClosed() || activeTaskPageCount > 0) {
       this.reusableStartupPage = null;
     }
@@ -161,17 +167,19 @@ export class BrowserTaskPageFactory {
     await this.options.windowController.backgroundPage(page, browserContext);
   }
 
-  private async waitForPageByTargetId(targetId: string): Promise<Page> {
-    const activeContext = await this.options.ensureBrowserContext();
+  private async waitForPageByTargetId(
+    targetId: string,
+    browserContext: BrowserContext,
+  ): Promise<Page> {
     const startTime = Date.now();
     while (Date.now() - startTime < 30000) {
-      for (const candidate of activeContext.pages()) {
+      for (const candidate of browserContext.pages()) {
         if (candidate.isClosed()) {
           continue;
         }
         try {
           if (
-            (await this.options.windowController.getTargetId(candidate, activeContext)) === targetId
+            (await this.options.windowController.getTargetId(candidate, browserContext)) === targetId
           ) {
             return candidate;
           }
@@ -241,7 +249,9 @@ export class BrowserTaskPageFactory {
       await this.options.windowController.setNormalWindowState(page, targetId, browserContext);
       return;
     }
-    if (launchMode === 'minimized-once') return;
+    if (launchMode === 'minimized-once') {
+      return;
+    }
     await this.options.windowController.restorePageWithoutForeground(
       page,
       targetId,
@@ -309,7 +319,7 @@ export class BrowserTaskPageFactory {
           background: options.launchMode !== 'foreground',
         })) as { targetId: string };
         _createdTargetId = targetId;
-        page = await this.waitForPageByTargetId(targetId);
+        page = await this.waitForPageByTargetId(targetId, options.browserContext);
         if (options.viewport) {
           await page.setViewportSize(options.viewport);
         }

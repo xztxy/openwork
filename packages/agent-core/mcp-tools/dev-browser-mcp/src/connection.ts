@@ -1,7 +1,6 @@
 import {
   chromium,
   type Browser,
-  type BrowserContext,
   type CDPSession,
   type Page,
 } from 'playwright';
@@ -56,17 +55,24 @@ function buildConfigFromEnv(): ConnectionConfig {
   return { mode: 'builtin', devBrowserUrl: `http://localhost:${port}`, taskId };
 }
 
+// Internal helper: fire-and-forget async cleanup with error handling
+function clearCachedBrowserAsync(): void {
+  _manager.clearCachedBrowser().catch((err) => {
+    console.error('Failed to clear cached browser during configuration:', err);
+  });
+}
+
 // Read from environment and update singleton config
-export async function configureFromEnv(): Promise<ConnectionConfig> {
+export function configureFromEnv(): ConnectionConfig {
   _config = buildConfigFromEnv();
-  await _manager.clearCachedBrowser();
+  clearCachedBrowserAsync();
   return _config;
 }
 
 // Update singleton config directly (for testing or runtime reconfiguration)
-export async function configure(config: ConnectionConfig): Promise<void> {
+export function configure(config: ConnectionConfig): void {
   _config = config;
-  await _manager.clearCachedBrowser();
+  clearCachedBrowserAsync();
 }
 
 // Reset singleton state (for testing)
