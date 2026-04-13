@@ -102,6 +102,7 @@ export class BrowserTaskPageFactory {
       return this.createStandaloneTaskPage({
         browserContext: options.browserContext,
         initialUrl: options.initialUrl,
+        launchMode,
         name: options.name,
         viewport: options.viewport,
       });
@@ -251,6 +252,7 @@ export class BrowserTaskPageFactory {
   private async createStandaloneTaskPage(options: {
     browserContext: BrowserContext;
     initialUrl?: string;
+    launchMode: TaskPageLaunchMode;
     name: string;
     viewport?: ViewportSize;
   }): Promise<CreatedTaskPage> {
@@ -273,11 +275,13 @@ export class BrowserTaskPageFactory {
           page,
           options.browserContext,
         );
+        const windowState = options.launchMode === 'background-normal' ? 'normal' : 'normal';
+        const backgroundAfterFirstFrame = options.launchMode === 'minimized-once';
         return {
           page,
           targetId,
-          windowState: 'normal',
-          backgroundAfterFirstFrame: false,
+          windowState,
+          backgroundAfterFirstFrame,
           navigatedDuringCreate,
         };
       } catch (error) {
@@ -323,6 +327,11 @@ export class BrowserTaskPageFactory {
         }
         throw error;
       } finally {
+        if (_createdTargetId && !page) {
+          await cdpSession
+            .send('Target.closeTarget', { targetId: _createdTargetId })
+            .catch(() => {});
+        }
         await cdpSession.detach().catch(() => {});
       }
     });

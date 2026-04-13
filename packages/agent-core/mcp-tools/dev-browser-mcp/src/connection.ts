@@ -43,11 +43,16 @@ function buildConfigFromEnv(): ConnectionConfig {
 
   if (cdpEndpoint) {
     const headers: Record<string, string> = {};
-    if (process.env.CDP_SECRET) headers['X-CDP-Secret'] = process.env.CDP_SECRET;
+    if (process.env.CDP_SECRET) {
+      headers['X-CDP-Secret'] = process.env.CDP_SECRET;
+    }
     return { mode: 'remote', cdpEndpoint, cdpHeaders: headers, taskId };
   }
 
-  const port = parseInt(process.env.DEV_BROWSER_PORT || '9224', 10);
+  let port = parseInt(process.env.DEV_BROWSER_PORT || '9224', 10);
+  if (!Number.isFinite(port) || !Number.isInteger(port) || port < 1 || port > 65535) {
+    port = 9224;
+  }
   return { mode: 'builtin', devBrowserUrl: `http://localhost:${port}`, taskId };
 }
 
@@ -139,11 +144,10 @@ export async function closePage(pageName?: string): Promise<boolean> {
 
 export async function getCDPSession(pageName?: string): Promise<CDPSession> {
   const page = await getPage(pageName);
-  const browser = _manager.getBrowser();
-  if (!browser) throw new Error('Browser not connected');
-  const contexts = browser.contexts();
-  const context: BrowserContext | undefined = contexts[0];
-  if (!context) throw new Error('No browser context available');
+  const context = page.context();
+  if (!context) {
+    throw new Error('No browser context available for page');
+  }
   return context.newCDPSession(page);
 }
 
@@ -182,16 +186,24 @@ async function getBuiltinPage(fullName: string): Promise<Page> {
   const pages = context.pages();
   // First, try to match by targetId via CDP
   for (const page of pages) {
-    if (page.isClosed()) continue;
+    if (page.isClosed()) {
+      continue;
+    }
+    let session: CDPSession | undefined;
     try {
-      const session = await context.newCDPSession(page);
+      session = await context.newCDPSession(page);
       const { targetInfo } = (await session.send('Target.getTargetInfo')) as {
         targetInfo: { targetId: string };
       };
-      await session.detach().catch(() => {});
-      if (targetInfo.targetId === data.targetId) return page;
+      if (targetInfo.targetId === data.targetId) {
+        return page;
+      }
     } catch {
       // try next
+    } finally {
+      if (session) {
+        await session.detach().catch(() => {});
+      }
     }
   }
   // Fallback: any non-blank, open page
