@@ -123,13 +123,13 @@ export class BrowserTaskPageFactory {
     if (page.isClosed()) {
       return;
     }
-    const activeContext = await this.options.ensureBrowserContext();
-    if (!(await this.isLastOpenPage(page, activeContext))) {
+    const pageContext = page.context();
+    if (!(await this.isLastOpenPage(page, pageContext))) {
       await page.close();
       return;
     }
     try {
-      await this.prepareReusableStartupPage(page, activeContext);
+      await this.prepareReusableStartupPage(page, pageContext);
     } catch (error) {
       if (!isClosedPageError(error)) {
         await page.close().catch(() => {});
