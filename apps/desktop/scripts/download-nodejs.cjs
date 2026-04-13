@@ -1,7 +1,7 @@
 /**
  * Download Node.js standalone binaries for bundling with the Electron app.
  *
- * Downloads Node.js v20.18.1 for:
+ * Downloads Node.js v22.22.2 for:
  * - macOS x64
  * - macOS arm64
  * - Windows x64
@@ -15,7 +15,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 const crypto = require('crypto');
 
-const NODE_VERSION = '20.18.1';
+const NODE_VERSION = '22.22.2';
 const BASE_URL = `https://nodejs.org/dist/v${NODE_VERSION}`;
 
 const PLATFORMS = [
@@ -23,31 +23,31 @@ const PLATFORMS = [
     name: 'darwin-x64',
     file: `node-v${NODE_VERSION}-darwin-x64.tar.gz`,
     extract: 'tar',
-    sha256: 'c5497dd17c8875b53712edaf99052f961013cedc203964583fc0cfc0aaf93581',
+    sha256: '12a6abb9c2902cf48a21120da13f87fde1ed1b71a13330712949e8db818708ba',
   },
   {
     name: 'darwin-arm64',
     file: `node-v${NODE_VERSION}-darwin-arm64.tar.gz`,
     extract: 'tar',
-    sha256: '9e92ce1032455a9cc419fe71e908b27ae477799371b45a0844eedb02279922a4',
+    sha256: 'db4b275b83736df67533529a18cc55de2549a8329ace6c7bcc68f8d22d3c9000',
   },
   {
     name: 'linux-x64',
     file: `node-v${NODE_VERSION}-linux-x64.tar.gz`,
     extract: 'tar',
-    sha256: '259e5a8bf2e15ecece65bd2a47153262eda71c0b2c9700d5e703ce4951572784',
+    sha256: '978978a635eef872fa68beae09f0aad0bbbae6757e444da80b570964a97e62a3',
   },
   {
     name: 'linux-arm64',
     file: `node-v${NODE_VERSION}-linux-arm64.tar.gz`,
     extract: 'tar',
-    sha256: '73cd297378572e0bc9dfc187c5ec8cca8d43aee6a596c10ebea1ed5f9ec682b6',
+    sha256: 'b2f3a96f31486bfc365192ad65ced14833ad2a3c2e1bcefec4846902f264fa28',
   },
   {
     name: 'win32-x64',
     file: `node-v${NODE_VERSION}-win-x64.zip`,
     extract: 'zip',
-    sha256: '56e5aacdeee7168871721b75819ccacf2367de8761b78eaceacdecd41e04ca03',
+    sha256: '7c93e9d92bf68c07182b471aa187e35ee6cd08ef0f24ab060dfff605fcc1c57c',
   },
 ];
 

@@ -11,7 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const NODE_VERSION = '20.18.1';
+const NODE_VERSION = '22.22.2';
 
 /**
  * Map electron-builder arch number to string
@@ -204,7 +204,7 @@ async function copyNodeBinary(context, platform, arch) {
 
   const nodeDirName = getNodeDirName(platform, arch);
 
-  // Source: resources/nodejs/<platform>-<arch>/node-v20.18.1-<platform>-<arch>/
+  // Source: resources/nodejs/<platform>-<arch>/node-v22.22.2-<platform>-<arch>/
   const sourceDir = path.join(
     __dirname,
     '..',
