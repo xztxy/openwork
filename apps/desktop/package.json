@@ -69,7 +69,7 @@
     "proxy-from-env": "^2.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "undici": "^7.24.7",
+    "undici": "^8.0.3",
     "zod": "catalog:"
   },
   "devDependencies": {
