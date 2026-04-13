@@ -328,7 +328,7 @@ export class BrowserTaskPageFactory {
           page,
           targetId,
           windowState: 'normal',
-          backgroundAfterFirstFrame: false,
+          backgroundAfterFirstFrame: options.launchMode === 'minimized-once',
           navigatedDuringCreate: !!options.initialUrl,
         };
       } catch (error) {
