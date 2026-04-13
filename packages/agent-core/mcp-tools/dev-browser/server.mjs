@@ -23078,11 +23078,23 @@ var BrowserTaskPageFactory = class {
   }
   async acquirePageForExternalOpen(browserContext) {
     const reusableStartupPage = this.takeReusableStartupPage();
-    if (reusableStartupPage) return reusableStartupPage;
+    if (reusableStartupPage) {
+      return reusableStartupPage;
+    }
     return withTimeout(browserContext.newPage(), 3e4, "Page creation timed out after 30s");
   }
   reset() {
     this.reusableStartupPage = null;
+  }
+  async closeReusableStartupPage() {
+    const page = this.takeReusableStartupPage();
+    if (!page) {
+      return;
+    }
+    try {
+      await page.close();
+    } catch {
+    }
   }
   takeReusableStartupPage() {
     if (!this.reusableStartupPage || this.reusableStartupPage.isClosed()) {
@@ -23118,6 +23130,7 @@ var BrowserTaskPageFactory = class {
       return this.createStandaloneTaskPage({
         browserContext: options.browserContext,
         initialUrl: options.initialUrl,
+        launchMode,
         name: options.name,
         viewport: options.viewport
       });
@@ -23142,12 +23155,16 @@ var BrowserTaskPageFactory = class {
     try {
       await this.prepareReusableStartupPage(page, activeContext);
     } catch (error) {
-      if (!isClosedPageError(error)) await page.close().catch(() => {
-      });
+      if (!isClosedPageError(error)) {
+        await page.close().catch(() => {
+        });
+      }
     }
   }
   clearUnavailableReusableStartupPage(activeTaskPageCount) {
-    if (!this.reusableStartupPage) return;
+    if (!this.reusableStartupPage) {
+      return;
+    }
     if (this.reusableStartupPage.isClosed() || activeTaskPageCount > 0) {
       this.reusableStartupPage = null;
     }
@@ -23169,16 +23186,15 @@ var BrowserTaskPageFactory = class {
     this.attachStartupPage(page);
     await this.options.windowController.backgroundPage(page, browserContext);
   }
-  async waitForPageByTargetId(targetId) {
-    const activeContext = await this.options.ensureBrowserContext();
+  async waitForPageByTargetId(targetId, browserContext) {
     const startTime = Date.now();
     while (Date.now() - startTime < 3e4) {
-      for (const candidate of activeContext.pages()) {
+      for (const candidate of browserContext.pages()) {
         if (candidate.isClosed()) {
           continue;
         }
         try {
-          if (await this.options.windowController.getTargetId(candidate, activeContext) === targetId) {
+          if (await this.options.windowController.getTargetId(candidate, browserContext) === targetId) {
             return candidate;
           }
         } catch (error) {
@@ -23229,7 +23245,9 @@ var BrowserTaskPageFactory = class {
       await this.options.windowController.setNormalWindowState(page, targetId, browserContext);
       return;
     }
-    if (launchMode === "minimized-once") return;
+    if (launchMode === "minimized-once") {
+      return;
+    }
     await this.options.windowController.restorePageWithoutForeground(
       page,
       targetId,
@@ -23256,11 +23274,13 @@ var BrowserTaskPageFactory = class {
           page,
           options.browserContext
         );
+        const windowState = options.launchMode === "background-normal" ? "normal" : "normal";
+        const backgroundAfterFirstFrame = options.launchMode === "minimized-once";
         return {
           page,
           targetId,
-          windowState: "normal",
-          backgroundAfterFirstFrame: false,
+          windowState,
+          backgroundAfterFirstFrame,
           navigatedDuringCreate
         };
       } catch (error) {
@@ -23281,7 +23301,7 @@ var BrowserTaskPageFactory = class {
           background: options.launchMode !== "foreground"
         });
         _createdTargetId = targetId;
-        page = await this.waitForPageByTargetId(targetId);
+        page = await this.waitForPageByTargetId(targetId, options.browserContext);
         if (options.viewport) {
           await page.setViewportSize(options.viewport);
         }
@@ -23299,6 +23319,10 @@ var BrowserTaskPageFactory = class {
         }
         throw error;
       } finally {
+        if (_createdTargetId && !page) {
+          await cdpSession.send("Target.closeTarget", { targetId: _createdTargetId }).catch(() => {
+          });
+        }
         await cdpSession.detach().catch(() => {
         });
       }
@@ -23468,6 +23492,10 @@ var BrowserPageService = class {
     this.registry.clear();
     this.knownTaskPages.clear();
     this.releasedPageUrls.clear();
+    try {
+      await this.pageFactory.closeReusableStartupPage();
+    } catch {
+    }
     this.pageFactory.reset();
   }
   resolveTaskPageLaunchMode(name, launchIntent, keepForegroundUntilFirstFrame) {
