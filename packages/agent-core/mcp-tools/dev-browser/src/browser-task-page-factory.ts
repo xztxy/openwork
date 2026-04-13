@@ -179,7 +179,8 @@ export class BrowserTaskPageFactory {
         }
         try {
           if (
-            (await this.options.windowController.getTargetId(candidate, browserContext)) === targetId
+            (await this.options.windowController.getTargetId(candidate, browserContext)) ===
+            targetId
           ) {
             return candidate;
           }
