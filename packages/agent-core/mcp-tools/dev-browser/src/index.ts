@@ -81,6 +81,9 @@ export async function serve(options: ServeOptions = {}): Promise<DevBrowserServe
   const blankStartup = startupPages.find((p) => p.url() === 'about:blank') ?? null;
   if (blankStartup) {
     pageService['pageFactory'].attachStartupPage(blankStartup);
+    // Minimize the blank startup tab immediately so no Chrome window appears on
+    // server start. Content is delivered via the in-app screencast preview instead.
+    await pageService.backgroundStartupPage(blankStartup);
   }
 
   browserContext.on('close', () => {
@@ -259,6 +262,21 @@ export async function serve(options: ServeOptions = {}): Promise<DevBrowserServe
     try {
       const name = decodeURIComponent(req.params.name);
       const state = await pageService.focusPage(name);
+      if (!state) {
+        res.status(404).json({ error: 'page not found' });
+        return;
+      }
+      res.json(state);
+    } catch (error) {
+      respondInternalError(res, error);
+    }
+  });
+
+  // ─── Background page (minimize OS window) ─────────────────────────────────
+  app.post('/pages/:name/background', async (req: Request<{ name: string }>, res: Response) => {
+    try {
+      const name = decodeURIComponent(req.params.name);
+      const state = await pageService.backgroundPageByName(name);
       if (!state) {
         res.status(404).json({ error: 'page not found' });
         return;

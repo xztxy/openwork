@@ -27,7 +27,10 @@ import {
   getConnectionMode,
   getCDPSession,
   getFullPageName,
+  focusPageWindow,
+  backgroundPageWindow,
 } from './connection.js';
+import { detectAuthPage } from './auth-detection.js';
 
 console.error('[dev-browser-mcp] All imports completed successfully');
 
@@ -51,6 +54,35 @@ interface ToolDebug {
 }
 
 let toolDebug: ToolDebug | null = null;
+
+// Tracks pages that are currently visible due to an auth/interaction requirement.
+// Keyed by full page name (taskId-prefixed). Allows returning to invisible after login.
+const interactionModePages = new Set<string>();
+
+/**
+ * After each navigation, checks whether the resulting page requires user interaction
+ * (login, CAPTCHA, etc.). If so, makes the browser window visible. If the page has
+ * moved away from an interaction screen, returns the window to invisible/minimized mode.
+ * Errors are swallowed so window management never blocks the tool result.
+ */
+async function checkInteractionMode(page: Page, pageName?: string): Promise<void> {
+  try {
+    const url = page.url();
+    const title = await page.title().catch(() => '');
+    const detection = detectAuthPage({ url, title });
+    const fullName = getFullPageName(pageName);
+
+    if (detection.isAuthPage && !interactionModePages.has(fullName)) {
+      interactionModePages.add(fullName);
+      await focusPageWindow(pageName);
+    } else if (!detection.isAuthPage && interactionModePages.has(fullName)) {
+      interactionModePages.delete(fullName);
+      await backgroundPageWindow(pageName);
+    }
+  } catch {
+    // best-effort — window management must never break the tool call
+  }
+}
 
 async function loadToolDebug(): Promise<void> {
   const debugPath = process.env.ACCOMPLISH_TOOL_DEBUG_PATH;
@@ -2705,6 +2737,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToo
           // Fire-and-forget — failure here should never break navigation.
           // Contributed by samarthsinh2660 (PR #414) for ENG-695.
           void startScreencast(page_name);
+
+          // Check if the page requires user interaction (login, CAPTCHA, etc.).
+          // Shows or hides the browser window accordingly. Fire-and-forget.
+          void checkInteractionMode(page, page_name);
 
           const title = await page.title();
           const currentUrl = page.url();

@@ -150,6 +150,32 @@ export async function closePage(pageName?: string): Promise<boolean> {
   }
 }
 
+/**
+ * Restores and focuses the OS window for the given page.
+ * Called when auth/interaction detection requires user to see the browser.
+ */
+export async function focusPageWindow(pageName?: string): Promise<void> {
+  if (_config.mode !== 'builtin') return;
+  const fullName = getFullPageName(pageName);
+  const url = `${_config.devBrowserUrl}/pages/${encodeURIComponent(fullName)}/focus`;
+  await fetch(url, { method: 'POST' }).catch(() => {
+    // best-effort — never block the tool call on window management
+  });
+}
+
+/**
+ * Minimizes the OS window for the given page.
+ * Called when the user has completed an interaction and the page is no longer auth-gated.
+ */
+export async function backgroundPageWindow(pageName?: string): Promise<void> {
+  if (_config.mode !== 'builtin') return;
+  const fullName = getFullPageName(pageName);
+  const url = `${_config.devBrowserUrl}/pages/${encodeURIComponent(fullName)}/background`;
+  await fetch(url, { method: 'POST' }).catch(() => {
+    // best-effort — never block the tool call on window management
+  });
+}
+
 export async function getCDPSession(pageName?: string): Promise<CDPSession> {
   const page = await getPage(pageName);
   const context = page.context();
@@ -183,7 +209,9 @@ async function getBuiltinPage(fullName: string): Promise<Page> {
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: fullName }),
+    // launchIntent 'background-normal' ensures the page window starts minimized.
+    // The in-app screencast preview is the sole visual surface by default.
+    body: JSON.stringify({ name: fullName, launchIntent: 'background-normal' }),
   });
   if (!res.ok) {
     throw new Error(`Failed to get page "${fullName}": ${res.status}`);

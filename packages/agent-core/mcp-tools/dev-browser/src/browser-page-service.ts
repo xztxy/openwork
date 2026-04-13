@@ -415,4 +415,28 @@ export class BrowserPageService {
   async backgroundPage(page: Page, browserContext?: BrowserContext): Promise<void> {
     await this.windowController.backgroundPage(page, browserContext);
   }
+
+  /**
+   * Minimizes the startup blank tab so no Chrome window flashes on server start.
+   * Called immediately after attaching the startup page in serve().
+   */
+  async backgroundStartupPage(page: Page): Promise<void> {
+    const ctx = await this.options.ensureBrowserContext();
+    await this.windowController.backgroundPage(page, ctx);
+  }
+
+  /**
+   * Looks up a registered page by name and minimizes its OS window.
+   * Returns the updated page state, or null if the page is not found.
+   */
+  async backgroundPageByName(name: string): Promise<PageStateResponse | null> {
+    const entry = this.registry.get(name);
+    if (!entry) {
+      return null;
+    }
+    const ctx = await this.options.ensureBrowserContext();
+    await this.windowController.backgroundPage(entry.page, ctx);
+    entry.windowState = 'minimized';
+    return this.getPageState(name, entry);
+  }
 }
