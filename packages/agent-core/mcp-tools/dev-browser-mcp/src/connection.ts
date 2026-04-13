@@ -28,6 +28,9 @@ export type ConnectionConfig = BuiltinConnectionConfig | RemoteConnectionConfig;
 let _config: ConnectionConfig = buildConfigFromEnv();
 const _manager = new BrowserManager();
 
+// Cache CDP sessions per page to ensure same session is reused for handlers
+const _cdpSessionCache = new WeakMap<Page, CDPSession>();
+
 // ─── Configuration helpers ──────────────────────────────────────────────────
 
 // Pure function: builds config from environment, no side effects
@@ -178,11 +181,27 @@ export async function backgroundPageWindow(pageName?: string): Promise<void> {
 
 export async function getCDPSession(pageName?: string): Promise<CDPSession> {
   const page = await getPage(pageName);
+
+  // Return cached session if available
+  const cached = _cdpSessionCache.get(page);
+  if (cached) {
+    return cached;
+  }
+
+  // Create new session and cache it
   const context = page.context();
   if (!context) {
     throw new Error('No browser context available for page');
   }
-  return context.newCDPSession(page);
+  const session = await context.newCDPSession(page);
+  _cdpSessionCache.set(page, session);
+
+  // Clean up cache entry when page closes
+  page.once('close', () => {
+    _cdpSessionCache.delete(page);
+  });
+
+  return session;
 }
 
 // ─── Internal helpers ────────────────────────────────────────────────────────
