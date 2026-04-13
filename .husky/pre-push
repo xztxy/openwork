@@ -1,5 +1,13 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 echo "[pre-push] Running pre-push checks (skip with: git push --no-verify)"
+
+# Load nvm / fnm so we use the Node version from .nvmrc (Node 22 required for undici v8)
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+# shellcheck disable=SC1090
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --no-use
+if command -v nvm &>/dev/null && [ -f ".nvmrc" ]; then
+  nvm use --silent 2>/dev/null || true
+fi
 
 # Compute changed files once, used by all steps below
 UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || echo "")
