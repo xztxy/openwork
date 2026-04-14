@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 echo "[pre-push] Running pre-push checks (skip with: git push --no-verify)"
 
-# Load nvm / fnm so we use the Node version from .nvmrc (Node 22 required for undici v8)
+# Load nvm so we use the Node version from .nvmrc (Node 22 required for undici v8)
 export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 # shellcheck disable=SC1090
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --no-use
