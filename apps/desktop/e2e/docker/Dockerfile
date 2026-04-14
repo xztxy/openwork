@@ -22,8 +22,9 @@ RUN apt-get update && apt-get install -y \
     libcairo2 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pnpm (use npm to avoid corepack signature key mismatch with pnpm 10)
-RUN COREPACK_INTEGRITY_KEYS=0 corepack prepare pnpm@10.33.0 --activate
+# Install pnpm 10 — corepack enable creates the shims, COREPACK_INTEGRITY_KEYS=0
+# bypasses the signature key check that fails for pnpm 10 on older corepack versions
+RUN corepack enable && COREPACK_INTEGRITY_KEYS=0 corepack prepare pnpm@10.33.0 --activate
 
 WORKDIR /app
 
@@ -43,3 +44,4 @@ COPY apps/desktop/scripts ./apps/desktop/scripts
 RUN pnpm install --frozen-lockfile
 
 ENV DISPLAY=:99
+
