@@ -15,6 +15,11 @@ const RECOVERABLE_PATTERNS = [
   'fetch failed',
   'connectovercdp',
   'page closed',
+  'connection timeout',
+  'socket timeout',
+  'connect timeout',
+  'request aborted',
+  'connection aborted',
 ];
 
 export function isRecoverableConnectionError(error: unknown): boolean {
