@@ -40,7 +40,18 @@ import type {
   CloudBrowserConfig,
   MessagingConnectionStatus,
   ScheduledTask,
+  GoogleAccount,
+  GoogleAccountStatus,
 } from '@accomplish_ai/agent-core/common';
+
+interface GwsAPI {
+  listAccounts(): Promise<GoogleAccount[]>;
+  startAuth(label: string): Promise<{ state: string; authUrl: string }>;
+  completeAuth(state: string, code: string): Promise<GoogleAccount>;
+  removeAccount(id: string): Promise<void>;
+  updateLabel(id: string, label: string): Promise<void>;
+  onStatusChanged(callback: (id: string, status: GoogleAccountStatus) => void): () => void;
+}
 
 // Define the API interface
 interface AccomplishAPI {
@@ -648,6 +659,17 @@ interface AccomplishAPI {
   // Build capabilities
   getBuildCapabilities(): Promise<{ hasFreeMode: boolean; hasAnalytics: boolean }>;
 
+  // Google Workspace multi-account
+  gws?: GwsAPI;
+
+  // Google Workspace — flat convenience methods
+  gwsListAccounts(): Promise<GoogleAccount[]>;
+  gwsStartAuth(label: string): Promise<{ state: string; authUrl: string }>;
+  gwsCompleteAuth(state: string, code: string): Promise<GoogleAccount>;
+  gwsRemoveAccount(id: string): Promise<void>;
+  gwsUpdateLabel(id: string, label: string): Promise<void>;
+  gwsOnStatusChanged(cb: (id: string, status: GoogleAccountStatus) => void): () => void;
+
   // Analytics — renderer-side tracking bridge
   analytics: {
     track(eventName: string, params?: Record<string, string | number | boolean>): Promise<void>;
@@ -831,6 +853,23 @@ export function getAccomplish() {
         error?: string;
       }) => void,
     ) => window.accomplish!.onHuggingFaceDownloadProgress(callback),
+
+    // Google Workspace flat helpers — delegate to the gws namespace
+    gwsListAccounts: (): Promise<GoogleAccount[]> => window.accomplish!.gws!.listAccounts(),
+
+    gwsStartAuth: (label: string): Promise<{ state: string; authUrl: string }> =>
+      window.accomplish!.gws!.startAuth(label),
+
+    gwsCompleteAuth: (state: string, code: string): Promise<GoogleAccount> =>
+      window.accomplish!.gws!.completeAuth(state, code),
+
+    gwsRemoveAccount: (id: string): Promise<void> => window.accomplish!.gws!.removeAccount(id),
+
+    gwsUpdateLabel: (id: string, label: string): Promise<void> =>
+      window.accomplish!.gws!.updateLabel(id, label),
+
+    gwsOnStatusChanged: (cb: (id: string, status: GoogleAccountStatus) => void): (() => void) =>
+      window.accomplish!.gws!.onStatusChanged(cb),
   };
 }
 

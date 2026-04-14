@@ -40,7 +40,10 @@ export function useExecutionEffects(s: CoreState, accomplish: CoreState['accompl
     s.currentTask?.result?.pauseReason,
     s.currentTask?.result?.pauseAction,
     s.currentTask?.result?.pauseAction?.type,
-    s.currentTask?.result?.pauseAction?.providerId,
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- providerId only exists on oauth-connect variant; narrowing inside deps array is intentional
+    s.currentTask?.result?.pauseAction?.type === 'oauth-connect'
+      ? s.currentTask.result?.pauseAction?.providerId
+      : undefined,
   ]);
 
   useEffect(() => {

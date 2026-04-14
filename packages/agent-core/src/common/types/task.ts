@@ -74,20 +74,32 @@ export interface TaskMessage {
   attachments?: TaskAttachment[];
 }
 
-export interface TaskPauseAction {
-  type: 'oauth-connect';
-  providerId: OAuthProviderId;
-  label: string;
-  pendingLabel?: string;
-  successText?: string;
-}
+export type TaskPauseAction =
+  | {
+      type: 'oauth-connect';
+      providerId: OAuthProviderId;
+      label: string;
+      pendingLabel?: string;
+      successText?: string;
+    }
+  | {
+      type: 'google-file-picker';
+      label: string;
+      pendingLabel?: string;
+      /** Pre-filled search query for the file picker UI */
+      query?: string;
+      /** Label of the Google account to open the picker for */
+      accountLabel?: string;
+      /** Email of the Google account to open the picker for */
+      accountEmail?: string;
+    };
 
 export interface TaskResult {
   status: 'success' | 'error' | 'interrupted';
   sessionId?: string;
   durationMs?: number;
   error?: string;
-  pauseReason?: 'auth';
+  pauseReason?: 'auth' | 'file-picker';
   pauseAction?: TaskPauseAction;
 }
 

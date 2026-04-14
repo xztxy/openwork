@@ -219,13 +219,37 @@ export async function startApp(
     logMain('INFO', '[Main] E2E mock mode — skipping daemon bootstrap');
   }
 
-  registerIPCHandlers();
+  // Initialize Google account managers (lazy singletons — safe after initializeStorage())
+  let googleAccountManager;
+  let googleTokenManager;
+  try {
+    const { getAccountManager, getTokenManager, startGoogleOAuth } =
+      await import('./google-accounts/index');
+    googleAccountManager = getAccountManager();
+    googleTokenManager = getTokenManager();
+    registerIPCHandlers(googleAccountManager, googleTokenManager, startGoogleOAuth);
+  } catch (err) {
+    logMain('WARN', '[Main] Google account managers unavailable', { err: String(err) });
+    registerIPCHandlers();
+  }
   logMain('INFO', '[Main] IPC handlers registered');
 
   createWindow();
 
   const mainWindow = getMainWindow();
   if (mainWindow) {
+    // Wire TokenManager window reference and start refresh timers for connected accounts
+    if (googleTokenManager && googleAccountManager) {
+      try {
+        googleTokenManager.setWindow(mainWindow);
+        googleTokenManager.startAllTimers(googleAccountManager.listAccounts());
+        logMain('INFO', '[Main] Google account token refresh timers started');
+      } catch (err) {
+        logMain('WARN', '[Main] Failed to start Google token refresh timers', {
+          err: String(err),
+        });
+      }
+    }
     // Forward daemon notifications to the renderer via IPC.
     // Uses a dynamic getter so recreated windows (macOS activate) receive events.
     registerNotificationForwarding(() => getMainWindow());
