@@ -6,7 +6,7 @@ export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 # shellcheck disable=SC1090
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --no-use
 if command -v nvm &>/dev/null && [ -f ".nvmrc" ]; then
-  nvm use --silent 2>/dev/null || true
+  nvm use --silent 2>/dev/null || exit 1
 fi
 
 # Compute changed files once, used by all steps below
