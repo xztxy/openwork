@@ -22,8 +22,8 @@ RUN apt-get update && apt-get install -y \
     libcairo2 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+# Install pnpm (use npm to avoid corepack signature key mismatch with pnpm 10)
+RUN COREPACK_INTEGRITY_KEYS=0 corepack prepare pnpm@10.33.0 --activate
 
 WORKDIR /app
 

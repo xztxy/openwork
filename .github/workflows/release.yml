@@ -29,6 +29,9 @@ on:
         type: boolean
         default: false
 
+env:
+  NODE_VERSION: '22.22.2'
+
 permissions:
   contents: write
   pull-requests: write
@@ -54,7 +57,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22.22.2'
+          node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
 
       - name: Determine bump type
@@ -244,12 +247,12 @@ jobs:
           ref: v${{ needs.version-bump.outputs.new_version }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22.22.2'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
 
       - name: Setup Python
@@ -295,12 +298,12 @@ jobs:
           ref: v${{ needs.version-bump.outputs.new_version }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22.22.2'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
 
       - name: Setup Python
@@ -346,12 +349,12 @@ jobs:
           ref: v${{ needs.version-bump.outputs.new_version }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22.22.2'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
 
       - name: Install system dependencies
@@ -397,12 +400,12 @@ jobs:
           ref: v${{ needs.version-bump.outputs.new_version }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22.22.2'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
 
       - name: Install system dependencies
@@ -444,12 +447,12 @@ jobs:
           ref: v${{ needs.version-bump.outputs.new_version }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22.22.2'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
 
       - name: Install dependencies
