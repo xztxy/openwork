@@ -10,10 +10,10 @@ catalogs:
       specifier: ^7.6.13
       version: 7.6.13
     '@types/node':
-      specifier: ^20.19.0
-      version: 20.19.39
+      specifier: ^22.15.0
+      version: 22.19.17
     better-sqlite3:
-      specifier: ^12.8.0
+      specifier: ^12.9.0
       version: 12.9.0
     node-pty:
       specifier: ^1.1.0
@@ -98,8 +98,8 @@ importers:
         specifier: ^7.6.13
         version: 7.6.13
       '@types/node':
-        specifier: ^20.19.0
-        version: 20.19.39
+        specifier: ^22.15.0
+        version: 22.19.17
       '@types/ws':
         specifier: ^8.5.14
         version: 8.18.1
@@ -114,7 +114,7 @@ importers:
         version: 6.0.2
       vitest:
         specifier: ^4.0.17
-        version: 4.1.4(@opentelemetry/api@1.9.1)(@types/node@20.19.39)(@vitest/coverage-v8@4.1.4)(happy-dom@20.6.1)(jsdom@29.0.2)(vite@8.0.8(@types/node@20.19.39)(esbuild@0.27.4)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))
+        version: 4.1.4(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(@vitest/coverage-v8@4.1.4)(happy-dom@20.6.1)(jsdom@29.0.2)(vite@8.0.8(@types/node@22.19.17)(esbuild@0.27.4)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))
 
   apps/desktop:
     dependencies:
@@ -152,14 +152,14 @@ importers:
         specifier: ^4.0.3
         version: 4.0.3
       mixpanel:
-        specifier: ^0.20.0
-        version: 0.20.0
+        specifier: ^0.21.0
+        version: 0.21.0
       node-pty:
         specifier: 'catalog:'
         version: 1.1.0
       opencode-ai:
-        specifier: 1.3.16
-        version: 1.3.16
+        specifier: 1.4.3
+        version: 1.4.3
       pino:
         specifier: ^10.3.1
         version: 10.3.1
@@ -173,8 +173,8 @@ importers:
         specifier: ^19.0.0
         version: 19.2.5(react@19.2.5)
       undici:
-        specifier: ^7.24.7
-        version: 7.24.8
+        specifier: ^8.0.3
+        version: 8.1.0
       zod:
         specifier: 'catalog:'
         version: 3.25.76
@@ -190,7 +190,7 @@ importers:
         version: 7.6.13
       '@types/node':
         specifier: 'catalog:'
-        version: 20.19.39
+        version: 22.19.17
       '@types/react':
         specifier: ^19.0.2
         version: 19.2.14
@@ -217,47 +217,47 @@ importers:
         version: 6.0.2
       vite:
         specifier: ^8.0.3
-        version: 8.0.8(@types/node@20.19.39)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
+        version: 8.0.8(@types/node@22.19.17)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
       vite-plugin-electron:
         specifier: ^0.29.1
         version: 0.29.1(vite-plugin-electron-renderer@0.14.6)
       vitest:
         specifier: ^4.1.0
-        version: 4.1.4(@opentelemetry/api@1.9.1)(@types/node@20.19.39)(@vitest/coverage-v8@4.1.4)(happy-dom@20.6.1)(jsdom@29.0.2)(vite@8.0.8(@types/node@20.19.39)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))
+        version: 4.1.4(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(@vitest/coverage-v8@4.1.4)(happy-dom@20.6.1)(jsdom@29.0.2)(vite@8.0.8(@types/node@22.19.17)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))
     optionalDependencies:
       opencode-darwin-arm64:
-        specifier: 1.3.16
-        version: 1.3.16
+        specifier: 1.4.3
+        version: 1.4.3
       opencode-darwin-x64:
-        specifier: 1.3.16
-        version: 1.3.16
+        specifier: 1.4.3
+        version: 1.4.3
       opencode-darwin-x64-baseline:
-        specifier: 1.3.16
-        version: 1.3.16
+        specifier: 1.4.3
+        version: 1.4.3
       opencode-linux-arm64:
-        specifier: 1.3.16
-        version: 1.3.16
+        specifier: 1.4.3
+        version: 1.4.3
       opencode-linux-arm64-musl:
-        specifier: 1.3.16
-        version: 1.3.16
+        specifier: 1.4.3
+        version: 1.4.3
       opencode-linux-x64:
-        specifier: 1.3.16
-        version: 1.3.16
+        specifier: 1.4.3
+        version: 1.4.3
       opencode-linux-x64-baseline:
-        specifier: 1.3.16
-        version: 1.3.16
+        specifier: 1.4.3
+        version: 1.4.3
       opencode-linux-x64-baseline-musl:
-        specifier: 1.3.16
-        version: 1.3.16
+        specifier: 1.4.3
+        version: 1.4.3
       opencode-linux-x64-musl:
-        specifier: 1.3.16
-        version: 1.3.16
+        specifier: 1.4.3
+        version: 1.4.3
       opencode-windows-x64:
-        specifier: 1.3.16
-        version: 1.3.16
+        specifier: 1.4.3
+        version: 1.4.3
       opencode-windows-x64-baseline:
-        specifier: 1.3.16
-        version: 1.3.16
+        specifier: 1.4.3
+        version: 1.4.3
 
   apps/web:
     dependencies:
@@ -362,8 +362,8 @@ importers:
         specifier: ^16.3.1
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@types/node':
-        specifier: ^20.19.0
-        version: 20.19.39
+        specifier: ^22.15.0
+        version: 22.19.17
       '@types/qrcode':
         specifier: ^1.5.5
         version: 1.5.6
@@ -375,7 +375,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@vitejs/plugin-react':
         specifier: ^6.0.1
-        version: 6.0.1(vite@8.0.8(@types/node@20.19.39)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))
+        version: 6.0.1(vite@8.0.8(@types/node@22.19.17)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))
       '@vitest/coverage-v8':
         specifier: ^4.1.0
         version: 4.1.4(vitest@4.1.4)
@@ -402,10 +402,10 @@ importers:
         version: 6.0.2
       vite:
         specifier: ^8.0.3
-        version: 8.0.8(@types/node@20.19.39)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
+        version: 8.0.8(@types/node@22.19.17)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
       vitest:
         specifier: ^4.1.0
-        version: 4.1.4(@opentelemetry/api@1.9.1)(@types/node@20.19.39)(@vitest/coverage-v8@4.1.4)(happy-dom@20.6.1)(jsdom@29.0.2)(vite@8.0.8(@types/node@20.19.39)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))
+        version: 4.1.4(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(@vitest/coverage-v8@4.1.4)(happy-dom@20.6.1)(jsdom@29.0.2)(vite@8.0.8(@types/node@22.19.17)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))
 
   packages/agent-core:
     dependencies:
@@ -431,8 +431,8 @@ importers:
         specifier: ^2.1.0
         version: 2.1.0
       undici:
-        specifier: ^7.24.7
-        version: 7.24.8
+        specifier: ^8.0.3
+        version: 8.1.0
       zod:
         specifier: 'catalog:'
         version: 3.25.76
@@ -442,7 +442,7 @@ importers:
         version: 7.6.13
       '@types/node':
         specifier: 'catalog:'
-        version: 20.19.39
+        version: 22.19.17
       '@types/proxy-from-env':
         specifier: ^1.0.4
         version: 1.0.4
@@ -451,7 +451,7 @@ importers:
         version: 6.0.2
       vitest:
         specifier: ^4.1.0
-        version: 4.1.4(@opentelemetry/api@1.9.1)(@types/node@20.19.39)(@vitest/coverage-v8@4.1.4)(happy-dom@20.6.1)(jsdom@29.0.2)(vite@8.0.8(@types/node@20.19.39)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))
+        version: 4.1.4(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(@vitest/coverage-v8@4.1.4)(happy-dom@20.6.1)(jsdom@29.0.2)(vite@8.0.8(@types/node@22.19.17)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))
 
 packages:
 
@@ -2796,8 +2796,8 @@ packages:
   '@types/node@10.17.60':
     resolution: {integrity: sha512-F0KIgDJfy2nA3zMLmWGKxcH2ZVEtCZXHHdOQs2gSaQ27+lNeEfGxzkIw90aXswATX7AZ33tahPbzy6KAfUreVw==}
 
-  '@types/node@20.19.39':
-    resolution: {integrity: sha512-orrrD74MBUyK8jOAD/r0+lfa1I2MO6I+vAkmAWzMYbCcgrN4lCrmK52gRFQq/JRxfYPfonkr4b0jcY7Olqdqbw==}
+  '@types/node@22.19.17':
+    resolution: {integrity: sha512-wGdMcf+vPYM6jikpS/qhg6WiqSV/OhG+jeeHT/KlVqxYfD40iYJf9/AE1uQxVWFvU7MipKRkRv8NSHiCGgPr8Q==}
 
   '@types/node@24.12.2':
     resolution: {integrity: sha512-A1sre26ke7HDIuY/M23nd9gfB+nrmhtYyMINbjI1zHJxYteKR6qSMX56FsmjMcDb3SMcjJg5BiRRgOCC/yBD0g==}
@@ -5116,8 +5116,8 @@ packages:
     resolution: {integrity: sha512-KZxYo1BUkWD2TVFLr0MQoM8vUUigWD3LlD83a/75BqC+4qE0Hb1Vo5v1FgcfaNXvfXzr+5EhQ6ing/CaBijTlw==}
     engines: {node: '>= 18'}
 
-  mixpanel@0.20.0:
-    resolution: {integrity: sha512-va/dizV9tWgumKU3WQR2ZbMsb3NDlSaF7enDwtRiVIz2HCu7Cl3dq8BMV7ufB5LiNWtgtoELHsJvJv+hGhpvxw==}
+  mixpanel@0.21.0:
+    resolution: {integrity: sha512-vi4LenewfZjbmpjdmKEIBHqqovyFKcYDqXFZrRYEmQ7vlYwRyzmZICMgA9KCd/624et2O2Um8Unra56zNhJgRA==}
     engines: {node: '>=10.0'}
 
   mkdirp-classic@0.5.3:
@@ -5272,67 +5272,67 @@ packages:
     resolution: {integrity: sha512-YgBpdJHPyQ2UE5x+hlSXcnejzAvD0b22U2OuAP+8OnlJT+PjWPxtgmGqKKc+RgTM63U9gN0YzrYc71R2WT/hTA==}
     engines: {node: '>=18'}
 
-  opencode-ai@1.3.16:
-    resolution: {integrity: sha512-IilfHGH0hW+c3iU7nj4eaJMrV4dBOU4ZKFBP4V/pZIegsfOlzRz1Dj0CTNuwWnlQMAE41lnU+FKDJT8xjnVubQ==}
+  opencode-ai@1.4.3:
+    resolution: {integrity: sha512-WwCSrLgJiS+sLIWoi9pa62vAw3l6VI3a+ShhjDDMUJBBG2FxU18xEhk8xhEedLMKyHo1p0nwD41+iKZ1y+rdAw==}
     hasBin: true
 
-  opencode-darwin-arm64@1.3.16:
-    resolution: {integrity: sha512-DIJQXlbIO2eugWlGVsjU/KtMhtHpVoEpihXF3F/NFcaRzFe/2VTK3KmaojWbHiITrqB5S0VudpYAYDDD5qEkiQ==}
+  opencode-darwin-arm64@1.4.3:
+    resolution: {integrity: sha512-d/MT28Is5yhdFY+36AqKc5r31zx8lXTQIYblfn5R8kdhamXijZVGdD0pHl3eJc1ZolUHNwzg2B+IqV22uyU9GQ==}
     cpu: [arm64]
     os: [darwin]
 
-  opencode-darwin-x64-baseline@1.3.16:
-    resolution: {integrity: sha512-15mTTYFLYPaCuCR1/lWNdRKkt8tJ8VzfgH+mR9u148r0ih0hvZR8Tq3uAkvgJl1mH+Cqiasej+mY+FhJM+WeDQ==}
+  opencode-darwin-x64-baseline@1.4.3:
+    resolution: {integrity: sha512-WTqf7WBNRZcv6pClqnN4F7X/T/osgcPGikNHkHUSLszKWg9flqz7Z68kHR4i9ae8Bn3ke9MQRgzRdOt2PgLL0w==}
     cpu: [x64]
     os: [darwin]
 
-  opencode-darwin-x64@1.3.16:
-    resolution: {integrity: sha512-uoakbDl9skVCITIQ4TvOmTFI4pA9VW/RSnQQT/qcFuSfYXf0g+woc2WhxqxvQgR8qHrsRP0PcTWLYhD7Fe7lVw==}
+  opencode-darwin-x64@1.4.3:
+    resolution: {integrity: sha512-8FUHeybVmaCYt4S2YmWcf32o/xa/ahCfI258bpWssrzs7Xg51JgUB/Csoble0I1mH7RpW39SKy/hHUtHGuJfJg==}
     cpu: [x64]
     os: [darwin]
 
-  opencode-linux-arm64-musl@1.3.16:
-    resolution: {integrity: sha512-RoVlXh2JJzkMqKbhe/Hcvo7sQ0SgAwxmZO7GG4Qxn1/wFBUXqtj5cEt9oRUYMjntB2Vz+SolyOZNbsFTxSNTEg==}
+  opencode-linux-arm64-musl@1.4.3:
+    resolution: {integrity: sha512-3Ej2klaep8+fxcc44UyEuRpb/UFiNkwfzIDLIST83hFUtjzprjpTRqg6zHmOfzyfjNAaNpB4VZw6e9y3mGBpiQ==}
     cpu: [arm64]
     os: [linux]
 
-  opencode-linux-arm64@1.3.16:
-    resolution: {integrity: sha512-mALw7OxnSOCWZ/gNmPM0u5/wSiktZrD3QY7b4XrcCGemuETVpIhqcF3AxHCAPjYcepYI0ZgKOjhkJK3IKqOO8w==}
+  opencode-linux-arm64@1.4.3:
+    resolution: {integrity: sha512-9jpVSOEF7TX3gPPAHVAsBT9XEO3LgYafI+IUmOzbBB9CDiVVNJw6JmEffmSpSxY4nkAh322xnMbNjVGEyXQBRA==}
     cpu: [arm64]
     os: [linux]
 
-  opencode-linux-x64-baseline-musl@1.3.16:
-    resolution: {integrity: sha512-A0MHnTEIY92uTdXz7gzMAGUX1mWRY1mRvMqXz6vMKnYrvT7WfhkFw513DpYGgG3+OaR8O4cZahYiMqEvU4iZ0A==}
+  opencode-linux-x64-baseline-musl@1.4.3:
+    resolution: {integrity: sha512-aned/3FQTHXXQv2PPKDprJwQaQkoadriQ6AByGhRl6/bHhSkhkiVl6cHHvYMKxYEwN4bVOydWhasfgm/xru/xw==}
     cpu: [x64]
     os: [linux]
 
-  opencode-linux-x64-baseline@1.3.16:
-    resolution: {integrity: sha512-SPGziMrnKq5lWQKkunNIrhJJH8eW26zPrR7vFOBLMEmHP5zSk9Ta0iJkMHKyGnyaGGHi+XpWV6JUuE6BSPzcWQ==}
+  opencode-linux-x64-baseline@1.4.3:
+    resolution: {integrity: sha512-HpzdgYaI90qqt0WokcyBhadgFQ0EYMhq4TZ4EcaSPuZTssS2Drb6kp70Si54uOJL/MUAdc9+E0BYYIAdOJ6h1g==}
     cpu: [x64]
     os: [linux]
 
-  opencode-linux-x64-musl@1.3.16:
-    resolution: {integrity: sha512-N7P8vTeEGkarIkJ0yYiSt7s2VpLLt6IyJ/7YDheY1yiesbBaqCBl0kYa4+d/sWHnXcR9Ii0OlyzMwLafalkYFw==}
+  opencode-linux-x64-musl@1.4.3:
+    resolution: {integrity: sha512-ibUevyDxVrwkp6FWu8UBCBsrzlKDT/uEug2NHCKaHIwo9uwVf5zsL/0ueHYqmH14SHK+M6wzWewYk6WuW9f0zQ==}
     cpu: [x64]
     os: [linux]
 
-  opencode-linux-x64@1.3.16:
-    resolution: {integrity: sha512-KuHrXR1VH8kLWLNBQNi+ZSiehqucEQXlHmAOuIetF4Xu+0twtJsQ4f6WcGU11AIKz7GGZAr8yfeqfklWhRTIDA==}
+  opencode-linux-x64@1.4.3:
+    resolution: {integrity: sha512-RS6TsDqTUrW5sefxD1KD9Xy9mSYGXAlr2DlGrdi8vNm9e/Bt4r4u557VB7f/Uj2CxTt2Gf7OWl08ZoPlxMJ5Gg==}
     cpu: [x64]
     os: [linux]
 
-  opencode-windows-arm64@1.3.16:
-    resolution: {integrity: sha512-2qnr8gLR3JVxVKuPeDXiE1IeKcg3CcESHYBSsavxbfAypAsFE18gdehNyySZxymSFIxTQl9Q7o9awqya6wra5A==}
+  opencode-windows-arm64@1.4.3:
+    resolution: {integrity: sha512-2ViH17WpIQbRVfQaOBMi49pu73gqTQYT/4/WxFjShmRagX40/KkG18fhvyDAZrBKfkhPtdwgFsFxMSYP9F6QCQ==}
     cpu: [arm64]
     os: [win32]
 
-  opencode-windows-x64-baseline@1.3.16:
-    resolution: {integrity: sha512-yn7VWuWMXEd3XcY2Pr63S31HsNPq6kFt3bfGkDGnGvRODNBneImPLAhHYZ/wDrEb5WeRGwsnWVbPNntpeUI7Tg==}
+  opencode-windows-x64-baseline@1.4.3:
+    resolution: {integrity: sha512-SWYDli9SAKQd/pS/hVfuq1KEsc+gnAJdv+YtBmxaHOw57y0euqLwbGFUYFq78GAMGt/RnTYWZIEUbRK/ZiX3UA==}
     cpu: [x64]
     os: [win32]
 
-  opencode-windows-x64@1.3.16:
-    resolution: {integrity: sha512-KeSC7gBt2rqA2S710o6kjjxxR9mffHhF8AVJcL5W0t0uqwEEG28PwVFsXupQhDgAEANtSVYyWc9/mSn3yRcA3Q==}
+  opencode-windows-x64@1.4.3:
+    resolution: {integrity: sha512-UxmKDIw3t4XHST6JSUWHmSrCGIEK1LRTAOpO82HBC3XkIjH78gVIeauRR6RULjWAApmy9I1C3TukO2sDUi7Gvw==}
     cpu: [x64]
     os: [win32]
 
@@ -6428,6 +6428,10 @@ packages:
   undici@7.24.8:
     resolution: {integrity: sha512-6KQ/+QxK49Z/p3HO6E5ZCZWNnCasyZLa5ExaVYyvPxUwKtbCPMKELJOqh7EqOle0t9cH/7d2TaaTRRa6Nhs4YQ==}
     engines: {node: '>=20.18.1'}
+
+  undici@8.1.0:
+    resolution: {integrity: sha512-E9MkTS4xXLnRPYqxH2e6Hr2/49e7WFDKczKcCaFH4VaZs2iNvHMqeIkyUAD9vM8kujy9TjVrRlQ5KkdEJxB2pw==}
+    engines: {node: '>=22.19.0'}
 
   unified@11.0.5:
     resolution: {integrity: sha512-xKvGhPWw3k84Qjh8bI3ZeJjqnyadK+GEFtazSfZv/rKeTkTjOJho6mFqh2SM96iIcZokxiOpg78GazTSg8+KHA==}
@@ -9376,13 +9380,13 @@ snapshots:
 
   '@types/better-sqlite3@7.6.13':
     dependencies:
-      '@types/node': 20.19.39
+      '@types/node': 22.19.17
 
   '@types/cacheable-request@6.0.3':
     dependencies:
       '@types/http-cache-semantics': 4.2.0
       '@types/keyv': 3.1.4
-      '@types/node': 20.19.39
+      '@types/node': 22.19.17
       '@types/responselike': 1.0.3
 
   '@types/chai@5.2.3':
@@ -9392,7 +9396,7 @@ snapshots:
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 20.19.39
+      '@types/node': 22.19.17
 
   '@types/debug@4.1.12':
     dependencies:
@@ -9408,7 +9412,7 @@ snapshots:
 
   '@types/fs-extra@9.0.13':
     dependencies:
-      '@types/node': 20.19.39
+      '@types/node': 22.19.17
 
   '@types/hast@3.0.4':
     dependencies:
@@ -9420,7 +9424,7 @@ snapshots:
 
   '@types/keyv@3.1.4':
     dependencies:
-      '@types/node': 20.19.39
+      '@types/node': 22.19.17
 
   '@types/long@4.0.2': {}
 
@@ -9432,11 +9436,11 @@ snapshots:
 
   '@types/mysql@2.15.27':
     dependencies:
-      '@types/node': 20.19.39
+      '@types/node': 22.19.17
 
   '@types/node@10.17.60': {}
 
-  '@types/node@20.19.39':
+  '@types/node@22.19.17':
     dependencies:
       undici-types: 6.21.0
 
@@ -9450,13 +9454,13 @@ snapshots:
 
   '@types/pg@8.15.6':
     dependencies:
-      '@types/node': 20.19.39
+      '@types/node': 22.19.17
       pg-protocol: 1.13.0
       pg-types: 2.2.0
 
   '@types/plist@3.0.5':
     dependencies:
-      '@types/node': 20.19.39
+      '@types/node': 22.19.17
       xmlbuilder: 15.1.1
     optional: true
 
@@ -9464,11 +9468,11 @@ snapshots:
 
   '@types/proxy-from-env@1.0.4':
     dependencies:
-      '@types/node': 20.19.39
+      '@types/node': 22.19.17
 
   '@types/qrcode@1.5.6':
     dependencies:
-      '@types/node': 20.19.39
+      '@types/node': 22.19.17
 
   '@types/react-dom@19.2.3(@types/react@19.2.14)':
     dependencies:
@@ -9480,11 +9484,11 @@ snapshots:
 
   '@types/responselike@1.0.3':
     dependencies:
-      '@types/node': 20.19.39
+      '@types/node': 22.19.17
 
   '@types/tedious@4.0.14':
     dependencies:
-      '@types/node': 20.19.39
+      '@types/node': 22.19.17
 
   '@types/unist@2.0.11': {}
 
@@ -9498,11 +9502,11 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 20.19.39
+      '@types/node': 22.19.17
 
   '@types/yauzl@2.10.3':
     dependencies:
-      '@types/node': 20.19.39
+      '@types/node': 22.19.17
     optional: true
 
   '@typescript-eslint/eslint-plugin@8.58.1(@typescript-eslint/parser@8.58.1(eslint@9.39.2(jiti@1.21.7))(typescript@6.0.2))(eslint@9.39.2(jiti@1.21.7))(typescript@6.0.2)':
@@ -9606,10 +9610,10 @@ snapshots:
 
   '@ungap/structured-clone@1.3.0': {}
 
-  '@vitejs/plugin-react@6.0.1(vite@8.0.8(@types/node@20.19.39)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))':
+  '@vitejs/plugin-react@6.0.1(vite@8.0.8(@types/node@22.19.17)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))':
     dependencies:
       '@rolldown/pluginutils': 1.0.0-rc.7
-      vite: 8.0.8(@types/node@20.19.39)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
+      vite: 8.0.8(@types/node@22.19.17)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
 
   '@vitest/coverage-v8@4.1.4(vitest@4.1.4)':
     dependencies:
@@ -9623,7 +9627,7 @@ snapshots:
       obug: 2.1.1
       std-env: 4.0.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.4(@opentelemetry/api@1.9.1)(@types/node@20.19.39)(@vitest/coverage-v8@4.1.4)(happy-dom@20.6.1)(jsdom@29.0.2)(vite@8.0.8(@types/node@20.19.39)(esbuild@0.27.4)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))
+      vitest: 4.1.4(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(@vitest/coverage-v8@4.1.4)(happy-dom@20.6.1)(jsdom@29.0.2)(vite@8.0.8(@types/node@22.19.17)(esbuild@0.27.4)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))
 
   '@vitest/expect@4.1.4':
     dependencies:
@@ -9634,21 +9638,21 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.0
 
-  '@vitest/mocker@4.1.4(vite@8.0.8(@types/node@20.19.39)(esbuild@0.27.4)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))':
+  '@vitest/mocker@4.1.4(vite@8.0.8(@types/node@22.19.17)(esbuild@0.27.4)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))':
     dependencies:
       '@vitest/spy': 4.1.4
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 8.0.8(@types/node@20.19.39)(esbuild@0.27.4)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
+      vite: 8.0.8(@types/node@22.19.17)(esbuild@0.27.4)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
 
-  '@vitest/mocker@4.1.4(vite@8.0.8(@types/node@20.19.39)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))':
+  '@vitest/mocker@4.1.4(vite@8.0.8(@types/node@22.19.17)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))':
     dependencies:
       '@vitest/spy': 4.1.4
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 8.0.8(@types/node@20.19.39)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
+      vite: 8.0.8(@types/node@22.19.17)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
 
   '@vitest/pretty-format@4.1.4':
     dependencies:
@@ -11171,7 +11175,7 @@ snapshots:
 
   happy-dom@20.6.1:
     dependencies:
-      '@types/node': 20.19.39
+      '@types/node': 22.19.17
       '@types/whatwg-mimetype': 3.0.2
       '@types/ws': 8.18.1
       entities: 6.0.1
@@ -12311,7 +12315,7 @@ snapshots:
     dependencies:
       minipass: 7.1.3
 
-  mixpanel@0.20.0:
+  mixpanel@0.21.0:
     dependencies:
       https-proxy-agent: 7.0.6
       json-logic-js: 2.0.5
@@ -12499,55 +12503,55 @@ snapshots:
       is-inside-container: 1.0.0
       wsl-utils: 0.1.0
 
-  opencode-ai@1.3.16:
+  opencode-ai@1.4.3:
     optionalDependencies:
-      opencode-darwin-arm64: 1.3.16
-      opencode-darwin-x64: 1.3.16
-      opencode-darwin-x64-baseline: 1.3.16
-      opencode-linux-arm64: 1.3.16
-      opencode-linux-arm64-musl: 1.3.16
-      opencode-linux-x64: 1.3.16
-      opencode-linux-x64-baseline: 1.3.16
-      opencode-linux-x64-baseline-musl: 1.3.16
-      opencode-linux-x64-musl: 1.3.16
-      opencode-windows-arm64: 1.3.16
-      opencode-windows-x64: 1.3.16
-      opencode-windows-x64-baseline: 1.3.16
+      opencode-darwin-arm64: 1.4.3
+      opencode-darwin-x64: 1.4.3
+      opencode-darwin-x64-baseline: 1.4.3
+      opencode-linux-arm64: 1.4.3
+      opencode-linux-arm64-musl: 1.4.3
+      opencode-linux-x64: 1.4.3
+      opencode-linux-x64-baseline: 1.4.3
+      opencode-linux-x64-baseline-musl: 1.4.3
+      opencode-linux-x64-musl: 1.4.3
+      opencode-windows-arm64: 1.4.3
+      opencode-windows-x64: 1.4.3
+      opencode-windows-x64-baseline: 1.4.3
 
-  opencode-darwin-arm64@1.3.16:
+  opencode-darwin-arm64@1.4.3:
     optional: true
 
-  opencode-darwin-x64-baseline@1.3.16:
+  opencode-darwin-x64-baseline@1.4.3:
     optional: true
 
-  opencode-darwin-x64@1.3.16:
+  opencode-darwin-x64@1.4.3:
     optional: true
 
-  opencode-linux-arm64-musl@1.3.16:
+  opencode-linux-arm64-musl@1.4.3:
     optional: true
 
-  opencode-linux-arm64@1.3.16:
+  opencode-linux-arm64@1.4.3:
     optional: true
 
-  opencode-linux-x64-baseline-musl@1.3.16:
+  opencode-linux-x64-baseline-musl@1.4.3:
     optional: true
 
-  opencode-linux-x64-baseline@1.3.16:
+  opencode-linux-x64-baseline@1.4.3:
     optional: true
 
-  opencode-linux-x64-musl@1.3.16:
+  opencode-linux-x64-musl@1.4.3:
     optional: true
 
-  opencode-linux-x64@1.3.16:
+  opencode-linux-x64@1.4.3:
     optional: true
 
-  opencode-windows-arm64@1.3.16:
+  opencode-windows-arm64@1.4.3:
     optional: true
 
-  opencode-windows-x64-baseline@1.3.16:
+  opencode-windows-x64-baseline@1.4.3:
     optional: true
 
-  opencode-windows-x64@1.3.16:
+  opencode-windows-x64@1.4.3:
     optional: true
 
   optionator@0.9.4:
@@ -12884,7 +12888,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
-      '@types/node': 20.19.39
+      '@types/node': 22.19.17
       long: 5.3.2
 
   proxy-from-env@2.1.0: {}
@@ -13862,6 +13866,8 @@ snapshots:
 
   undici@7.24.8: {}
 
+  undici@8.1.0: {}
+
   unified@11.0.5:
     dependencies:
       '@types/unist': 3.0.3
@@ -13958,7 +13964,7 @@ snapshots:
     optionalDependencies:
       vite-plugin-electron-renderer: 0.14.6
 
-  vite@8.0.8(@types/node@20.19.39)(esbuild@0.27.4)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2):
+  vite@8.0.8(@types/node@22.19.17)(esbuild@0.27.4)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2):
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.4
@@ -13966,14 +13972,14 @@ snapshots:
       rolldown: 1.0.0-rc.15
       tinyglobby: 0.2.16
     optionalDependencies:
-      '@types/node': 20.19.39
+      '@types/node': 22.19.17
       esbuild: 0.27.4
       fsevents: 2.3.3
       jiti: 1.21.7
       tsx: 4.21.0
       yaml: 2.8.2
 
-  vite@8.0.8(@types/node@20.19.39)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2):
+  vite@8.0.8(@types/node@22.19.17)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2):
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.4
@@ -13981,17 +13987,17 @@ snapshots:
       rolldown: 1.0.0-rc.15
       tinyglobby: 0.2.16
     optionalDependencies:
-      '@types/node': 20.19.39
+      '@types/node': 22.19.17
       esbuild: 0.28.0
       fsevents: 2.3.3
       jiti: 1.21.7
       tsx: 4.21.0
       yaml: 2.8.2
 
-  vitest@4.1.4(@opentelemetry/api@1.9.1)(@types/node@20.19.39)(@vitest/coverage-v8@4.1.4)(happy-dom@20.6.1)(jsdom@29.0.2)(vite@8.0.8(@types/node@20.19.39)(esbuild@0.27.4)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)):
+  vitest@4.1.4(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(@vitest/coverage-v8@4.1.4)(happy-dom@20.6.1)(jsdom@29.0.2)(vite@8.0.8(@types/node@22.19.17)(esbuild@0.27.4)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)):
     dependencies:
       '@vitest/expect': 4.1.4
-      '@vitest/mocker': 4.1.4(vite@8.0.8(@types/node@20.19.39)(esbuild@0.27.4)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))
+      '@vitest/mocker': 4.1.4(vite@8.0.8(@types/node@22.19.17)(esbuild@0.27.4)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))
       '@vitest/pretty-format': 4.1.4
       '@vitest/runner': 4.1.4
       '@vitest/snapshot': 4.1.4
@@ -14008,21 +14014,21 @@ snapshots:
       tinyexec: 1.1.1
       tinyglobby: 0.2.16
       tinyrainbow: 3.1.0
-      vite: 8.0.8(@types/node@20.19.39)(esbuild@0.27.4)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
+      vite: 8.0.8(@types/node@22.19.17)(esbuild@0.27.4)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
-      '@types/node': 20.19.39
+      '@types/node': 22.19.17
       '@vitest/coverage-v8': 4.1.4(vitest@4.1.4)
       happy-dom: 20.6.1
       jsdom: 29.0.2
     transitivePeerDependencies:
       - msw
 
-  vitest@4.1.4(@opentelemetry/api@1.9.1)(@types/node@20.19.39)(@vitest/coverage-v8@4.1.4)(happy-dom@20.6.1)(jsdom@29.0.2)(vite@8.0.8(@types/node@20.19.39)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)):
+  vitest@4.1.4(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(@vitest/coverage-v8@4.1.4)(happy-dom@20.6.1)(jsdom@29.0.2)(vite@8.0.8(@types/node@22.19.17)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)):
     dependencies:
       '@vitest/expect': 4.1.4
-      '@vitest/mocker': 4.1.4(vite@8.0.8(@types/node@20.19.39)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))
+      '@vitest/mocker': 4.1.4(vite@8.0.8(@types/node@22.19.17)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2))
       '@vitest/pretty-format': 4.1.4
       '@vitest/runner': 4.1.4
       '@vitest/snapshot': 4.1.4
@@ -14039,11 +14045,11 @@ snapshots:
       tinyexec: 1.1.1
       tinyglobby: 0.2.16
       tinyrainbow: 3.1.0
-      vite: 8.0.8(@types/node@20.19.39)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
+      vite: 8.0.8(@types/node@22.19.17)(esbuild@0.28.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
-      '@types/node': 20.19.39
+      '@types/node': 22.19.17
       '@vitest/coverage-v8': 4.1.4(vitest@4.1.4)
       happy-dom: 20.6.1
       jsdom: 29.0.2
