@@ -95,14 +95,29 @@ export type TaskPauseAction =
       accountEmail?: string;
     };
 
-export interface TaskResult {
-  status: 'success' | 'error' | 'interrupted';
-  sessionId?: string;
-  durationMs?: number;
-  error?: string;
-  pauseReason?: 'auth' | 'file-picker';
-  pauseAction?: TaskPauseAction;
-}
+export type TaskResult =
+  | {
+      status: 'success' | 'error' | 'interrupted';
+      sessionId?: string;
+      durationMs?: number;
+      error?: string;
+      pauseReason: 'oauth';
+      pauseAction: Extract<TaskPauseAction, { type: 'oauth-connect' }>;
+    }
+  | {
+      status: 'success' | 'error' | 'interrupted';
+      sessionId?: string;
+      durationMs?: number;
+      error?: string;
+      pauseReason: 'file-picker';
+      pauseAction: Extract<TaskPauseAction, { type: 'google-file-picker' }>;
+    }
+  | {
+      status: 'success' | 'error' | 'interrupted';
+      sessionId?: string;
+      durationMs?: number;
+      error?: string;
+    };
 
 export type StartupStage =
   | 'starting'
