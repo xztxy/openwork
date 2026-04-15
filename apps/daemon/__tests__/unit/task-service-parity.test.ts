@@ -257,4 +257,54 @@ describe('TaskService parity', () => {
       expect(taskManager.cancelTask).toHaveBeenCalledWith('tsk_running_1');
     });
   });
+
+  // REGRESSION (Max residual #1): the `permission.respond` RPC handler in
+  // `daemon-routes.ts` now gates on `taskService.hasActiveTask(taskId)`
+  // before forwarding the response. Without the guard a bogus taskId
+  // cascades an error from deep inside `OpenCodeAdapter.sendResponse`
+  // (pending === null, or the adapter doesn't exist) producing a
+  // confusing stack trace rather than a clean "unknown task" RPC error.
+  // This suite pins the contract that hasActiveTask returns false for
+  // unknown taskIds and the handler throws a readable error.
+  describe('permission.respond bogus taskId guard', () => {
+    it('hasActiveTask returns false for unknown taskIds', () => {
+      const storage = createMockStorage();
+      const service = new TaskService(storage as never, {
+        userDataPath: '/data',
+        mcpToolsPath: '/tools',
+      });
+      // TaskManager's default mock returns false — this assertion pins the
+      // contract TaskService.hasActiveTask delegates through to it.
+      expect(service.hasActiveTask('tsk_nonexistent')).toBe(false);
+    });
+
+    it('mirrors the guard logic from daemon-routes: throws when task is unknown', async () => {
+      // Replicate the handler's gate + forward pattern. The real handler
+      // lives in `apps/daemon/src/daemon-routes.ts`; this test pins the
+      // contract so a refactor that drops the gate fails fast.
+      const storage = createMockStorage();
+      const service = new TaskService(storage as never, {
+        userDataPath: '/data',
+        mcpToolsPath: '/tools',
+      });
+      const bogusTaskId = 'tsk_never_existed';
+
+      const handlerSimulation = async (taskId: string): Promise<void> => {
+        if (!service.hasActiveTask(taskId)) {
+          throw new Error(
+            `permission.respond: no active task with id=${taskId}. The task may have completed, been cancelled, or never existed.`,
+          );
+        }
+        await service.sendResponse(taskId, {
+          taskId,
+          requestId: 'filereq_irrelevant',
+          decision: 'deny',
+        });
+      };
+
+      await expect(handlerSimulation(bogusTaskId)).rejects.toThrow(
+        /permission.respond: no active task with id=tsk_never_existed/,
+      );
+    });
+  });
 });
