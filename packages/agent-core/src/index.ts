@@ -546,6 +546,7 @@ export { stripAnsi, quoteForShell, getPlatformShell, getShellArgs } from './util
 export { isPortInUse, waitForPortRelease } from './utils/network.js';
 export { isWaitingForUser } from './common/utils/waiting-detection.js';
 export { detectLogSource, LOG_SOURCE_PATTERNS } from './common/utils/log-source-detector.js';
+export { mergeTaskMessage, upsertTaskMessages } from './common/utils/task-message-merge.js';
 // Schemas
 export {
   taskConfigSchema,

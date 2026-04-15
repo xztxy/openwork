@@ -1,4 +1,5 @@
 import type { TaskStatus, TaskUpdateEvent, TaskMessage } from '@accomplish_ai/agent-core';
+import { upsertTaskMessages } from '@accomplish_ai/agent-core';
 import { getAccomplish } from '../lib/accomplish';
 import type { TaskState } from './taskStore';
 
@@ -21,9 +22,14 @@ export function createTaskUpdateActions(set: SetFn, _get: GetFn) {
         let updatedTasks = state.tasks;
         let newStatus: TaskStatus | null = null;
         if (event.type === 'message' && event.message && isCurrentTask && state.currentTask) {
+          // Phase 1c of the SDK cutover port — merge by stable ID so a tool
+          // row's `{ toolStatus: 'running' }` followed by
+          // `{ toolStatus: 'completed' }` (same id) collapses into ONE row,
+          // not two. Before this, raw append produced duplicate bubbles on
+          // every tool-state transition.
           updatedCurrentTask = {
             ...state.currentTask,
-            messages: [...state.currentTask.messages, event.message],
+            messages: upsertTaskMessages(state.currentTask.messages, [event.message]),
           };
         }
         if (event.type === 'complete' && event.result) {
@@ -106,7 +112,9 @@ export function createTaskUpdateActions(set: SetFn, _get: GetFn) {
         if (!state.currentTask || state.currentTask.id !== event.taskId) {
           return state;
         }
-        const updatedMessages = [...state.currentTask.messages, ...event.messages];
+        // Merge-by-stable-id for the batch path, same reason as the
+        // single-message branch above.
+        const updatedMessages = upsertTaskMessages(state.currentTask.messages, event.messages);
         const updatedTask = {
           ...state.currentTask,
           messages: updatedMessages,

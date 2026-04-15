@@ -61,26 +61,12 @@ function getStableToolUseMessageId(message: OpenCodeToolUseMessage): string {
 }
 
 /**
- * Merge an incoming `TaskMessage` into an existing one by `id`. Preserves the
- * original timestamp (we don't want UI re-sorting on each update) and takes the
- * newest tool state / model metadata. Used by the batcher's upsert path and by
- * the renderer's `taskStore.upsertTaskMessages` (Phase 1c).
- *
- * Added by commercial PR #720.
+ * Phase 1c of the OpenCode SDK cutover port extracted `mergeTaskMessage`
+ * into `common/utils/task-message-merge.ts` so the renderer's browser-safe
+ * entry can share the exact same semantics as the daemon-side batcher.
+ * Re-exported here so existing daemon-side callers keep working.
  */
-export function mergeTaskMessage(existing: TaskMessage, incoming: TaskMessage): TaskMessage {
-  return {
-    ...existing,
-    ...incoming,
-    timestamp: existing.timestamp,
-    attachments: incoming.attachments ?? existing.attachments,
-    toolInput: incoming.toolInput ?? existing.toolInput,
-    toolName: incoming.toolName ?? existing.toolName,
-    toolStatus: incoming.toolStatus ?? existing.toolStatus,
-    modelId: incoming.modelId ?? existing.modelId,
-    providerId: incoming.providerId ?? existing.providerId,
-  };
-}
+export { mergeTaskMessage } from '../common/utils/task-message-merge.js';
 
 function getTaskMessageTimestamp(message: OpenCodeMessage): string {
   return new Date(message.timestamp ?? Date.now()).toISOString();

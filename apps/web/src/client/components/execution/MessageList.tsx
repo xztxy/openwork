@@ -113,7 +113,19 @@ export const MessageBubble = memo(
               <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
                 {ToolIcon ? <ToolIcon className="h-4 w-4" /> : <Wrench className="h-4 w-4" />}
                 <span>{toolDisplayInfo?.label || toolName || 'Processing'}</span>
-                {isLastMessage && isRunning && <SpinningIcon className="h-3.5 w-3.5 ml-1" />}
+                {/*
+                 * Spinner rule (Phase 1c of the SDK cutover port): prefer
+                 * per-message `toolStatus` when it's set by the adapter —
+                 * lets non-last tool rows still show running state if they
+                 * happen to be in-flight (e.g. two concurrent tool calls).
+                 * Fall back to the legacy `isLastMessage && isRunning` prop
+                 * for messages without toolStatus (older persisted rows or
+                 * non-SDK code paths).
+                 */}
+                {(message.toolStatus === 'running' ||
+                  (message.toolStatus === undefined && isLastMessage && isRunning)) && (
+                  <SpinningIcon className="h-3.5 w-3.5 ml-1" />
+                )}
               </div>
             ) : (
               <>
