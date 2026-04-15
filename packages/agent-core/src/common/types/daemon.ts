@@ -87,6 +87,19 @@ export interface TaskStartParams {
   allowedTools?: string[];
   systemPromptAppend?: string;
   outputSchema?: object;
+  /**
+   * Originating surface — `'ui' | 'whatsapp' | 'scheduler'`. Drives the
+   * no-UI auto-deny policy for permission/question prompts when the task
+   * runs headlessly (Phase 2 of the SDK cutover port, decision #5).
+   *
+   * The runtime zod schema at `validation.ts:taskConfigSchema` already
+   * accepts this field, but any typed RPC caller that follows this
+   * interface used to silently omit it and default to `'ui'`. WhatsApp
+   * bridge and scheduler callers call `TaskService.startTask` directly
+   * (not via RPC), so they were unaffected; the gap mattered for any
+   * future RPC-path caller.
+   */
+  source?: import('./task.js').TaskSource;
 }
 
 /** Parameters for task.cancel / task.interrupt */
