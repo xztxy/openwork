@@ -118,6 +118,16 @@ export type { EnvironmentConfig } from './opencode/environment.js';
 
 export { buildProviderConfigs, syncApiKeysToOpenCodeAuth } from './opencode/config-builder.js';
 
+// SDK-era model-runtime mapping (port of commercial 1a320029). Normalises OSS
+// `SelectedModel` into the `{ providerID, modelID }` shape the OpenCode SDK v2
+// session.prompt API expects. Populated in Phase 2 when the daemon constructs
+// the adapter's `AdapterOptions.getServerUrl` + selected-model plumbing.
+export {
+  normalizeSelectedModelForSdk,
+  resolveLlamaCppRuntimeModelName,
+} from './opencode/model-runtime-mapping.js';
+export type { SdkSelectedModelRef } from './opencode/model-runtime-mapping.js';
+
 export { resolveTaskConfig } from './opencode/resolve-task-config.js';
 export type {
   ResolveTaskConfigOptions,
