@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { PERMISSION_API_PORT } from '../../../src/common/constants.js';
 import {
   generateConfig,
   getOpenCodeConfigPath,
@@ -18,9 +17,11 @@ describe('ConfigGenerator', () => {
   let mcpToolsPath: string;
   let userDataPath: string;
   const sharedBundledNodeBinPath = path.join(os.tmpdir(), 'config-gen-test-bundled-node', 'bin');
+  // Phase 3 of the SDK cutover port deleted the `file-permission` and
+  // `ask-user-question` MCP shims — the SDK's `permission.asked` /
+  // `question.asked` events replace them. Those entries are no longer
+  // expected in the generated config.
   const requiredMcpDistEntries = [
-    ['file-permission', 'dist/index.mjs'],
-    ['ask-user-question', 'dist/index.mjs'],
     ['request-connector-auth', 'dist/index.mjs'],
     ['complete-task', 'dist/index.mjs'],
     ['start-task', 'dist/index.mjs'],
@@ -176,8 +177,11 @@ describe('ConfigGenerator', () => {
       const result = generateConfig(options);
 
       expect(result.mcpServers.slack).toBeDefined();
-      expect(result.mcpServers['file-permission']).toBeDefined();
-      expect(result.mcpServers['ask-user-question']).toBeDefined();
+      // file-permission / ask-user-question removed in Phase 3 of the SDK
+      // cutover port — their HTTP-callback role is now handled natively by
+      // the SDK's permission.asked / question.asked events.
+      expect(result.mcpServers['file-permission']).toBeUndefined();
+      expect(result.mcpServers['ask-user-question']).toBeUndefined();
       expect(result.mcpServers['request-connector-auth']).toBeDefined();
       expect(result.mcpServers['dev-browser-mcp']).toBeDefined();
       expect(result.mcpServers['complete-task']).toBeDefined();
@@ -204,50 +208,13 @@ describe('ConfigGenerator', () => {
       expect(result.config.mcp?.slack).toEqual(result.mcpServers.slack);
     });
 
-    it('should set permission API port in environment', () => {
-      const options: ConfigGeneratorOptions = {
-        ...baseOptions,
-        mcpToolsPath,
-        userDataPath,
-        permissionApiPort: 9999,
-      };
-
-      const result = generateConfig(options);
-
-      expect(result.mcpServers['file-permission'].environment?.PERMISSION_API_PORT).toBe('9999');
-      expect(result.mcpServers['desktop-control'].environment?.PERMISSION_API_PORT).toBe('9999');
-    });
-
-    it('should set question API port in environment', () => {
-      const options: ConfigGeneratorOptions = {
-        ...baseOptions,
-        mcpToolsPath,
-        userDataPath,
-        questionApiPort: 8888,
-      };
-
-      const result = generateConfig(options);
-
-      expect(result.mcpServers['ask-user-question'].environment?.QUESTION_API_PORT).toBe('8888');
-    });
-
-    it('should use default ports if not specified', () => {
-      const options: ConfigGeneratorOptions = {
-        ...baseOptions,
-        mcpToolsPath,
-        userDataPath,
-      };
-
-      const result = generateConfig(options);
-
-      expect(result.mcpServers['file-permission'].environment?.PERMISSION_API_PORT).toBe(
-        String(PERMISSION_API_PORT),
-      );
-      expect(result.mcpServers['desktop-control'].environment?.PERMISSION_API_PORT).toBe(
-        String(PERMISSION_API_PORT),
-      );
-      expect(result.mcpServers['ask-user-question'].environment?.QUESTION_API_PORT).toBe('9227');
-    });
+    // Phase 3 of the SDK cutover port removed the file-permission and
+    // ask-user-question MCP entries. The `permissionApiPort` /
+    // `questionApiPort` options are retained on the config-generator type
+    // for back-compat but no MCP entry consumes them. Desktop-control's
+    // PERMISSION_API_PORT env injection is also gone — its sandbox path no
+    // longer routes through the daemon HTTP listeners. Tests that asserted
+    // on those fields are removed here.
 
     it('should include skills in system prompt when provided', () => {
       const options: ConfigGeneratorOptions = {
@@ -448,7 +415,9 @@ describe('ConfigGenerator', () => {
       const result = generateConfig(options);
 
       // Should use node + dist path instead of tsx + src
-      const command = result.mcpServers['file-permission'].command;
+      // file-permission MCP removed in Phase 3 of the SDK cutover port;
+      // assert on a retained MCP entry (request-connector-auth) instead.
+      const command = result.mcpServers['request-connector-auth'].command;
       expect(command?.[0]).toContain('node');
       expect(command?.[1]).toContain('dist/index.mjs');
     });
@@ -475,13 +444,18 @@ describe('ConfigGenerator', () => {
 
       const result = generateConfig(options);
 
-      const command = result.mcpServers['file-permission'].command;
+      // file-permission MCP removed in Phase 3 of the SDK cutover port;
+      // assert on a retained MCP entry (request-connector-auth) instead.
+      const command = result.mcpServers['request-connector-auth'].command;
       expect(command?.[0]).toContain('node');
       expect(command?.[1]).toContain('dist/index.mjs');
     });
 
     it('should throw when MCP dist entry is missing', () => {
-      fs.rmSync(path.join(mcpToolsPath, 'file-permission', 'dist', 'index.mjs'));
+      // Pick any still-bundled MCP — request-connector-auth is the simplest
+      // always-present entry post-Phase-3. Removing its dist entry should
+      // trip the generator's validation.
+      fs.rmSync(path.join(mcpToolsPath, 'request-connector-auth', 'dist', 'index.mjs'));
 
       const options: ConfigGeneratorOptions = {
         ...baseOptions,

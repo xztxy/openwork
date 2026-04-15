@@ -79,8 +79,11 @@ export function buildMcpServers(options: BuildMcpServersOptions): Record<string,
   const {
     mcpToolsPath,
     nodeExe,
-    permissionApiPort,
-    questionApiPort,
+    // permissionApiPort / questionApiPort are retained on the options type
+    // for back-compat with existing call sites (Phase 3 of the SDK cutover
+    // port removed the file-permission and ask-user-question MCP entries).
+    permissionApiPort: _permissionApiPort,
+    questionApiPort: _questionApiPort,
     whatsappApiPort,
     browserConfig,
     authToken,
@@ -98,20 +101,13 @@ export function buildMcpServers(options: BuildMcpServersOptions): Record<string,
       url: OPENCODE_SLACK_MCP_SERVER_URL,
       oauth: { clientId: OPENCODE_SLACK_MCP_CLIENT_ID },
     },
-    'file-permission': {
-      type: 'local',
-      command: resolveMcpCommand(mcpToolsPath, 'file-permission', 'dist/index.mjs', nodeExe),
-      enabled: true,
-      environment: { PERMISSION_API_PORT: String(permissionApiPort), ...authEnv },
-      timeout: 30000,
-    },
-    'ask-user-question': {
-      type: 'local',
-      command: resolveMcpCommand(mcpToolsPath, 'ask-user-question', 'dist/index.mjs', nodeExe),
-      enabled: true,
-      environment: { QUESTION_API_PORT: String(questionApiPort), ...authEnv },
-      timeout: 600000, // 10 minutes — user needs time to read and respond
-    },
+    // Phase 3 of the OpenCode SDK cutover port removed the `file-permission`
+    // and `ask-user-question` MCP entries — their HTTP-callback role was
+    // replaced by the SDK's native `permission.asked` / `question.asked`
+    // events handled inside `OpenCodeAdapter`. The `permissionApiPort` /
+    // `questionApiPort` parameters are retained in this builder's signature
+    // for back-compat with existing call sites; the daemon no longer listens
+    // on those ports.
     'request-connector-auth': {
       type: 'local',
       command: resolveMcpCommand(mcpToolsPath, 'request-connector-auth', 'dist/index.mjs', nodeExe),
@@ -135,7 +131,12 @@ export function buildMcpServers(options: BuildMcpServersOptions): Record<string,
       type: 'local',
       command: resolveMcpCommand(mcpToolsPath, 'desktop-control', 'dist/index.mjs', nodeExe),
       enabled: true,
-      environment: { PERMISSION_API_PORT: String(permissionApiPort), ...authEnv },
+      // Phase 3 of the SDK cutover port removed the daemon's
+      // /permission HTTP listener, so `PERMISSION_API_PORT` no longer points
+      // at anything. If desktop-control needs to route permission prompts
+      // it should do so via the task emitter / RPC chain like any other
+      // tool — not by direct HTTP to a defunct listener.
+      environment: { ...authEnv },
       timeout: 60000,
     },
   };

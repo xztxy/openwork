@@ -33,10 +33,14 @@ const skillsDir = path.join(
 // Skills that have runtime dependencies (playwright) that cannot be bundled
 const SKILLS_WITH_RUNTIME_DEPS = ['dev-browser', 'dev-browser-mcp'];
 
-// Skills that are fully bundled (no runtime node_modules needed)
+// Skills that are fully bundled (no runtime node_modules needed).
+//
+// `ask-user-question` and `file-permission` were removed by Phase 3 of the
+// OpenCode SDK cutover port — their HTTP-callback plumbing was replaced by
+// native SDK `permission.asked` / `question.asked` events handled inside
+// `OpenCodeAdapter`. Keep this list synchronised with `mcp-tools/` directory
+// contents; any skill listed here but absent on disk would fail the build.
 const SKILLS_FULLY_BUNDLED = [
-  'ask-user-question',
-  'file-permission',
   'complete-task',
   'request-connector-auth',
   'start-task',
@@ -45,16 +49,6 @@ const SKILLS_FULLY_BUNDLED = [
 ];
 
 const bundles = [
-  {
-    name: 'ask-user-question',
-    entry: 'src/index.ts',
-    outfile: 'dist/index.mjs',
-  },
-  {
-    name: 'file-permission',
-    entry: 'src/index.ts',
-    outfile: 'dist/index.mjs',
-  },
   {
     name: 'complete-task',
     entry: 'src/index.ts',
