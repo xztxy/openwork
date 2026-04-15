@@ -8,9 +8,13 @@ const agentCorePackageJsonPath = path.join(agentCoreDir, 'package.json');
 const agentCoreSourceDir = path.join(agentCoreDir, 'src');
 const agentCoreTsconfigPath = path.join(agentCoreDir, 'tsconfig.json');
 const desktopNodeResourcesDir = path.join(rootDir, 'apps', 'desktop', 'resources', 'nodejs');
+// Phase 3 of the OpenCode SDK cutover port deleted the `file-permission`
+// and `ask-user-question` MCP tool sources — their HTTP-bridged role was
+// replaced by SDK-native `permission.asked` / `question.asked` events
+// handled inside `OpenCodeAdapter`. Keeping them in this preflight list
+// would always fail dev startup with "Failed to produce required MCP dist
+// outputs" because their `src/index.ts` no longer exists.
 const mcpDistOutputs = [
-  'mcp-tools/file-permission/dist/index.mjs',
-  'mcp-tools/ask-user-question/dist/index.mjs',
   'mcp-tools/complete-task/dist/index.mjs',
   'mcp-tools/start-task/dist/index.mjs',
   'mcp-tools/dev-browser-mcp/dist/index.mjs',
