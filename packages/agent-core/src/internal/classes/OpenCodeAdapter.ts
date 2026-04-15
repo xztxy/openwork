@@ -361,18 +361,31 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.eventAbortController = new AbortController();
     this.eventStreamPromise = this.runEventSubscription(this.eventAbortController.signal);
 
-    // Create the session + kick off the prompt.
+    // Resume an existing session if the caller provided one; otherwise
+    // create a fresh one. CRITICAL for conversation continuity — the
+    // previous code called `session.create` unconditionally on every
+    // `startTask`, which meant every follow-up turn (from `resumeSession`
+    // → `_runTask` → `startTask({ sessionId, ... })`) got a brand-new
+    // SDK session with zero memory of earlier turns. User-visible
+    // symptom: after answering "What is 8+9? → 17", a follow-up "add 5
+    // to the result" triggered a clarification popup because the agent
+    // had no idea what "the result" referred to. OpenCode sessions are
+    // long-lived; `session.prompt(sessionID=X, text=...)` appends a new
+    // user turn to session X and the agent sees the full prior history.
     const model = this.buildModelParam(config);
-    const sessionCreateRes = await this.client.session.create(
-      { title: this.deriveTitle(config.prompt) },
-      { throwOnError: true },
-    );
-    const sessionId =
-      (sessionCreateRes as { data?: { id?: string }; id?: string }).data?.id ??
-      (sessionCreateRes as { id?: string }).id ??
-      null;
+    let sessionId: string | null = config.sessionId ?? null;
     if (!sessionId) {
-      throw new Error('session.create did not return a session ID');
+      const sessionCreateRes = await this.client.session.create(
+        { title: this.deriveTitle(config.prompt) },
+        { throwOnError: true },
+      );
+      sessionId =
+        (sessionCreateRes as { data?: { id?: string }; id?: string }).data?.id ??
+        (sessionCreateRes as { id?: string }).id ??
+        null;
+      if (!sessionId) {
+        throw new Error('session.create did not return a session ID');
+      }
     }
     this.currentSessionId = sessionId;
 
@@ -455,6 +468,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
         { requestID: pending.sdkRequestId, reply },
         { throwOnError: true },
       );
+      this.pendingRequest = null;
     } else {
       // Question reply. Build the `answers` payload from selectedOptions +
       // customText. If both are empty and decision is 'deny', use reject.
@@ -465,7 +479,8 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       if (response.customText) {
         answers.push([response.customText]);
       }
-      if (response.decision === 'deny' && answers.length === 0) {
+      const isCancel = response.decision === 'deny' && answers.length === 0;
+      if (isCancel) {
         await this.client.question.reject(
           { requestID: pending.sdkRequestId },
           { throwOnError: true },
@@ -477,8 +492,24 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
           { throwOnError: true },
         );
       }
+      this.pendingRequest = null;
+
+      // Cancel-hangs-forever fix: when the user hits Cancel on a
+      // clarification popup (decision=deny, no answer payload), the
+      // opencode SDK session often stops without ever emitting another
+      // `session.idle`. Server-side it was paused waiting for an
+      // answer; the reject signals abandonment but doesn't always
+      // produce the idle event our `session.idle` handler relies on to
+      // mark the task complete. Symptom: task card spins "Doing…"
+      // forever and the tool row for the question stays in `running`.
+      // User-visible fix: treat a cancel as end-of-turn and mark the
+      // task complete ourselves. The session object remains alive
+      // server-side so a follow-up prompt via `resumeSession` still
+      // keeps conversation memory.
+      if (isCancel) {
+        this.markComplete('success');
+      }
     }
-    this.pendingRequest = null;
   }
 
   async cancelTask(): Promise<void> {
