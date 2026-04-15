@@ -19,6 +19,52 @@ import {
   cmdFreeTime,
 } from './calendar.js';
 
+/**
+ * Tokenize a command string while preserving quoted sequences.
+ * Handles both single and double quotes.
+ * Example: 'create --title "Team Sync" --start 2024-01-01' → ['create', '--title', 'Team Sync', '--start', '2024-01-01']
+ */
+function tokenizeCommand(command: string): string[] {
+  const tokens: string[] = [];
+  let current = '';
+  let inQuote: '"' | "'" | null = null;
+
+  for (let i = 0; i < command.length; i++) {
+    const char = command[i];
+
+    if (inQuote) {
+      // Inside a quoted string
+      if (char === inQuote) {
+        // End of quoted string
+        inQuote = null;
+      } else {
+        current += char;
+      }
+    } else {
+      // Outside quotes
+      if (char === '"' || char === "'") {
+        // Start of quoted string
+        inQuote = char;
+      } else if (char === ' ' || char === '\t') {
+        // Whitespace: push current token if non-empty
+        if (current.length > 0) {
+          tokens.push(current);
+          current = '';
+        }
+      } else {
+        current += char;
+      }
+    }
+  }
+
+  // Push final token if any
+  if (current.length > 0) {
+    tokens.push(current);
+  }
+
+  return tokens;
+}
+
 const server = new Server(
   { name: 'google-calendar', version: '1.0.0' },
   { capabilities: { tools: {} } },
@@ -77,7 +123,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToo
   const command = rawArgs.command;
   const accountParam = rawArgs.account as string | undefined;
 
-  const accounts = loadManifest();
+  let accounts: ReturnType<typeof loadManifest>;
+  try {
+    accounts = loadManifest();
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    return {
+      content: [{ type: 'text', text: `Error loading Google accounts: ${errMsg}` }],
+      isError: true,
+    };
+  }
+
   if (accounts.length === 0) {
     return {
       content: [
@@ -90,7 +146,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToo
     };
   }
 
-  const parts = command.trim().split(/\s+/);
+  const parts = tokenizeCommand(command.trim());
   const subcommand = parts[0];
   const rest = parts.slice(1);
   const flags = parseFlags(rest);

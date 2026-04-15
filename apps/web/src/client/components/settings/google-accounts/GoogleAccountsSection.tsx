@@ -14,14 +14,17 @@ export function GoogleAccountsSection() {
   const [reconnectId, setReconnectId] = useState<string | null>(null);
   const [pendingAuthState, setPendingAuthState] = useState<string | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollCancelRef = useRef<boolean>(false);
 
   useEffect(() => {
     const cleanup = initGoogleAccountListener();
     fetchAccounts();
     return () => {
       cleanup();
+      pollCancelRef.current = true;
       if (pollTimerRef.current !== null) {
         clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
       }
     };
   }, [fetchAccounts]);
@@ -43,9 +46,24 @@ export function GoogleAccountsSection() {
         const knownIds = new Set(accounts.map((a) => a.googleAccountId));
         const targetAccountId = accountId || reconnectId;
         let attempts = 0;
+        pollCancelRef.current = false;
         const poll = async (): Promise<void> => {
           attempts++;
-          await fetchAccounts();
+          try {
+            await fetchAccounts();
+          } catch (error) {
+            // Handle fetch failures: log and stop polling if canceled
+            console.error('Failed to fetch accounts during polling:', error);
+            if (pollCancelRef.current) {
+              return;
+            }
+          }
+
+          // Check cancellation after async work
+          if (pollCancelRef.current) {
+            return;
+          }
+
           const current = useGoogleAccountStore.getState().accounts;
 
           // Check for new account (add flow)
@@ -70,6 +88,12 @@ export function GoogleAccountsSection() {
             onComplete?.();
             return;
           }
+
+          // Check cancellation before scheduling next poll
+          if (pollCancelRef.current) {
+            return;
+          }
+
           pollTimerRef.current = setTimeout(() => void poll(), POLL_INTERVAL_MS);
         };
         pollTimerRef.current = setTimeout(() => void poll(), POLL_INTERVAL_MS);
@@ -99,6 +123,7 @@ export function GoogleAccountsSection() {
   };
 
   const handleCancelConnecting = async () => {
+    pollCancelRef.current = true;
     if (pollTimerRef.current !== null) {
       clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;

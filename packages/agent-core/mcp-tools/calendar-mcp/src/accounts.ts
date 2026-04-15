@@ -21,8 +21,12 @@ export function loadManifest(): AccountEntry[] {
   }
   try {
     return JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as AccountEntry[];
-  } catch {
-    return [];
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Failed to load Google accounts manifest at "${manifestPath}": ${errMsg}. ` +
+        'Check that the file exists and contains valid JSON.',
+    );
   }
 }
 
@@ -59,6 +63,15 @@ export function resolveAccounts(
   // free-time always queries all accounts regardless of account param
   if (subcommand === 'free-time') {
     return { resolved: accounts };
+  }
+
+  // get requires a specific account when multiple exist
+  if (subcommand === 'get' && accounts.length > 1) {
+    const available = accounts.map((a) => `${a.label} (${a.email})`).join(', ');
+    return {
+      resolved: [],
+      clarificationNeeded: `Which account's calendar? Available: ${available}`,
+    };
   }
 
   if (!READ_COMMANDS.has(subcommand)) {
