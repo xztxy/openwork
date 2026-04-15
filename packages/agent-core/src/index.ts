@@ -118,6 +118,19 @@ export type { EnvironmentConfig } from './opencode/environment.js';
 
 export { buildProviderConfigs, syncApiKeysToOpenCodeAuth } from './opencode/config-builder.js';
 
+// `resolveTaskConfig` was retained at merge time (rather than fully deleted in
+// Phase 4b of the SDK cutover port) because the desktop config-generator —
+// which on `main` was extended with GWS manifest preparation in #921 — still
+// imports it. The function is dead at runtime under SDK architecture (the
+// daemon owns config generation via `apps/daemon/src/task-config-builder.ts`)
+// but kept for type compatibility until the desktop config-generator is
+// either rewritten for the SDK era or deleted as part of GWS daemon-side wiring.
+export { resolveTaskConfig } from './opencode/resolve-task-config.js';
+export type {
+  ResolveTaskConfigOptions,
+  ResolvedTaskConfig,
+} from './opencode/resolve-task-config.js';
+
 // SDK-era model-runtime mapping (port of commercial 1a320029). Normalises OSS
 // `SelectedModel` into the `{ providerID, modelID }` shape the OpenCode SDK v2
 // session.prompt API expects. Populated in Phase 2 when the daemon constructs

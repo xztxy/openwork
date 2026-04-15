@@ -34,7 +34,11 @@ import { migration as v024 } from './v024-huggingface-local-config.js';
 import { migration as v025 } from './v024-accomplish-ai.js';
 import { migration as v026 } from './v026-language.js';
 import { migration as v027 } from './v027-reconcile-commercial-schema.js';
-import { migration as v028 } from './v028-opencode-sdk-message-fields.js';
+import { migration as v028 } from './v028-google-accounts.js';
+// v029 — added by the OpenCode SDK cutover port. Originally numbered v028
+// on the port branch, renumbered to v029 at merge time because the
+// google-accounts migration (#921) claimed v028 first on `main`.
+import { migration as v029 } from './v029-opencode-sdk-message-fields.js';
 
 const migrations: Migration[] = [
   v001,
@@ -65,13 +69,14 @@ const migrations: Migration[] = [
   v026,
   v027,
   v028,
+  v029,
 ];
 export function registerMigration(migration: Migration): void {
   migrations.push(migration);
   migrations.sort((a, b) => a.version - b.version);
 }
 
-export const CURRENT_VERSION = 28;
+export const CURRENT_VERSION = 29;
 export function getStoredVersion(db: Database): number {
   try {
     const tableExists = db

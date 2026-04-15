@@ -5,7 +5,7 @@ import * as os from 'os';
 
 /**
  * Round-trip persistence test for the new TaskMessage fields introduced by
- * migration v028 (OpenCode SDK cutover port, commercial PR #720):
+ * migration v029 (OpenCode SDK cutover port, commercial PR #720):
  *   - tool_status
  *   - model_id
  *   - provider_id
@@ -16,7 +16,7 @@ import * as os from 'os';
  * Requires the better-sqlite3 native module. Skipped on ABI mismatch.
  */
 
-describe('TaskMessage new fields round-trip (v028)', () => {
+describe('TaskMessage new fields round-trip (v029)', () => {
   let testDir: string;
   let dbPath: string;
   let databaseModule: typeof import('../../../src/storage/database.js') | null = null;

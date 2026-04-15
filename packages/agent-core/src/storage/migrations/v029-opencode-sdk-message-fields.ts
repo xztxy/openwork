@@ -18,7 +18,7 @@ import type { Migration } from './index.js';
  * Idempotent: checks column existence before altering. Safe to re-run.
  *
  * Rollback: columns are additive and never the sole source of truth. Revert by
- * landing a `v029-drop-opencode-sdk-message-fields` migration using
+ * landing a `v030-drop-opencode-sdk-message-fields` migration using
  * `ALTER TABLE ... DROP COLUMN` (SQLite 3.35+).
  */
 
@@ -28,7 +28,7 @@ function hasColumn(db: Database, table: string, column: string): boolean {
 }
 
 export const migration: Migration = {
-  version: 28,
+  version: 29,
   up: (db: Database) => {
     if (!hasColumn(db, 'task_messages', 'tool_status')) {
       db.exec(`ALTER TABLE task_messages ADD COLUMN tool_status TEXT`);
@@ -39,6 +39,6 @@ export const migration: Migration = {
     if (!hasColumn(db, 'task_messages', 'provider_id')) {
       db.exec(`ALTER TABLE task_messages ADD COLUMN provider_id TEXT`);
     }
-    console.log('[Migrations] v028: task_messages +tool_status +model_id +provider_id');
+    console.log('[Migrations] v029: task_messages +tool_status +model_id +provider_id');
   },
 };

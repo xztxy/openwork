@@ -1327,7 +1327,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.eventStreamPromise = null;
     this.pendingRequest = null;
     this.client = null;
-    // Clear LLM-gateway task tag so subsequent non-task LLM calls aren't
+    // Clear optional proxy task tag so subsequent non-task LLM calls aren't
     // misattributed. No-op if the callback wasn't wired.
     this.options.setProxyTaskId?.(undefined);
   }
