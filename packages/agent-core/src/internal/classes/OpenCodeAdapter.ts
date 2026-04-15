@@ -49,6 +49,11 @@ import {
 
 import { OpenCodeLogWatcher, createLogWatcher, OpenCodeLogError } from './OpenCodeLogWatcher.js';
 import {
+  TaskInactivityWatchdog,
+  type TaskInactivityWatchdogSnapshot,
+  type TaskInactivityWatchdogTimeoutContext,
+} from './TaskInactivityWatchdog.js';
+import {
   CompletionEnforcer,
   CompletionEnforcerCallbacks,
 } from '../../opencode/completion/index.js';
@@ -235,6 +240,15 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   /** Screenshot/frame payload buffer for dev-browser-mcp outputs emitted via SDK tool events. */
   private browserFrameSeen = new Set<string>();
 
+  /**
+   * Monotonic counter bumped in `handleSdkEvent` on every SDK event. Feeds
+   * the `TaskInactivityWatchdog` fingerprint — each real SDK event advances
+   * it, so a stuck task (LLM generation hung, server silent) produces a
+   * stable fingerprint and the watchdog escalates.
+   */
+  private watchdogActivityCounter = 0;
+  private watchdog: TaskInactivityWatchdog | null = null;
+
   constructor(options: AdapterOptions, taskId?: string) {
     super();
     this.options = options;
@@ -332,6 +346,13 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       throw new Error('session.create did not return a session ID');
     }
     this.currentSessionId = sessionId;
+
+    // Start the inactivity watchdog now that we have a session. Defaults
+    // from `TaskInactivityWatchdog` give us a 90s stall → soft-timeout
+    // nudge followed by 60s post-nudge → hard timeout (total ~2.5 min of
+    // zero SDK activity). The watchdog pauses while a permission/question
+    // prompt is pending (human input time doesn't count as a stall).
+    this.startWatchdog();
 
     this.emit('progress', { stage: 'waiting', message: 'Waiting for response...' });
 
@@ -578,6 +599,11 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   }
 
   private handleSdkEvent(event: OpenCodeSdkEvent): void {
+    // Bump the watchdog fingerprint BEFORE the switch so every real SDK
+    // event (message, part, delta, permission, question, idle, error,
+    // todo…) counts as progress. A hang that produces no events will
+    // leave this counter stable, letting the watchdog detect the stall.
+    this.watchdogActivityCounter += 1;
     switch (event.type) {
       case 'message.updated': {
         const info = (event.properties as { info: OpenCodeSdkMessage }).info;
@@ -963,6 +989,8 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   }
 
   private teardown(): void {
+    this.watchdog?.stop();
+    this.watchdog = null;
     this.eventAbortController?.abort();
     this.eventAbortController = null;
     this.eventStreamPromise = null;
@@ -971,5 +999,85 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     // Clear LLM-gateway task tag so subsequent non-task LLM calls aren't
     // misattributed. No-op if the callback wasn't wired.
     this.options.setProxyTaskId?.(undefined);
+  }
+
+  /**
+   * Spin up the inactivity watchdog for this task. Called after the SDK
+   * session is created in `startTask`. The watchdog samples every
+   * `sampleIntervalMs` (default 5s), considers the task stalled if the
+   * fingerprint doesn't advance for `stallTimeoutMs` (default 90s), nudges
+   * via `onSoftTimeout`, and hard-fails via `onHardTimeout` after a further
+   * `postNudgeTimeoutMs` (default 60s). A pending permission/question
+   * request pauses the detection — waiting on a human isn't a stall.
+   *
+   * Wired lazily here (rather than in the constructor) because the adapter
+   * instance is reused across tasks in the queued-task case and we want a
+   * fresh timer budget per task.
+   */
+  private startWatchdog(): void {
+    this.watchdog?.stop();
+    this.watchdog = new TaskInactivityWatchdog({
+      sample: async () => this.sampleWatchdogState(),
+      onSoftTimeout: async (ctx) => this.handleWatchdogSoftTimeout(ctx),
+      onHardTimeout: async (ctx) => this.handleWatchdogHardTimeout(ctx),
+      onDebug: (type, message, data) => {
+        log.warn(`[watchdog] ${type}: ${message}`, { data });
+      },
+    });
+    this.watchdog.start();
+  }
+
+  private sampleWatchdogState(): TaskInactivityWatchdogSnapshot {
+    // Fingerprint combines the session ID, the monotonic activity counter,
+    // and the pending-request ID. Any genuine progress (event received, new
+    // permission prompt) advances it. A hang leaves it stable.
+    const fingerprint = [
+      this.currentSessionId ?? 'no-session',
+      this.watchdogActivityCounter,
+      this.pendingRequest?.sdkRequestId ?? 'no-pending',
+    ].join(':');
+    // `inProgress: false` tells the watchdog to reset its timer and not
+    // escalate. We flip it false in three cases:
+    //   - task already completed
+    //   - client torn down
+    //   - waiting on human input (pending permission/question)
+    // Otherwise the session is actively expected to produce events.
+    const inProgress =
+      !this.hasCompleted &&
+      this.client !== null &&
+      !this.isDisposed &&
+      this.pendingRequest === null;
+    return {
+      fingerprint,
+      inProgress,
+      summary: this.currentSessionId ?? undefined,
+    };
+  }
+
+  private handleWatchdogSoftTimeout(ctx: TaskInactivityWatchdogTimeoutContext): void {
+    // Soft timeout: task has been quiet for `stallTimeoutMs`. V1 treats this
+    // as a warning and lets the post-nudge timer run — opencode may still
+    // produce a late event. Future enhancement: send a session nudge via
+    // the SDK to prompt progress. For now, log and continue.
+    log.warn(
+      `[watchdog] Task stalled (soft timeout, attempt ${ctx.attempt}, elapsed ${ctx.elapsedMs}ms). Waiting for recovery...`,
+      { sessionId: this.currentSessionId, taskId: this.currentTaskId },
+    );
+  }
+
+  private handleWatchdogHardTimeout(ctx: TaskInactivityWatchdogTimeoutContext): void {
+    // Hard timeout: task hasn't made progress in soft + post-nudge
+    // windows. Fail the task. `markComplete` triggers the standard
+    // cleanup chain (error event, teardown, callback).
+    const elapsedSec = Math.round(ctx.elapsedMs / 1000);
+    const msg = `Task inactivity watchdog: no SDK events for ${elapsedSec}s (hard timeout)`;
+    log.error(`[watchdog] ${msg}`, {
+      sessionId: this.currentSessionId,
+      taskId: this.currentTaskId,
+    });
+    if (!this.hasCompleted) {
+      this.emit('error', new Error(msg));
+      this.markComplete('error', msg);
+    }
   }
 }
