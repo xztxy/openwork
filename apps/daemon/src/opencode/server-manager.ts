@@ -241,9 +241,20 @@ function spawnOpenCodeServer(
       stdoutBuffer = lines.pop() ?? '';
 
       for (const rawLine of lines) {
-        const url = parseServerUrlFromOutput(rawLine.trim());
+        const trimmed = rawLine.trim();
+        if (!trimmed) continue;
+        // Forward opencode's own stdout into the daemon log. Previously we
+        // captured stdout silently for ready-line parsing, which made it
+        // impossible to see what opencode was doing during long-running
+        // flows like OAuth. Forwarding gives direct visibility — the cost
+        // is a little more log noise on successful task runs.
+        if (settled) {
+          log.info(`[opencode:stdout] ${trimmed}`);
+        }
+        const url = parseServerUrlFromOutput(trimmed);
         if (!url) continue;
         settle(() => {
+          log.info(`[opencode:stdout] ${trimmed}`);
           resolve({ url, close });
         });
         return;
@@ -251,12 +262,23 @@ function spawnOpenCodeServer(
     };
 
     const onStderr = (chunk: Buffer | string): void => {
-      output += chunk.toString();
+      const text = chunk.toString();
+      output += text;
+      // Forward opencode's own stderr too — schema validation failures,
+      // port conflicts, OAuth exchange errors all land here.
+      for (const rawLine of text.split('\n')) {
+        const trimmed = rawLine.trim();
+        if (trimmed) log.warn(`[opencode:stderr] ${trimmed}`);
+      }
     };
 
     const onExit = (code: number | null): void => {
       close();
       notifyClosed();
+      // Always log the exit so silent child-process deaths are visible.
+      log.warn(
+        `[opencode:exit] opencode-serve exited with code ${code} after ${output.trim().length} bytes of output (settled=${settled})`,
+      );
       if (settled) return;
       settle(() => {
         let message = `OpenCode server exited with code ${code}`;
