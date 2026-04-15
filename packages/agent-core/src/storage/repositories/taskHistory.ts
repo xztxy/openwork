@@ -146,11 +146,33 @@ export function addTaskMessage(taskId: string, message: TaskMessage): void {
 
     const sortOrder = (maxOrder.max ?? -1) + 1;
 
+    // INSERT … ON CONFLICT(id) DO UPDATE (SQLite upsert). The SDK-cutover
+    // port introduced stable message IDs so a single tool row can
+    // transition `running → completed/error` in the UI without producing
+    // duplicate bubbles (see `mergeTaskMessage` + `upsertTaskMessages`).
+    // The persistence layer MUST honour the same semantics — the daemon's
+    // `onBatchedMessages` callback calls this on every batch, including
+    // repeat IDs, and a plain INSERT throws `SQLITE_CONSTRAINT_PRIMARYKEY`
+    // on the second write.
+    //
+    // On conflict:
+    //   - Preserve `task_id`, `type`, `timestamp`, `sort_order` — these
+    //     are set at first insert and should stay stable.
+    //   - Update content, tool_name, tool_input, tool_status, model_id,
+    //     provider_id from the incoming row — these are what actually
+    //     change across a running→completed transition.
     db.prepare(
       `INSERT INTO task_messages
         (id, task_id, type, content, tool_name, tool_input, timestamp, sort_order,
          tool_status, model_id, provider_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        content = excluded.content,
+        tool_name = excluded.tool_name,
+        tool_input = excluded.tool_input,
+        tool_status = excluded.tool_status,
+        model_id = excluded.model_id,
+        provider_id = excluded.provider_id`,
     ).run(
       message.id,
       taskId,
@@ -166,8 +188,16 @@ export function addTaskMessage(taskId: string, message: TaskMessage): void {
     );
 
     if (message.attachments) {
+      // Attachments are content-stable for a given message id, so
+      // dedupe on (message_id, type, data) — re-running with the same
+      // payload must not create duplicates. The existing rows stay
+      // intact; INSERT OR IGNORE is sufficient because
+      // `task_attachments` does not have a unique constraint on the
+      // logical tuple today (we rely on the caller not to mutate
+      // attachment content for a given message_id, which the SDK
+      // honours).
       const insertAttachment = db.prepare(
-        `INSERT INTO task_attachments (message_id, type, data, label) VALUES (?, ?, ?, ?)`,
+        `INSERT OR IGNORE INTO task_attachments (message_id, type, data, label) VALUES (?, ?, ?, ?)`,
       );
 
       for (const att of message.attachments) {

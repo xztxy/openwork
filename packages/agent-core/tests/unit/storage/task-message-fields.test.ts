@@ -103,13 +103,14 @@ describe('TaskMessage new fields round-trip (v028)', () => {
       messages: [],
     });
 
+    const firstTimestamp = new Date().toISOString();
     repoModule.addTaskMessage(taskId, {
       id: 'msg-running',
       type: 'tool',
       content: '',
       toolName: 'read',
       toolStatus: 'running',
-      timestamp: new Date().toISOString(),
+      timestamp: firstTimestamp,
       modelId: 'gpt-5.4',
       providerId: 'openai',
     });
@@ -118,6 +119,33 @@ describe('TaskMessage new fields round-trip (v028)', () => {
     expect(afterRunning!.messages).toHaveLength(1);
     expect(afterRunning!.messages[0].toolStatus).toBe('running');
     expect(afterRunning!.messages[0].modelId).toBe('gpt-5.4');
+
+    // REGRESSION (Codex P1 #1): the SDK adapter emits the SAME stable
+    // message ID for running and then completed states of a tool row.
+    // Before the upsert fix, the second addTaskMessage call threw
+    // `SQLITE_CONSTRAINT_PRIMARYKEY` because the insert was plain. The
+    // renderer-side mergeTaskMessage helper collapsed the duplicate in
+    // memory, but persistence broke on every tool-state transition.
+    repoModule.addTaskMessage(taskId, {
+      id: 'msg-running', // SAME ID — this is the point of the regression.
+      type: 'tool',
+      content: 'file contents here',
+      toolName: 'read',
+      toolStatus: 'completed',
+      // New timestamp on the caller side — upsert preserves the ORIGINAL
+      // timestamp so the UI sort order stays stable.
+      timestamp: new Date(Date.now() + 5_000).toISOString(),
+      modelId: 'gpt-5.4',
+      providerId: 'openai',
+    });
+
+    const afterCompleted = repoModule.getTask(taskId);
+    expect(afterCompleted!.messages).toHaveLength(1); // still ONE row
+    expect(afterCompleted!.messages[0].id).toBe('msg-running');
+    expect(afterCompleted!.messages[0].toolStatus).toBe('completed');
+    expect(afterCompleted!.messages[0].content).toBe('file contents here');
+    // Timestamp preserved from the first insert.
+    expect(afterCompleted!.messages[0].timestamp).toBe(firstTimestamp);
   });
 
   it('accepts messages without new fields (back-compat, NULL columns)', () => {
