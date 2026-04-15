@@ -256,6 +256,23 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   private messageRoles = new Map<string, 'user' | 'assistant' | string>();
 
   /**
+   * Text parts that arrived via `message.part.updated` before we had seen
+   * the matching `message.updated` (so the parent message's role wasn't
+   * yet known). Keyed by SDK `messageID`. When the role eventually
+   * resolves via `handleMessageUpdated`:
+   *   - role === 'assistant' → replay buffered parts as `message` events
+   *     so the renderer and persistence layer receive them.
+   *   - role !== 'assistant' → drop buffered parts (user/system text that
+   *     would have produced a phantom assistant bubble).
+   * Without this buffer, the earlier default-deny dropped legitimate
+   * assistant text FOREVER whenever the SDK delivered the text part
+   * ahead of its parent message.updated — which Codex R5 P1 identified
+   * as the root cause of follow-up turns "completing" with no assistant
+   * reply in SQLite.
+   */
+  private pendingTextParts = new Map<string, OpenCodeSdkPart[]>();
+
+  /**
    * Per-task set of tool-call IDs that have already been counted by the
    * completion enforcer (`markToolsUsed`, `markTaskRequiresCompletion`, or
    * `handleCompleteTaskDetection`). Used to dedupe across the
@@ -351,6 +368,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.pendingRequest = null;
     this.browserFrameSeen.clear();
     this.messageRoles.clear();
+    this.pendingTextParts.clear();
     this.countedToolCallIds.clear();
     this.awaitingIdle = false;
     this.sawAssistantProgress = false;
@@ -765,6 +783,17 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
         // coalesces by stable ID when the completed text arrives via
         // message.part.updated. We don't emit per-delta messages to avoid
         // flooding the IPC bus.
+        //
+        // Use deltas as the LIVE-GENERATION signal for the idle gate.
+        // Deltas represent in-flight streaming content, so they are
+        // NOT replayable when a new client subscribes to an existing
+        // session — unlike `message.updated` / `message.part.updated`,
+        // which can redeliver prior-turn state. That makes delta events
+        // a much stronger signal that the CURRENT turn is actually
+        // generating (Codex R5 P2: the prior `sawAssistantProgress`
+        // signal was tied to `message.updated` and could be satisfied
+        // by a replayed assistant message from a prior turn).
+        this.sawAssistantProgress = true;
         return;
       }
       case 'permission.asked': {
@@ -876,6 +905,24 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     const role = (info as { role?: string }).role;
     if (id && role) {
       this.messageRoles.set(id, role);
+      // Flush any text parts that arrived before this `message.updated`.
+      // Replay only if role is assistant; drop otherwise. Without this
+      // path, the earlier default-deny in `handlePartUpdated` dropped
+      // the entire follow-up reply whenever `message.part.updated`
+      // raced ahead of `message.updated` on a resumed session (Codex
+      // R5 P1). The orphan-buffer design preserves both correctness
+      // (never echo the user's prompt as assistant) and liveness
+      // (never lose an assistant reply).
+      const orphans = this.pendingTextParts.get(id);
+      if (orphans && orphans.length > 0) {
+        this.pendingTextParts.delete(id);
+        if (role === 'assistant') {
+          for (const part of orphans) {
+            const synthetic = this.partToOpenCodeMessage(part);
+            if (synthetic) this.emit('message', synthetic);
+          }
+        }
+      }
     }
     if (info.role === 'assistant') {
       const assistant = info as AssistantMessage;
@@ -908,13 +955,30 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       // text part. `toTaskMessage` unconditionally stamps text parts as
       // `type: 'assistant'`; without the role filter the renderer shows a
       // bogus assistant bubble echoing the user's prompt immediately
-      // before the real reply. Default-deny policy: if we don't yet know
-      // the parent message's role (rare — `message.updated` typically
-      // arrives before its first `message.part.updated`), drop the text
-      // rather than risk duplicating the user prompt. A stale message ID
-      // will retry on the next update after the role is recorded.
+      // before the real reply.
+      //
+      // Ordering is not guaranteed between `message.updated` and
+      // `message.part.updated` for the same message id — particularly
+      // on resumed sessions, `message.part.updated` can arrive first.
+      // The earlier default-deny dropped those parts forever, losing
+      // legitimate assistant replies (Codex R5 P1 — reproduced as
+      // turn-2 replies missing from SQLite). Instead:
+      //   - Role unknown → buffer in `pendingTextParts[messageID]`.
+      //     `handleMessageUpdated` flushes when the role resolves:
+      //     assistant → replay; non-assistant → discard.
+      //   - Role is 'assistant' → emit normally.
+      //   - Role is anything else (user / system) → drop.
       const messageId = (part as { messageID?: string }).messageID;
       const role = messageId ? this.messageRoles.get(messageId) : undefined;
+      if (role === undefined) {
+        if (messageId) {
+          const bucket = this.pendingTextParts.get(messageId) ?? [];
+          bucket.push(part);
+          this.pendingTextParts.set(messageId, bucket);
+        }
+        this.checkForConnectorAuthMarker((part as { text?: string }).text ?? '');
+        return;
+      }
       if (role !== 'assistant') {
         this.checkForConnectorAuthMarker((part as { text?: string }).text ?? '');
         return;
