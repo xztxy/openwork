@@ -268,6 +268,21 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   private countedToolCallIds = new Set<string>();
 
   /**
+   * Whether we're currently awaiting a response to an outstanding
+   * `session.prompt` call. `session.idle` events from the SDK only
+   * terminate the task when this is true. Without the gate, a fresh
+   * adapter subscribing to `event.subscribe` on an already-idle session
+   * (e.g., every follow-up turn arriving via `resumeSession`) can
+   * receive a pending `session.idle` event BEFORE we've even issued
+   * our new prompt — my handler then called `markComplete('success')`
+   * prematurely, so when the real assistant reply streamed in the task
+   * was already marked completed and the renderer dropped the new
+   * messages on the floor. User-visible symptom: follow-up turn shows
+   * the user bubble but never the agent's reply.
+   */
+  private awaitingIdle = false;
+
+  /**
    * Monotonic counter bumped in `handleSdkEvent` on every SDK event. Feeds
    * the `TaskInactivityWatchdog` fingerprint — each real SDK event advances
    * it, so a stuck task (LLM generation hung, server silent) produces a
@@ -323,6 +338,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.browserFrameSeen.clear();
     this.messageRoles.clear();
     this.countedToolCallIds.clear();
+    this.awaitingIdle = false;
     this.completionEnforcer.reset();
     this.lastWorkingDirectory = config.workingDirectory;
 
@@ -397,6 +413,18 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.startWatchdog();
 
     this.emit('progress', { stage: 'waiting', message: 'Waiting for response...' });
+
+    // Flip `awaitingIdle` BEFORE firing the prompt so any `session.idle`
+    // event the SDK emits from this point forward correctly triggers
+    // task completion. `event.subscribe` can replay an older idle for
+    // a previously-idle session (e.g., every follow-up turn arriving
+    // via `resumeSession`), and without this gate that pre-prompt idle
+    // prematurely marked the task complete, cleaning up the adapter
+    // before the real reply could stream back. User-visible symptom:
+    // follow-up user bubble appeared but the assistant's reply was
+    // never rendered (see 17:18:35→17:18:40 trace in daemon log:
+    // task cleaned up 5s after start, no reply produced).
+    this.awaitingIdle = true;
 
     // Fire the prompt. We do NOT await — the response streams via events.
     this.client.session
@@ -769,6 +797,14 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
         // anything else → success). The user can send a follow-up prompt
         // via the existing resumeSession path if they want more work.
         if (this.hasCompleted) return;
+        // Ignore `session.idle` until we've actually submitted the
+        // prompt for this turn. `event.subscribe` can replay a pending
+        // idle event from a previously-idle session (follow-up turns
+        // attach to sessions where the last turn already ended) —
+        // without this gate we marked the task complete BEFORE the
+        // SDK had a chance to produce the new turn's reply.
+        if (!this.awaitingIdle) return;
+        this.awaitingIdle = false;
         const enforcerState = this.completionEnforcer.getState();
         if (enforcerState === CompletionFlowState.BLOCKED) {
           this.markComplete('error', 'Task blocked');
