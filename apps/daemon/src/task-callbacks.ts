@@ -16,6 +16,8 @@ import {
   type TaskSource,
   type StorageAPI,
   type TaskManagerAPI,
+  type TodoItem,
+  type BrowserFramePayload,
 } from '@accomplish_ai/agent-core';
 
 /**
@@ -126,8 +128,32 @@ export function createTaskCallbacks(
       emitter.emit('statusChange', { taskId, status });
       storage.updateTaskStatus(taskId, status, new Date().toISOString());
     },
-    onTodoUpdate: (todos) => {
+    onTodoUpdate: (todos: TodoItem[]) => {
+      // Persist AND emit. Prior to this fix the callback only persisted,
+      // so TaskManager forwarded the adapter's `todo:update` into the
+      // daemon but the daemon never re-notified the desktop. Desktop's
+      // `daemon-bootstrap` already listens for `todo.update` RPC
+      // notifications (see apps/desktop/src/main/daemon-bootstrap.ts:217)
+      // → TodoSidebar went dark on real SDK runs.
       storage.saveTodosForTask(taskId, todos);
+      emitter.emit('todo:update', { taskId, todos });
+    },
+    onAuthError: (error: { providerId: string; message: string }) => {
+      // Connector auth-required marker observed in tool output. Desktop
+      // preload subscribes to `auth:error` IPC (see
+      // apps/desktop/src/preload/index.ts:481). Was missing entirely from
+      // the daemon callback factory — auth-expired toasts silently dropped
+      // on real SDK runs.
+      emitter.emit('auth:error', { taskId, ...error });
+    },
+    onBrowserFrame: (data: BrowserFramePayload) => {
+      // Browser preview frames (ENG-695 / PR #414). Desktop preload
+      // subscribes to `browser:frame` (see
+      // apps/desktop/src/preload/index.ts:494). Was missing entirely
+      // from the daemon callback factory — dev-browser-mcp preview went
+      // dark on real SDK runs even though the plan (decision #7)
+      // explicitly calls out preserving this path.
+      emitter.emit('browser:frame', { taskId, ...data });
     },
   };
 }

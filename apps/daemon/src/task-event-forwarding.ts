@@ -36,6 +36,20 @@ export function registerTaskEventForwarding(services: RouteServices): void {
     rpc.notify('task.summary', data);
   });
 
+  // Todo / auth-error / browser-frame live forwarding (Codex R4 P1 #1).
+  // `task-callbacks.ts` emits these on the taskService emitter; without
+  // these forwarders TodoSidebar, auth-expired toasts, and the browser
+  // preview path all went dark on real SDK runs.
+  taskService.on('todo:update', (data: { taskId: string; todos: unknown[] }) => {
+    rpc.notify('todo.update', data);
+  });
+  taskService.on('auth:error', (data: { taskId: string; providerId: string; message: string }) => {
+    rpc.notify('auth.error', data);
+  });
+  taskService.on('browser:frame', (data: { taskId: string; [key: string]: unknown }) => {
+    rpc.notify('browser.frame', data);
+  });
+
   // WhatsApp notification forwarding
   whatsappService.on('qr', (qr: string) => {
     rpc.notify('whatsapp.qr', { qr });

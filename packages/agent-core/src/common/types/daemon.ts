@@ -322,6 +322,14 @@ export interface DaemonNotificationMap {
   // and future refactors would have carried a bogus contract.
   'permission.request': PermissionRequest;
   'todo.update': { taskId: string; todos: TodoItem[] };
+  // Connector auth-required marker observed in tool output. Renderer
+  // subscribes via `accomplish.onAuthError`. Added alongside the P1
+  // task-callbacks wiring fix (Codex R4 P1 #1).
+  'auth.error': { taskId: string; providerId: string; message: string };
+  // Browser preview frames from `dev-browser-mcp` tool output. Renderer
+  // subscribes via `accomplish.onBrowserFrame`. ENG-695 / PR #414 —
+  // plan decision #7 explicitly preserves this path.
+  'browser.frame': { taskId: string; [key: string]: unknown };
   'thought.event': ThoughtEvent;
   'checkpoint.event': CheckpointEvent;
   // Extended notifications used by the standalone daemon process

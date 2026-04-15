@@ -218,6 +218,18 @@ function registerNotificationHandlers(
     forward('todo:update', data);
   });
 
+  // Connector auth-error (e.g., GitHub/Notion token expired). Renderer
+  // subscribes via `accomplish.onAuthError` in preload.
+  client.onNotification('auth.error', (data) => {
+    forward('auth:error', data);
+  });
+
+  // Browser preview frames from `dev-browser-mcp` tool output. Renderer
+  // subscribes via `accomplish.onBrowserFrame` in preload.
+  client.onNotification('browser.frame', (data) => {
+    forward('browser:frame', data);
+  });
+
   // Thought stream events
   client.onNotification('task.thought', (data) => {
     forward('task:thought', data);
