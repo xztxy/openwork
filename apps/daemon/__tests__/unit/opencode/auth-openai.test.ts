@@ -16,6 +16,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 let connected = false;
 let mockExpires: number | undefined = undefined;
+let mockAccessToken = '';
+let mockFileMtimeMs = 0;
 let oauthPlanValue: 'free' | 'paid' = 'paid';
 
 vi.mock('@accomplish_ai/agent-core', () => ({
@@ -25,6 +27,23 @@ vi.mock('@accomplish_ai/agent-core', () => ({
     connected ? { connected: true, expires: mockExpires } : { connected: false },
   ),
   getOpenCodeAuthJsonPath: vi.fn(() => '/tmp/fake-auth.json'),
+}));
+
+// `auth-openai.ts` reads the auth-state file directly (via fs.statSync +
+// fs.readFileSync) to compute its fingerprint (mtime + entry hash). Mock
+// node:fs so the test can drive the snapshot deterministically without
+// touching disk.
+vi.mock('node:fs', () => ({
+  default: {
+    statSync: vi.fn(() => ({ mtimeMs: mockFileMtimeMs })),
+    readFileSync: vi.fn(() =>
+      JSON.stringify({
+        openai: connected
+          ? { type: 'oauth', access: mockAccessToken, expires: mockExpires }
+          : undefined,
+      }),
+    ),
+  },
 }));
 
 vi.mock('../../../src/logger.js', () => ({
@@ -63,6 +82,8 @@ describe('OpenAiOauthManager', () => {
   beforeEach(() => {
     connected = false;
     mockExpires = undefined;
+    mockAccessToken = '';
+    mockFileMtimeMs = 0;
     oauthPlanValue = 'paid';
     transientCloseMock.mockClear();
     providerAuthMock.mockClear();
@@ -96,10 +117,15 @@ describe('OpenAiOauthManager', () => {
     const { sessionId } = await manager.startLogin();
 
     // Flip the mocked auth-state flag after a short delay — simulates the
-    // user finishing the browser OAuth handshake.
+    // user finishing the browser OAuth handshake. Bump mtime + token so
+    // the file-fingerprint detection sees the change (was-disconnected →
+    // connected is also enough on its own, but bumping mtime models the
+    // real opencode write).
     setTimeout(() => {
       connected = true;
       mockExpires = 1_999_999_999;
+      mockAccessToken = 'eyJfresh-token';
+      mockFileMtimeMs = 1_000;
     }, 50);
 
     const result = await manager.awaitCompletion({ sessionId, timeoutMs: 5_000 });
@@ -121,9 +147,12 @@ describe('OpenAiOauthManager', () => {
     // only resolves on a STATE CHANGE (was disconnected → connected,
     // OR was connected with token X → connected with token Y).
 
-    // Pre-existing valid token before the new flow starts.
+    // Pre-existing valid token before the new flow starts. The auth.json
+    // file already exists with stable mtime + token contents.
     connected = true;
     mockExpires = 1_500_000_000;
+    mockAccessToken = 'eyJleftover-token';
+    mockFileMtimeMs = 100;
 
     const manager = new OpenAiOauthManager({} as never);
     const { sessionId } = await manager.startLogin();
@@ -142,12 +171,41 @@ describe('OpenAiOauthManager', () => {
       expect(result.error).toMatch(/timed out/i);
     }
 
-    // Now simulate the browser flow completing — auth.json gets a NEW
-    // token (different `expires`). The manager should detect the change
-    // and resolve.
+    // Now simulate the browser flow completing — opencode rewrites
+    // auth.json with a fresh token. Either mtime change OR contents
+    // change is sufficient (we bump both, mirroring real opencode).
     mockExpires = 1_500_001_234;
+    mockAccessToken = 'eyJfresh-token';
+    mockFileMtimeMs = 200;
     const result2 = await manager.awaitCompletion({ sessionId, timeoutMs: 5_000 });
     expect(result2).toEqual({ ok: true, plan: 'paid' });
+
+    manager.dispose();
+  });
+
+  it('detects a fresh OAuth even when expires is unchanged (token-string change suffices)', async () => {
+    // REGRESSION (manual OAuth test, round 2): an earlier version of the
+    // fingerprint compared only `expires`. During real testing the user's
+    // auth.json had identical `expires` across multiple successful OAuth
+    // attempts (opencode rotated tokens but kept the same exp), so the
+    // poll never returned. Switching to mtime + entry-hash makes a token
+    // string change sufficient even when expires holds steady.
+    connected = true;
+    mockExpires = 1_500_000_000; // never changes throughout this test
+    mockAccessToken = 'eyJleftover-token';
+    mockFileMtimeMs = 100;
+
+    const manager = new OpenAiOauthManager({} as never);
+    const { sessionId } = await manager.startLogin();
+
+    // Simulate opencode writing a NEW token but with the same expires.
+    setTimeout(() => {
+      mockAccessToken = 'eyJrotated-token-same-expires';
+      mockFileMtimeMs = 200;
+    }, 50);
+
+    const result = await manager.awaitCompletion({ sessionId, timeoutMs: 5_000 });
+    expect(result).toEqual({ ok: true, plan: 'paid' });
 
     manager.dispose();
   });
