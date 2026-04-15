@@ -1,5 +1,5 @@
 {
-  "//": "WARNING: Before upgrading opencode-ai, check sst/opencode for prompt changes (title.txt, compaction.txt, prompt.ts, compaction.ts). The llm-gateway validates prompt prefixes to exempt title/compaction requests — if they drift, requests will fail with 400. Update llm-gateway's src/prompt-validation-prefixes.ts if prompts changed.",
+  "//": "WARNING: Before upgrading opencode-ai, check sst/opencode for prompt changes (title.txt, compaction.txt, prompt.ts, compaction.ts). Downstream prompt-validation (if any) may need to be re-aligned if prefixes drift.",
   "name": "@accomplish/desktop",
   "version": "0.5.17",
   "private": true,

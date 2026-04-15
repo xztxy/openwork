@@ -152,16 +152,10 @@ export interface AdapterOptions {
   sandboxProvider?: SandboxProvider;
   sandboxConfig?: SandboxConfig;
   /**
-   * Optional LLM-gateway proxy tagger. Called with the current task ID when a
-   * task starts, and with `undefined` when it tears down. Allows the fused
-   * `@accomplish/llm-gateway-client` (Accomplish Free builds) or a developer-
-   * integrated gateway to attribute LLM requests to the originating task.
-   *
-   * Wired by the daemon at startup: if `@accomplish/llm-gateway-client` is
-   * resolvable (Free build CI fuses it into `apps/daemon/dist/node_modules/`
-   * per `accomplish-release/.github/workflows/release.yml`), the daemon
-   * forwards its `setProxyTaskId` here. In pure OSS builds this stays
-   * undefined and the adapter becomes a no-op on this axis.
+   * Optional proxy tagger. Called with the current task ID when a task
+   * starts, and with `undefined` when it tears down. Allows an optional
+   * runtime adapter to attribute LLM requests to the originating task.
+   * Undefined in pure OSS builds — the adapter is a no-op on this axis.
    */
   setProxyTaskId?: (taskId: string | undefined) => void;
 }

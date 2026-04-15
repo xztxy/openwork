@@ -30,11 +30,10 @@ export interface TaskServiceOptions {
    */
   rpcConnectivityProbe?: { hasConnectedClients(): boolean };
   /**
-   * Optional LLM-gateway proxy tagger. Wired by the daemon at startup if
-   * `@accomplish/llm-gateway-client` is resolvable (Accomplish Free CI
-   * fusion per `accomplish-release/.github/workflows/release.yml:281`, or
-   * dev-local file-dep install). The adapter calls it on task start/teardown
-   * to tag outgoing LLM requests. Undefined in pure OSS builds — no-op.
+   * Optional proxy tagger. Wired by the daemon when an optional runtime
+   * module is available at startup. The adapter calls it on task start
+   * (with taskId) and teardown (with undefined). Undefined in pure OSS
+   * builds — no-op.
    */
   setProxyTaskId?: (taskId: string | undefined) => void;
 }

@@ -118,10 +118,9 @@ export interface TaskAdapterOptions {
    */
   getServerUrl?: (taskId: string) => Promise<string | undefined>;
   /**
-   * Optional LLM-gateway proxy tagger (Phase 2 of the SDK cutover port).
-   * Called by the adapter on task start (with `taskId`) and teardown (with
-   * `undefined`). Wired by the daemon when `@accomplish/llm-gateway-client`
-   * is resolvable — Accomplish Free CI fusion or dev-local file-dep install.
+   * Optional proxy tagger (Phase 2 of the SDK cutover port). Called by the
+   * adapter on task start (with `taskId`) and teardown (with `undefined`).
+   * Wired by the daemon when an optional runtime module is available.
    * Undefined in pure OSS builds.
    */
   setProxyTaskId?: (taskId: string | undefined) => void;

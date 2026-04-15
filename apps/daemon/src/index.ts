@@ -123,46 +123,37 @@ async function main(): Promise<void> {
     onDisconnection: (clientId) => log.info(`[Daemon] Client disconnected: ${clientId}`),
   });
 
-  // 5b. LLM-gateway proxy detection. `@accomplish/llm-gateway-client` is fused
-  // into the daemon's node_modules by CI for Accomplish Free builds (see
-  // accomplish-release/.github/workflows/release.yml:281), or installed
-  // locally by developers via
-  //   pnpm -F @accomplish/daemon add @accomplish/llm-gateway-client@file:...
-  // plus an ACCOMPLISH_GATEWAY_URL env var. Pure OSS builds don't have it;
-  // the require fails cleanly and the adapter's proxy-tagging path stays a
-  // no-op.
+  // Optional runtime-proxy tagger. The adapter's proxy-tagging path
+  // becomes a no-op in pure OSS builds where the optional package is
+  // not installed. Mirrors the `accomplishRuntime` bootstrap pattern at
+  // the top of this function — distinguishes "not installed" (silent)
+  // from "installed but broken" (logs).
+  const OPTIONAL_RUNTIME_MODULE = '@accomplish/llm-gateway-client';
   let setProxyTaskId: ((taskId: string | undefined) => void) | undefined;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const gateway = require('@accomplish/llm-gateway-client') as {
+    const runtimeMod = require(OPTIONAL_RUNTIME_MODULE) as {
       setProxyTaskId?: (taskId: string | undefined) => void;
     };
-    if (typeof gateway.setProxyTaskId === 'function') {
-      setProxyTaskId = gateway.setProxyTaskId;
-      log.info('[Daemon] llm-gateway-client detected; proxy task-tagging wired');
+    if (typeof runtimeMod.setProxyTaskId === 'function') {
+      setProxyTaskId = runtimeMod.setProxyTaskId;
+      log.info('[Daemon] optional runtime detected; proxy task-tagging wired');
     } else {
       log.warn(
-        '[Daemon] llm-gateway-client resolved but exports no setProxyTaskId function — proxy task-tagging stays unwired. Check the package build.',
+        '[Daemon] optional runtime resolved but exports no setProxyTaskId function — proxy task-tagging stays unwired. Check the package build.',
       );
     }
   } catch (err) {
-    // Distinguish "gateway not installed" (pure OSS / unset dev) from
-    // "gateway installed but broken" (importable but throws, exports
-    // missing, etc.). Silently swallowing both would mask real build
-    // issues — for example, a dev who installed the gateway via
-    // `pnpm add @accomplish/llm-gateway-client@file:…` but the sibling
-    // folder was moved. Matches the `accomplishRuntime` bootstrap
-    // pattern at the top of this function.
     const isPackageMissing =
       err instanceof Error &&
       ('code' in err ? (err as { code: string }).code === 'MODULE_NOT_FOUND' : false) &&
-      String(err).includes("Cannot find module '@accomplish/llm-gateway-client'");
+      String(err).includes(`Cannot find module '${OPTIONAL_RUNTIME_MODULE}'`);
     if (!isPackageMissing) {
       log.error(
-        `[Daemon] llm-gateway-client present but failed to load: ${err instanceof Error ? err.message : String(err)}. Proxy task-tagging stays unwired.`,
+        `[Daemon] optional runtime present but failed to load: ${err instanceof Error ? err.message : String(err)}. Proxy task-tagging stays unwired.`,
       );
     }
-    // Missing package: pure OSS or dev hasn't installed. Stay silent.
+    // Missing package: pure OSS. Stay silent.
   }
 
   const taskService = new TaskService(storage, {

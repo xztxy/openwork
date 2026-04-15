@@ -123,10 +123,10 @@ export class TaskService extends EventEmitter {
           return this.serverManager.waitForServerUrl(taskId);
         },
         getModelDisplayName,
-        // LLM-gateway proxy tagger — the adapter calls this on task start
+        // Optional proxy tagger — the adapter calls this on task start
         // (with taskId) and teardown (with undefined). Wired by the daemon
-        // at startup when `@accomplish/llm-gateway-client` is resolvable;
-        // undefined for pure OSS builds (no-op).
+        // when the optional runtime package is present; undefined for
+        // pure OSS builds (no-op).
         setProxyTaskId: options.setProxyTaskId,
       },
       defaultWorkingDirectory: homedir(),
