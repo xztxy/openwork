@@ -129,12 +129,16 @@ export interface AdapterOptions {
    */
   getServerUrl?: (taskId: string) => Promise<string | undefined>;
   /**
-   * Back-compat fields retained while other call sites still reference them.
-   * Not used by the SDK flow; the daemon will eliminate these in Phase 2.
+   * Optional pre-task hook. Returns environment variables to merge into
+   * `this.externalEnv` before opening the SDK session. The daemon's
+   * `task-config-builder.onBeforeStart` uses this to lazily generate the
+   * per-task `opencode.json`, sync API keys to `auth.json`, and surface the
+   * resulting `OPENCODE_CONFIG[_DIR]` env vars so the upstream `opencode
+   * serve` instance picks them up. Phase 4b removed the unused PTY-era
+   * `getCliCommand`, `buildEnvironment`, and `buildCliArgs` siblings — the
+   * SDK flow has no equivalent of CLI args (it uses `session.prompt`) and
+   * the spawn environment is owned by `apps/daemon/src/opencode/server-manager.ts`.
    */
-  getCliCommand?: () => { command: string; args: string[] };
-  buildEnvironment?: (taskId: string) => Promise<NodeJS.ProcessEnv>;
-  buildCliArgs?: (config: TaskConfig) => Promise<string[]>;
   onBeforeStart?: () => Promise<NodeJS.ProcessEnv | void>;
   getModelDisplayName?: (modelId: string) => string;
   /** Lazy sandbox factory, called once per adapter instance. */

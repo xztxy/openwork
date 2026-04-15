@@ -10,7 +10,6 @@ import {
   ProviderConfig,
 } from '../../../src/opencode/config-generator.js';
 import type { BrowserConfig } from '../../../src/opencode/generator-mcp.js';
-import { buildCliArgs } from '../../../src/opencode/cli-args.js';
 
 describe('ConfigGenerator', () => {
   let testDir: string;
@@ -468,21 +467,10 @@ describe('ConfigGenerator', () => {
     });
   });
 
-  describe('buildCliArgs', () => {
-    it('should normalize Z.AI models for API requests', () => {
-      const args = buildCliArgs({
-        prompt: 'test prompt',
-        selectedModel: {
-          provider: 'zai',
-          model: 'zai/glm-5',
-        },
-      });
-
-      const modelFlagIndex = args.indexOf('--model');
-      expect(modelFlagIndex).toBeGreaterThanOrEqual(0);
-      expect(args[modelFlagIndex + 1]).toBe('zai-coding-plan/glm-5');
-    });
-  });
+  // Phase 4b of the OpenCode SDK cutover port deleted the `buildCliArgs`
+  // helper. Z.AI model normalization for SDK calls now happens inside
+  // `model-runtime-mapping.ts` (`normalizeSelectedModelForSdk`). Tests for
+  // that mapping live in `model-runtime-mapping.unit.test.ts`.
 
   describe('getOpenCodeConfigPath', () => {
     it('should return correct config path', () => {

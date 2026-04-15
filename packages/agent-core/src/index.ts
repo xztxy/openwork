@@ -108,8 +108,8 @@ export { OpenCodeCliNotFoundError } from './internal/classes/OpenCodeAdapter.js'
 // Low-level OpenCode utilities for advanced integrations
 export { resolveCliPath, isCliAvailable } from './opencode/cli-resolver.js';
 export { generateConfig, ACCOMPLISH_AGENT_NAME } from './opencode/config-generator.js';
-export { buildCliArgs } from './opencode/cli-args.js';
-export type { BuildCliArgsOptions } from './opencode/cli-args.js';
+// Phase 4b of the OpenCode SDK cutover port deleted `./opencode/cli-args.js`
+// (the SDK adapter uses `session.prompt`, not CLI args).
 
 export type { BrowserConfig } from './opencode/generator-mcp.js';
 
@@ -127,12 +127,6 @@ export {
   resolveLlamaCppRuntimeModelName,
 } from './opencode/model-runtime-mapping.js';
 export type { SdkSelectedModelRef } from './opencode/model-runtime-mapping.js';
-
-export { resolveTaskConfig } from './opencode/resolve-task-config.js';
-export type {
-  ResolveTaskConfigOptions,
-  ResolvedTaskConfig,
-} from './opencode/resolve-task-config.js';
 
 export {
   getOpenCodeAuthPath,

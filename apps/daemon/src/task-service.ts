@@ -18,9 +18,6 @@ import {
 } from '@accomplish_ai/agent-core';
 import {
   type TaskConfigBuilderOptions,
-  getCliCommand,
-  buildEnvironment,
-  buildCliArgs,
   isCliAvailable,
   onBeforeStart,
   createOnBeforeTaskStart,
@@ -97,9 +94,11 @@ export class TaskService extends EventEmitter {
         platform: process.platform,
         isPackaged: this.opts.isPackaged,
         tempPath: tmpdir(),
-        getCliCommand: () => getCliCommand(this.opts),
-        buildEnvironment: (taskId) => buildEnvironment(taskId, this.storage, this.opts),
-        buildCliArgs: (config) => buildCliArgs(config, this.storage),
+        // The SDK adapter no longer spawns a CLI per task — `opencode serve`
+        // is started by `OpenCodeServerManager` (one per task) and the SDK
+        // talks HTTP. `onBeforeStart` still runs to write the per-task
+        // `opencode.json`, sync API keys to `auth.json`, and surface
+        // `OPENCODE_CONFIG[_DIR]` so the spawned `opencode serve` picks them up.
         onBeforeStart: async () => {
           const result = await onBeforeStart(this.storage, this.opts);
           return result.env;

@@ -7,22 +7,15 @@
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
-  buildCliArgs as coreBuildCliArgs,
-  buildOpenCodeEnvironment,
-  resolveCliPath,
   isCliAvailable as coreIsCliAvailable,
   generateConfig,
   buildProviderConfigs,
   syncApiKeysToOpenCodeAuth,
-  getOpenCodeAuthPath,
+  getOpenCodeAuthJsonPath,
   getBundledNodePaths,
   getEnabledSkills,
-  BedrockCredentials,
-  type TaskConfig,
   type StorageAPI,
-  type EnvironmentConfig,
   type CliResolverConfig,
-  type ProviderId,
   type AccomplishRuntime,
 } from '@accomplish_ai/agent-core';
 
@@ -35,21 +28,11 @@ export interface TaskConfigBuilderOptions {
   accomplishRuntime?: AccomplishRuntime;
 }
 
-export function getCliCommand(opts: TaskConfigBuilderOptions): { command: string; args: string[] } {
-  const cliConfig: CliResolverConfig = {
-    isPackaged: opts.isPackaged,
-    resourcesPath: opts.resourcesPath,
-    appPath: opts.appPath,
-  };
-  const resolved = resolveCliPath(cliConfig);
-  if (resolved) {
-    return { command: resolved.cliPath, args: [] };
-  }
-  if (process.platform === 'win32') {
-    throw new Error('Failed to resolve OpenCode CLI executable on Windows');
-  }
-  return { command: 'opencode', args: [] };
-}
+// Phase 4b of the OpenCode SDK cutover port removed the dead `getCliCommand`,
+// `buildEnvironment`, and `buildCliArgs` helpers. The SDK adapter no longer
+// spawns a CLI per task — `OpenCodeServerManager` runs `opencode serve`
+// directly via `child_process.spawn` and the SDK uses HTTP. The
+// per-task spawn environment is built inside the server-manager itself.
 
 export function getBundledNodeBinPath(opts: TaskConfigBuilderOptions): string | undefined {
   const paths = getBundledNodePaths({
@@ -62,65 +45,6 @@ export function getBundledNodeBinPath(opts: TaskConfigBuilderOptions): string | 
     arch: process.arch,
   });
   return paths?.binDir;
-}
-
-export async function buildEnvironment(
-  taskId: string,
-  storage: StorageAPI,
-  opts: TaskConfigBuilderOptions,
-): Promise<NodeJS.ProcessEnv> {
-  const env: NodeJS.ProcessEnv = { ...process.env };
-
-  // Prepend the bundled Node.js bin dir to PATH so the opencode wrapper script
-  // can find `node` even when the daemon runs as a login item with minimal PATH
-  // (e.g. /usr/bin:/bin:/usr/sbin:/sbin with no user-installed Node.js).
-  const bundledNodeBin = getBundledNodeBinPath(opts);
-  if (bundledNodeBin) {
-    env.PATH = `${bundledNodeBin}${path.delimiter}${env.PATH || ''}`;
-  }
-  const apiKeys = await storage.getAllApiKeys();
-  const bedrockCredentials = storage.getBedrockCredentials() as BedrockCredentials | null;
-  const activeModel = storage.getActiveProviderModel();
-  const selectedModel = storage.getSelectedModel();
-  let ollamaHost: string | undefined;
-  if (activeModel?.provider === 'ollama' && activeModel.baseUrl) {
-    ollamaHost = activeModel.baseUrl;
-  } else if (selectedModel?.provider === 'ollama' && selectedModel.baseUrl) {
-    ollamaHost = selectedModel.baseUrl;
-  }
-  const envConfig: EnvironmentConfig = {
-    apiKeys,
-    bedrockCredentials: bedrockCredentials || undefined,
-    taskId: taskId || undefined,
-    ollamaHost,
-  };
-  return buildOpenCodeEnvironment(env, envConfig);
-}
-
-export async function buildCliArgs(config: TaskConfig, storage: StorageAPI): Promise<string[]> {
-  let selectedModel;
-  if (config.modelId && config.provider) {
-    selectedModel = {
-      provider: config.provider as ProviderId,
-      model: config.modelId,
-    };
-  } else if (config.modelId) {
-    // modelId provided without a provider — use storage model for the provider,
-    // but override the model name so the caller's explicit modelId is honoured.
-    const baseModel = storage.getActiveProviderModel() || storage.getSelectedModel();
-    selectedModel = baseModel ? { provider: baseModel.provider, model: config.modelId } : undefined;
-  } else {
-    const activeModel = storage.getActiveProviderModel();
-    selectedModel = activeModel || storage.getSelectedModel();
-  }
-
-  return coreBuildCliArgs({
-    prompt: config.prompt,
-    sessionId: config.sessionId,
-    selectedModel: selectedModel
-      ? { provider: selectedModel.provider, model: selectedModel.model }
-      : null,
-  });
 }
 
 export async function isCliAvailable(opts: TaskConfigBuilderOptions): Promise<boolean> {
@@ -136,7 +60,7 @@ export async function onBeforeStart(
   storage: StorageAPI,
   opts: TaskConfigBuilderOptions,
 ): Promise<{ configPath: string; env: NodeJS.ProcessEnv }> {
-  const authPath = getOpenCodeAuthPath();
+  const authPath = getOpenCodeAuthJsonPath();
   const apiKeys = await storage.getAllApiKeys();
   await syncApiKeysToOpenCodeAuth(authPath, apiKeys);
 

@@ -78,7 +78,17 @@ export interface TaskCallbacks {
   }) => void;
 }
 
-/** Adapter options for the underlying CLI adapter */
+/**
+ * Adapter options for the underlying OpenCode runtime adapter.
+ *
+ * Phase 4b of the OpenCode SDK cutover port removed the PTY-era
+ * `getCliCommand`, `buildEnvironment`, and `buildCliArgs` fields. The SDK
+ * adapter no longer spawns an `opencode` CLI per task — `OpenCodeServerManager`
+ * runs `opencode serve` and the SDK talks HTTP. The per-task spawn
+ * environment lives inside the server-manager; the only remaining
+ * pre-task hook is `onBeforeStart`, which the daemon uses to write the
+ * per-task `opencode.json` and sync API keys to `auth.json`.
+ */
 export interface TaskAdapterOptions {
   /** The platform (e.g., 'darwin', 'linux', 'win32') */
   platform: NodeJS.Platform;
@@ -86,13 +96,12 @@ export interface TaskAdapterOptions {
   isPackaged: boolean;
   /** Path to temporary directory */
   tempPath: string;
-  /** Function to get the CLI command and arguments */
-  getCliCommand: () => { command: string; args: string[] };
-  /** Function to build environment variables for a task */
-  buildEnvironment: (taskId: string) => Promise<NodeJS.ProcessEnv>;
-  /** Function to build CLI arguments for a task */
-  buildCliArgs: (config: TaskConfig, taskId: string) => Promise<string[]>;
-  /** Called before the CLI starts. Can return environment variables to be merged. */
+  /**
+   * Optional pre-task hook. Returns environment variables to merge into the
+   * adapter's externalEnv before opening the SDK session — the daemon uses
+   * this to surface `OPENCODE_CONFIG[_DIR]` after writing the per-task
+   * config file.
+   */
   onBeforeStart?: () => Promise<NodeJS.ProcessEnv | void>;
   /** Function to get display name for a model ID */
   getModelDisplayName?: (modelId: string) => string;

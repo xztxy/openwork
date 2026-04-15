@@ -64,9 +64,9 @@ export interface TaskCallbacks {
 }
 
 export interface TaskManagerOptions {
-  adapterOptions: Omit<AdapterOptions, 'buildCliArgs'> & {
-    buildCliArgs: (config: TaskConfig, taskId: string) => Promise<string[]>;
-  };
+  // Phase 4b of the OpenCode SDK cutover port simplified the adapter options
+  // surface — the PTY-era `buildCliArgs` per-task wrapper is gone.
+  adapterOptions: AdapterOptions;
   defaultWorkingDirectory: string;
   maxConcurrentTasks?: number;
   isCliAvailable: () => Promise<boolean>;
@@ -159,7 +159,6 @@ export class TaskManager {
   ): Promise<Task> {
     const adapterOptions: AdapterOptions = {
       ...this.options.adapterOptions,
-      buildCliArgs: (taskConfig) => this.options.adapterOptions.buildCliArgs(taskConfig, taskId),
     };
 
     const adapter = new OpenCodeAdapter(adapterOptions, taskId);

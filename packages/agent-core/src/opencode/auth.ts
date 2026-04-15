@@ -155,12 +155,18 @@ export function getOpenAiOauthAccessToken(): string | null {
   return typeof access === 'string' && access.trim().length > 0 ? access : null;
 }
 
+/**
+ * Phase 4b of the OpenCode SDK cutover port collapsed `getOpenCodeAuthPath`
+ * to delegate to the XDG-aware `getOpenCodeAuthJsonPath`. Earlier callers
+ * had two inconsistent helpers — the non-XDG version computed a hardcoded
+ * `~/.local/share` (or `AppData\Local`) path that diverged from where
+ * `opencode serve` actually writes when `XDG_DATA_HOME` is set. Unifying
+ * everyone on a single helper means desktop status reads, daemon
+ * `task-config-builder` writes, and the `auth.openai.{status,getAccessToken}`
+ * RPC all resolve byte-identical paths.
+ */
 export function getOpenCodeAuthPath(): string {
-  const homeDir = os.homedir();
-  if (process.platform === 'win32') {
-    return path.join(homeDir, 'AppData', 'Local', 'opencode', 'auth.json');
-  }
-  return path.join(homeDir, '.local', 'share', 'opencode', 'auth.json');
+  return getOpenCodeAuthJsonPath();
 }
 
 export function writeOpenCodeAuth(

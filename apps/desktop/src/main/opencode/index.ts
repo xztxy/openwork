@@ -1,45 +1,34 @@
-// Factory functions from agent-core
-export { OpenCodeCliNotFoundError, createTaskManager } from '@accomplish_ai/agent-core';
+// Phase 4b of the OpenCode SDK cutover port simplified this barrel: the
+// PTY-era TaskManager wiring (`createElectronTaskManagerOptions`,
+// `buildCliArgs`, `getCliCommand`, `isCliAvailable`, `onBeforeStart`,
+// `onBeforeTaskStart`, `buildEnvironment`) is gone — task execution is
+// owned by `apps/daemon`. The desktop only retains:
+//   - bundled OpenCode CLI metadata for the Settings UI
+//   - dev-browser MCP server shutdown for app teardown
+//   - Vertex service-account key cleanup
+//   - `loginOpenAiWithChatGpt` was removed in Phase 4a (now a daemon RPC).
 
-// Types from agent-core
+// Re-export agent-core types still used by callers in the main process.
 export type {
   TaskManagerOptions,
   TaskCallbacks,
   TaskProgressEvent,
   TaskManagerAPI,
 } from '@accomplish_ai/agent-core';
+export { OpenCodeCliNotFoundError } from '@accomplish_ai/agent-core';
 
+export { cleanupVertexServiceAccountKey } from './vertex-cleanup';
+export { stopDevBrowserServer } from './dev-browser-shutdown';
 export {
-  createElectronTaskManagerOptions,
-  buildEnvironment,
-  buildCliArgs,
-  getCliCommand,
-  isCliAvailable,
-  onBeforeStart,
-  onBeforeTaskStart,
   getOpenCodeCliPath,
+  isOpenCodeCliAvailable,
   getBundledOpenCodeVersion,
-  cleanupVertexServiceAccountKey,
-  recoverDevBrowserServer,
-  stopDevBrowserServer,
-} from './electron-options';
+} from './cli-resolver';
 
-export {
-  generateOpenCodeConfig,
-  getMcpToolsPath,
-  syncApiKeysToOpenCodeAuth,
-  ACCOMPLISH_AGENT_NAME,
-} from './config-generator';
-
-// `loginOpenAiWithChatGpt` export removed in Phase 4a of the SDK cutover port.
-// The IPC handler for `opencode:auth:openai:login` now delegates directly to
-// the daemon's `auth.openai.{startLogin, awaitCompletion}` RPCs — see
-// `apps/desktop/src/main/ipc/handlers/settings-handlers/auth-handlers.ts`.
-
-import { isCliAvailable, getBundledOpenCodeVersion } from './electron-options';
+import { isOpenCodeCliAvailable, getBundledOpenCodeVersion } from './cli-resolver';
 
 export async function isOpenCodeCliInstalled(): Promise<boolean> {
-  return isCliAvailable();
+  return isOpenCodeCliAvailable();
 }
 
 export async function getOpenCodeCliVersion(): Promise<string | null> {
