@@ -159,6 +159,21 @@ export class TaskService extends EventEmitter {
      * must set this explicitly.
      */
     source?: TaskSource;
+    /**
+     * Restrict the OpenCode agent to a subset of tool names. Forwarded
+     * from the desktop IPC and accepted by both the RPC schema
+     * (`TaskStartParams.allowedTools`) and the zod taskConfigSchema.
+     * Dropping it here means the "advertised but silently ignored"
+     * gap Codex P2 flagged.
+     */
+    allowedTools?: string[];
+    /**
+     * Machine-readable output schema the task should produce. Same
+     * "daemon advertised but dropped" gap — RPC accepts it, config type
+     * accepts it, `validateTaskConfig` passes it through; this builder
+     * must forward it into `config.outputSchema`.
+     */
+    outputSchema?: object;
   }): Promise<Task> {
     const taskId = params.taskId || createTaskId();
     const config: TaskConfig = {
@@ -169,6 +184,8 @@ export class TaskService extends EventEmitter {
       workingDirectory: params.workingDirectory,
       systemPromptAppend: params.systemPromptAppend,
       files: params.attachments,
+      allowedTools: params.allowedTools,
+      outputSchema: params.outputSchema,
       source: params.source,
     };
     const validatedConfig = validateTaskConfig(config);
