@@ -65,14 +65,52 @@ function pickOauthMethodIndex(methods: Array<{ type: 'oauth' | 'api'; label: str
 }
 
 /**
- * Poll the OpenCode auth-state file until the OpenAI entry reports
- * `connected`. Resolves on success, rejects on timeout or abort. The
- * configured deadline matches commercial (`OPENAI_AUTH_TIMEOUT_MS = 2m`).
+ * Snapshot of the OpenAI OAuth state. Used by `waitForOpenAiConnection` to
+ * distinguish "already connected from a prior login" from "the new flow just
+ * completed and wrote a fresh token."
  */
-async function waitForOpenAiConnection(signal: AbortSignal, deadline: number): Promise<void> {
+interface OpenAiOauthSnapshot {
+  connected: boolean;
+  expires: number | undefined;
+}
+
+function snapshotOpenAiOauth(): OpenAiOauthSnapshot {
+  const { connected, expires } = getOpenAiOauthStatus();
+  return { connected, expires };
+}
+
+/**
+ * Poll the OpenCode auth-state file until the OpenAI entry reports a state
+ * change consistent with a fresh login. Resolves on success, rejects on
+ * timeout or abort. The configured deadline matches commercial
+ * (`OPENAI_AUTH_TIMEOUT_MS = 2m`).
+ *
+ * Three branches:
+ *  - was disconnected → became connected → success (a fresh login).
+ *  - was connected with token X → became connected with a DIFFERENT token
+ *    (`expires` field changed) → success (the new flow rewrote auth.json).
+ *  - was connected with token X → still token X → keep waiting (the user is
+ *    still in the browser; the existing token doesn't count).
+ *
+ * Without the third branch the manager would short-circuit on first poll
+ * whenever the user already has a valid OAuth token from a prior sign-in
+ * — closing the transient `opencode serve`'s OAuth callback server on
+ * port 1455 before the browser ever redirects there. The user would then
+ * see ERR_CONNECTION_REFUSED in the browser and "No matching in-flight
+ * OAuth session" in the daemon log.
+ */
+async function waitForOpenAiConnection(
+  signal: AbortSignal,
+  deadline: number,
+  initial: OpenAiOauthSnapshot,
+): Promise<void> {
   while (true) {
     if (signal.aborted) throw abortError('OpenAI authentication was cancelled.');
-    if (getOpenAiOauthStatus().connected) return;
+    const current = snapshotOpenAiOauth();
+    const isFreshLogin =
+      current.connected &&
+      (!initial.connected || current.expires === undefined || current.expires !== initial.expires);
+    if (isFreshLogin) return;
     const remaining = deadline - Date.now();
     if (remaining <= 0) {
       throw new OAuthLoginError('OpenAI authentication timed out. Please try again.');
@@ -174,6 +212,16 @@ export class OpenAiOauthManager {
       throw new OAuthLoginError('OpenAI authentication did not return an authorization URL.');
     }
 
+    // Snapshot the OAuth state BEFORE opening the browser so the polling
+    // loop can require an actual change (a fresh login that rewrites
+    // auth.json), not just any "connected" status. Without this, users who
+    // already have a valid token from a prior sign-in see the polling
+    // short-circuit on first iteration: the manager closes the transient
+    // runtime (taking the localhost:1455 callback server with it), the
+    // session gets cleared, and the in-progress browser flow fails with
+    // ERR_CONNECTION_REFUSED + "No matching in-flight OAuth session".
+    const initialAuthSnapshot = snapshotOpenAiOauth();
+
     // Poll for completion in the background; the promise is surfaced via
     // `awaitCompletion(sessionId)`. We capture it at this point so a caller
     // that calls awaitCompletion immediately after startLogin doesn't race
@@ -181,7 +229,7 @@ export class OpenAiOauthManager {
     const deadline = Date.now() + OPENAI_AUTH_TIMEOUT_MS;
     const completion = (async () => {
       try {
-        await waitForOpenAiConnection(signal, deadline);
+        await waitForOpenAiConnection(signal, deadline, initialAuthSnapshot);
         return await detectOpenAiOauthPlan({ authStatePath: getOpenCodeAuthJsonPath() });
       } finally {
         // Tear down the transient runtime once the flow resolves or aborts —

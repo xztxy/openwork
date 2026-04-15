@@ -15,13 +15,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
  */
 
 let connected = false;
+let mockExpires: number | undefined = undefined;
 let oauthPlanValue: 'free' | 'paid' = 'paid';
 
 vi.mock('@accomplish_ai/agent-core', () => ({
   detectOpenAiOauthPlan: vi.fn(async () => oauthPlanValue),
   getOpenAiOauthAccessToken: vi.fn(() => (connected ? 'sk-fake-token' : null)),
   getOpenAiOauthStatus: vi.fn(() =>
-    connected ? { connected: true, expires: Date.now() + 3600_000 } : { connected: false },
+    connected ? { connected: true, expires: mockExpires } : { connected: false },
   ),
   getOpenCodeAuthJsonPath: vi.fn(() => '/tmp/fake-auth.json'),
 }));
@@ -61,6 +62,7 @@ const { OpenAiOauthManager } = await import('../../../src/opencode/auth-openai.j
 describe('OpenAiOauthManager', () => {
   beforeEach(() => {
     connected = false;
+    mockExpires = undefined;
     oauthPlanValue = 'paid';
     transientCloseMock.mockClear();
     providerAuthMock.mockClear();
@@ -97,12 +99,57 @@ describe('OpenAiOauthManager', () => {
     // user finishing the browser OAuth handshake.
     setTimeout(() => {
       connected = true;
+      mockExpires = 1_999_999_999;
     }, 50);
 
     const result = await manager.awaitCompletion({ sessionId, timeoutMs: 5_000 });
 
     expect(result).toEqual({ ok: true, plan: 'paid' });
     expect(transientCloseMock).toHaveBeenCalled();
+  });
+
+  it('does NOT short-circuit on a leftover OAuth token from a prior login', async () => {
+    // REGRESSION (manual OAuth test): the previous version of
+    // `waitForOpenAiConnection` returned on first poll whenever
+    // `getOpenAiOauthStatus().connected === true` — including when the
+    // user already had a valid token from a previous sign-in. That
+    // caused the manager to close the transient `opencode serve`'s
+    // OAuth callback server (port 1455) before the browser ever
+    // redirected back, breaking real OAuth flows for any user with
+    // a prior session in `auth.json`. This test pins the fix:
+    // `startLogin` snapshots the initial state; the polling loop
+    // only resolves on a STATE CHANGE (was disconnected → connected,
+    // OR was connected with token X → connected with token Y).
+
+    // Pre-existing valid token before the new flow starts.
+    connected = true;
+    mockExpires = 1_500_000_000;
+
+    const manager = new OpenAiOauthManager({} as never);
+    const { sessionId } = await manager.startLogin();
+
+    // The transient runtime MUST still be open while the user is in
+    // the browser. The manager must not have called close().
+    expect(transientCloseMock).not.toHaveBeenCalled();
+
+    // Race a short awaitCompletion against the poll loop. Without the
+    // fix, awaitCompletion would resolve immediately as `{ ok: true }`
+    // (because polling short-circuits on the leftover token).
+    // With the fix, the poll keeps waiting → the RPC times out cleanly.
+    const result = await manager.awaitCompletion({ sessionId, timeoutMs: 100 });
+    expect(result.ok).toBe(false);
+    if (result.ok === false) {
+      expect(result.error).toMatch(/timed out/i);
+    }
+
+    // Now simulate the browser flow completing — auth.json gets a NEW
+    // token (different `expires`). The manager should detect the change
+    // and resolve.
+    mockExpires = 1_500_001_234;
+    const result2 = await manager.awaitCompletion({ sessionId, timeoutMs: 5_000 });
+    expect(result2).toEqual({ ok: true, plan: 'paid' });
+
+    manager.dispose();
   });
 
   it('awaitCompletion returns { ok: false } when the RPC timeoutMs fires before the flow completes', async () => {
