@@ -177,6 +177,16 @@ export function registerRpcMethods(services: RouteServices): void {
     safeHandler(async (params) => {
       const validated = validate(permissionResponseSchema, params);
       const { taskId, requestId, decision, selectedOptions, customText } = validated;
+      // Defensive taskId check. Without it, a bogus taskId (stale UI,
+      // double-click, replay of a cancelled task) cascades an error from
+      // deep inside `OpenCodeAdapter.sendResponse` (`pending` is null, or
+      // the adapter doesn't exist), producing a confusing stack trace
+      // rather than a clean "unknown task" RPC error.
+      if (!taskService.hasActiveTask(taskId)) {
+        throw new Error(
+          `permission.respond: no active task with id=${taskId}. The task may have completed, been cancelled, or never existed.`,
+        );
+      }
       await taskService.sendResponse(taskId, {
         requestId,
         taskId,
