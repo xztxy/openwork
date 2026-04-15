@@ -56,6 +56,7 @@ import {
 import {
   CompletionEnforcer,
   CompletionEnforcerCallbacks,
+  CompletionFlowState,
 } from '../../opencode/completion/index.js';
 
 import type { TaskConfig, Task, TaskResult } from '../../common/types/task.js';
@@ -499,6 +500,22 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     return this.currentTaskId;
   }
 
+  /**
+   * Current model/provider context for this task, derived from the
+   * config at start + the first `message.updated` that reports the
+   * assistant's chosen model/provider. Consumed by `TaskManager`'s
+   * live `toTaskMessage` conversion so persisted rows and `task.message`
+   * RPC notifications carry `modelId` / `providerId` (Codex R4 P2 #2 —
+   * the fields existed on the adapter but were never passed through
+   * to the message processor on the live pipeline).
+   */
+  getModelContext(): { modelId?: string; providerId?: string } {
+    const ctx: { modelId?: string; providerId?: string } = {};
+    if (this.currentModelId) ctx.modelId = this.currentModelId;
+    if (this.currentProviderId) ctx.providerId = this.currentProviderId;
+    return ctx;
+  }
+
   get running(): boolean {
     return this.client !== null && !this.hasCompleted && !this.isDisposed;
   }
@@ -696,29 +713,37 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
         return;
       }
       case 'session.idle': {
-        // Session finished its active work. Drive the completion enforcer
-        // through the same lifecycle it used in the PTY era:
-        //   1. `handleStepFinish('stop')` runs the conversational-turn
-        //      detection and the continuation scheduler. For a simple
-        //      "what is 8+5" the agent never calls `complete_task`;
-        //      without this hook `shouldComplete()` stays false and the
-        //      task HANGS FOREVER. (The pre-port adapter called this on
-        //      every step_finish event; the SDK port missed it — real
-        //      user-visible bug surfaced in manual testing.)
-        //   2. `handleProcessExit(0)` fires onComplete OR onStartContinuation
-        //      based on state. For conversational turns → onComplete →
-        //      markComplete('success'). For tool-using turns that didn't
-        //      call complete_task → onStartContinuation sends a nudge
-        //      prompt via the SDK to keep the agent working.
-        // Swallow handleStepFinish's return — the state it leaves behind
-        // drives handleProcessExit's branching.
+        // SDK-era turn boundary. `session.idle` fires at the end of EVERY
+        // turn in a session; the SDK session itself does not terminate
+        // and can be re-prompted via `session.prompt` for the next user
+        // message.
+        //
+        // DO NOT invoke `completionEnforcer.handleProcessExit(0)` here.
+        // That path was designed for the PTY era where the `opencode run`
+        // child exited when the turn ended — firing exactly once. It
+        // schedules continuation NUDGES via `onStartContinuation` whenever
+        // the agent didn't call `complete_task`. In SDK mode, `session.idle`
+        // repeats, and each invocation would re-enter the nudge path:
+        //   turn 1 idle → scheduleContinuation → sends nudge via session.prompt
+        //   → agent replies defensively ("I was conversational, no workflow
+        //   needed") → idle fires again → scheduleContinuation again → …
+        // until `MAX_RETRIES_REACHED` stops the storm (~10 attempts).
+        // Symptom: the user sees 5–10 successive defensive assistant
+        // bubbles after a simple "add 6" request before the task finally
+        // ends.
+        //
+        // Correct SDK-era behavior: an idle session is a natural turn
+        // boundary. Mark the task complete based on any `complete_task`
+        // the agent already recorded this turn (BLOCKED → error;
+        // anything else → success). The user can send a follow-up prompt
+        // via the existing resumeSession path if they want more work.
         if (this.hasCompleted) return;
-        this.completionEnforcer.handleStepFinish('stop');
-        void this.completionEnforcer.handleProcessExit(0).catch((err: unknown) => {
-          log.warn('completionEnforcer.handleProcessExit threw', {
-            error: serializeError(err),
-          });
-        });
+        const enforcerState = this.completionEnforcer.getState();
+        if (enforcerState === CompletionFlowState.BLOCKED) {
+          this.markComplete('error', 'Task blocked');
+        } else {
+          this.markComplete('success');
+        }
         return;
       }
       case 'todo.updated': {
@@ -856,28 +881,38 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       // that's running or completed/error — fast tools may never surface
       // a `running` update at all (Codex R3 P2). `countedToolCallIds`
       // ensures we only notify the enforcer once per call.
+      //
+      // `complete_task` is special: its `state.input` carries the
+      // success/partial/blocked payload, and the `running` snapshot may
+      // be streaming (missing `status`). `handleCompleteTaskDetection`
+      // is write-once — once it records a call, subsequent invocations
+      // are rejected (completion-enforcer.ts:56-59), so we cannot
+      // upgrade an earlier partial snapshot later (Codex R4 P1 #2).
+      // To avoid locking in a partial payload, defer the complete_task
+      // count to the first TERMINAL transition we observe. If the SDK
+      // somehow never surfaces a terminal update for this call, we
+      // correctly never mark it — preserving the agent's true state
+      // over a potentially-wrong guess.
       if (status === 'running' || status === 'completed' || status === 'error') {
         const callId = (toolPart as { id?: string }).id;
         const alreadyCounted = callId ? this.countedToolCallIds.has(callId) : false;
+        const isTerminal = status === 'completed' || status === 'error';
+        const isCompleteTask = toolName === 'complete_task';
+
         if (!alreadyCounted) {
-          if (callId) this.countedToolCallIds.add(callId);
-          if (toolName === 'complete_task' && state?.input !== undefined) {
-            this.completionEnforcer.handleCompleteTaskDetection(state.input);
-          } else if (toolName === 'start_task') {
-            this.completionEnforcer.markTaskRequiresCompletion();
+          if (isCompleteTask && !isTerminal) {
+            // Skip the running snapshot for complete_task; wait for
+            // terminal to get the full input. Do NOT mark counted yet.
           } else {
-            this.completionEnforcer.markToolsUsed(true);
+            if (callId) this.countedToolCallIds.add(callId);
+            if (isCompleteTask && state?.input !== undefined) {
+              this.completionEnforcer.handleCompleteTaskDetection(state.input);
+            } else if (toolName === 'start_task') {
+              this.completionEnforcer.markTaskRequiresCompletion();
+            } else {
+              this.completionEnforcer.markToolsUsed(true);
+            }
           }
-        } else if (
-          toolName === 'complete_task' &&
-          status === 'completed' &&
-          state?.input !== undefined
-        ) {
-          // complete_task is special: its input carries the success payload
-          // and may only be fully populated on the 'completed' update.
-          // Re-invoke detection on completion in case the 'running' snapshot
-          // had an incomplete input (e.g., streaming args).
-          this.completionEnforcer.handleCompleteTaskDetection(state.input);
         }
       }
 
