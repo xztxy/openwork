@@ -73,7 +73,7 @@ describe('OpenCode CLI Path Module', () => {
       mockApp.getAppPath.mockReturnValue(appPath);
       mockFs.existsSync.mockImplementation((p: string) => p === localCliPath);
 
-      const { getOpenCodeCliPath } = await import('@main/opencode/electron-options');
+      const { getOpenCodeCliPath } = await import('@main/opencode/cli-resolver');
       const result = getOpenCodeCliPath();
 
       expect(result.command).toBe(localCliPath);
@@ -91,7 +91,7 @@ describe('OpenCode CLI Path Module', () => {
       mockApp.getAppPath.mockReturnValue(appPath);
       mockFs.existsSync.mockImplementation((p: string) => p === localCliPath);
 
-      const { getOpenCodeCliPath } = await import('@main/opencode/electron-options');
+      const { getOpenCodeCliPath } = await import('@main/opencode/cli-resolver');
       const result = getOpenCodeCliPath();
 
       expect(result.command).toBe(localCliPath);
@@ -100,7 +100,7 @@ describe('OpenCode CLI Path Module', () => {
 
     it('throws when local CLI is missing in development mode', async () => {
       mockFs.existsSync.mockReturnValue(false);
-      const { getOpenCodeCliPath } = await import('@main/opencode/electron-options');
+      const { getOpenCodeCliPath } = await import('@main/opencode/cli-resolver');
 
       expect(() => getOpenCodeCliPath()).toThrow('OpenCode CLI executable not found');
     });
@@ -129,7 +129,7 @@ describe('OpenCode CLI Path Module', () => {
 
       mockFs.existsSync.mockImplementation((p: string) => p === bundledCliPath);
 
-      const { getOpenCodeCliPath } = await import('@main/opencode/electron-options');
+      const { getOpenCodeCliPath } = await import('@main/opencode/cli-resolver');
       const result = getOpenCodeCliPath();
 
       expect(result.command).toBe(bundledCliPath);
@@ -147,14 +147,14 @@ describe('OpenCode CLI Path Module', () => {
       mockApp.getAppPath.mockReturnValue(appPath);
       mockFs.existsSync.mockImplementation((p: string) => p === localCliPath);
 
-      const { isOpenCodeBundled } = await import('@main/opencode/electron-options');
+      const { isOpenCodeBundled } = await import('@main/opencode/cli-resolver');
       expect(isOpenCodeBundled()).toBe(true);
     });
 
     it('returns false when no local workspace CLI is available', async () => {
       mockFs.existsSync.mockReturnValue(false);
 
-      const { isOpenCodeBundled } = await import('@main/opencode/electron-options');
+      const { isOpenCodeBundled } = await import('@main/opencode/cli-resolver');
       expect(isOpenCodeBundled()).toBe(false);
     });
   });
