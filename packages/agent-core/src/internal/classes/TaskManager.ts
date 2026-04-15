@@ -14,6 +14,7 @@ import {
   toTaskMessage,
   flushAndCleanupBatcher,
   queueMessage,
+  type ModelContext,
 } from '../../opencode/message-processor.js';
 import { stopAzureFoundryProxy } from '../../opencode/proxies/azure-foundry-proxy.js';
 import { stopMoonshotProxy } from '../../opencode/proxies/moonshot-proxy.js';
@@ -173,7 +174,21 @@ export class TaskManager {
 
     const onMessage = (message: OpenCodeMessage) => {
       if (useInternalBatching && batchForward) {
-        const taskMessage = toTaskMessage(message);
+        // Stamp modelId/providerId on every live row. Codex R4 P2 #2:
+        // the message processor supports `ModelContext` and its own
+        // contract says the SDK adapter will always pass it, but this
+        // live site used to call `toTaskMessage(message)` with only
+        // one argument — so despite the adapter tracking the values in
+        // `currentModelId`/`currentProviderId`, they never reached
+        // persisted rows or `task.message` notifications from real
+        // SDK runs. The accessor is optional at the type level for
+        // back-compat with non-SDK adapters; the PTY-era branch just
+        // falls back to an empty context.
+        const modelContext =
+          typeof (adapter as { getModelContext?: () => unknown }).getModelContext === 'function'
+            ? (adapter as unknown as { getModelContext: () => ModelContext }).getModelContext()
+            : undefined;
+        const taskMessage = toTaskMessage(message, modelContext);
         if (taskMessage) {
           queueMessage(taskId, taskMessage, batchForward, () => {});
         }
