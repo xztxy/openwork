@@ -1,4 +1,5 @@
 {
+  "//": "WARNING: Before upgrading opencode-ai, check sst/opencode for prompt changes (title.txt, compaction.txt, prompt.ts, compaction.ts). The llm-gateway validates prompt prefixes to exempt title/compaction requests — if they drift, requests will fail with 400. Update llm-gateway's src/prompt-validation-prefixes.ts if prompts changed.",
   "name": "@accomplish/desktop",
   "version": "0.5.17",
   "private": true,
@@ -64,7 +65,8 @@
     "gray-matter": "^4.0.3",
     "mixpanel": "^0.21.0",
     "node-pty": "catalog:",
-    "opencode-ai": "1.4.3",
+    "@opencode-ai/sdk": "1.2.24",
+    "opencode-ai": "1.2.24",
     "pino": "^10.3.1",
     "proxy-from-env": "^2.1.0",
     "react": "^19.0.0",
@@ -90,17 +92,17 @@
     "vitest": "^4.1.0"
   },
   "optionalDependencies": {
-    "opencode-darwin-arm64": "1.4.3",
-    "opencode-darwin-x64": "1.4.3",
-    "opencode-darwin-x64-baseline": "1.4.3",
-    "opencode-linux-arm64": "1.4.3",
-    "opencode-linux-arm64-musl": "1.4.3",
-    "opencode-linux-x64": "1.4.3",
-    "opencode-linux-x64-baseline": "1.4.3",
-    "opencode-linux-x64-baseline-musl": "1.4.3",
-    "opencode-linux-x64-musl": "1.4.3",
-    "opencode-windows-x64": "1.4.3",
-    "opencode-windows-x64-baseline": "1.4.3"
+    "opencode-darwin-arm64": "1.2.24",
+    "opencode-darwin-x64": "1.2.24",
+    "opencode-darwin-x64-baseline": "1.2.24",
+    "opencode-linux-arm64": "1.2.24",
+    "opencode-linux-arm64-musl": "1.2.24",
+    "opencode-linux-x64": "1.2.24",
+    "opencode-linux-x64-baseline": "1.2.24",
+    "opencode-linux-x64-baseline-musl": "1.2.24",
+    "opencode-linux-x64-musl": "1.2.24",
+    "opencode-windows-x64": "1.2.24",
+    "opencode-windows-x64-baseline": "1.2.24"
   },
   "build": {
     "npmRebuild": false,
