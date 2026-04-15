@@ -75,6 +75,19 @@ export class TaskService extends EventEmitter {
       this.taskSources.delete(data.taskId);
       this.serverManager.scheduleTaskRuntimeCleanup(data.taskId);
     });
+    // The cancel path originally had no terminal callback — `TaskManager.
+    // cancelTask()` just aborts the adapter without emitting `complete` or
+    // `error`, so the internal `taskSources` entry and the per-task
+    // `opencode serve` runtime both leaked every time a user cancelled a
+    // task. `stopTask` now emits `'statusChange'` with `status: 'cancelled'`
+    // after it asks the TaskManager to abort, and this listener runs the
+    // same cleanup the other two terminal paths run.
+    this.on('statusChange', (data: { taskId: string; status: string }) => {
+      if (data.status === 'cancelled') {
+        this.taskSources.delete(data.taskId);
+        this.serverManager.scheduleTaskRuntimeCleanup(data.taskId);
+      }
+    });
 
     // Per-task `opencode serve` manager. Spawns one serve process per task,
     // cleans up on idle. The `getServerUrl` closure below is handed to the
@@ -188,14 +201,29 @@ export class TaskService extends EventEmitter {
 
   async stopTask(params: { taskId: string }): Promise<void> {
     const { taskId } = params;
+    const completedAt = new Date().toISOString();
+    // Emit `statusChange` with `'cancelled'` in BOTH branches so every
+    // terminal listener runs the same cleanup chain that success/error
+    // already trigger:
+    //   - task-event-forwarding unregisters the thought-stream entry,
+    //     refreshes the health service active-task count, and notifies
+    //     desktop via `task.statusChange` RPC;
+    //   - this class's own listener (registered in the constructor)
+    //     deletes the `taskSources` entry and schedules the per-task
+    //     `opencode serve` runtime for idle cleanup.
+    // Before this change `stopTask` only touched storage, so cancelled
+    // tasks leaked their runtime, their source entry, and their
+    // thought-stream registration until the daemon was restarted.
     if (this.taskManager.isTaskQueued(taskId)) {
       this.taskManager.cancelQueuedTask(taskId);
-      this.storage.updateTaskStatus(taskId, 'cancelled', new Date().toISOString());
+      this.storage.updateTaskStatus(taskId, 'cancelled', completedAt);
+      this.emit('statusChange', { taskId, status: 'cancelled', completedAt });
       return;
     }
     if (this.taskManager.hasActiveTask(taskId)) {
       await this.taskManager.cancelTask(taskId);
-      this.storage.updateTaskStatus(taskId, 'cancelled', new Date().toISOString());
+      this.storage.updateTaskStatus(taskId, 'cancelled', completedAt);
+      this.emit('statusChange', { taskId, status: 'cancelled', completedAt });
     }
   }
 

@@ -190,4 +190,71 @@ describe('TaskService parity', () => {
     // checks the full argument list, so the assertion must include the flag.
     expect(storage.getTasks).toHaveBeenCalledWith('ws-filter', false);
   });
+
+  // REGRESSION (Codex review P1): `stopTask` used to only update storage
+  // to `'cancelled'` without emitting any terminal event. Callbacks are
+  // wired only off `'complete'`/`'error'`/`'statusChange'`, so every
+  // cancelled task leaked its `taskSources` entry and its per-task
+  // `opencode serve` runtime until the daemon was restarted.
+  describe('stopTask cleanup', () => {
+    it('emits statusChange { status: "cancelled" } for queued tasks', async () => {
+      const storage = createMockStorage();
+      const service = new TaskService(storage as never, {
+        userDataPath: '/data',
+        mcpToolsPath: '/tools',
+      });
+      // Force the queued branch: `isTaskQueued` returns true, `hasActiveTask`
+      // returns false (the default mock already does this).
+      const taskManager = (
+        service as unknown as { taskManager: { isTaskQueued: ReturnType<typeof vi.fn> } }
+      ).taskManager;
+      taskManager.isTaskQueued.mockReturnValueOnce(true);
+
+      const statusChanges: Array<{ taskId: string; status: string }> = [];
+      service.on('statusChange', (data) =>
+        statusChanges.push(data as { taskId: string; status: string }),
+      );
+
+      await service.stopTask({ taskId: 'tsk_queued_1' });
+
+      expect(statusChanges).toEqual([
+        expect.objectContaining({ taskId: 'tsk_queued_1', status: 'cancelled' }),
+      ]);
+      expect(storage.updateTaskStatus).toHaveBeenCalledWith(
+        'tsk_queued_1',
+        'cancelled',
+        expect.any(String),
+      );
+    });
+
+    it('emits statusChange { status: "cancelled" } for running tasks', async () => {
+      const storage = createMockStorage();
+      const service = new TaskService(storage as never, {
+        userDataPath: '/data',
+        mcpToolsPath: '/tools',
+      });
+      const taskManager = (
+        service as unknown as {
+          taskManager: {
+            isTaskQueued: ReturnType<typeof vi.fn>;
+            hasActiveTask: ReturnType<typeof vi.fn>;
+          };
+        }
+      ).taskManager;
+      taskManager.isTaskQueued.mockReturnValueOnce(false);
+      taskManager.hasActiveTask.mockReturnValueOnce(true);
+
+      const statusChanges: Array<{ taskId: string; status: string }> = [];
+      service.on('statusChange', (data) =>
+        statusChanges.push(data as { taskId: string; status: string }),
+      );
+
+      await service.stopTask({ taskId: 'tsk_running_1' });
+
+      expect(statusChanges).toEqual([
+        expect.objectContaining({ taskId: 'tsk_running_1', status: 'cancelled' }),
+      ]);
+      expect(taskManager.cancelTask).toHaveBeenCalledWith('tsk_running_1');
+    });
+  });
 });
