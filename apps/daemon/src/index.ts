@@ -140,9 +140,29 @@ async function main(): Promise<void> {
     if (typeof gateway.setProxyTaskId === 'function') {
       setProxyTaskId = gateway.setProxyTaskId;
       log.info('[Daemon] llm-gateway-client detected; proxy task-tagging wired');
+    } else {
+      log.warn(
+        '[Daemon] llm-gateway-client resolved but exports no setProxyTaskId function — proxy task-tagging stays unwired. Check the package build.',
+      );
     }
-  } catch {
-    // No gateway present — pure OSS build or developer hasn't installed it.
+  } catch (err) {
+    // Distinguish "gateway not installed" (pure OSS / unset dev) from
+    // "gateway installed but broken" (importable but throws, exports
+    // missing, etc.). Silently swallowing both would mask real build
+    // issues — for example, a dev who installed the gateway via
+    // `pnpm add @accomplish/llm-gateway-client@file:…` but the sibling
+    // folder was moved. Matches the `accomplishRuntime` bootstrap
+    // pattern at the top of this function.
+    const isPackageMissing =
+      err instanceof Error &&
+      ('code' in err ? (err as { code: string }).code === 'MODULE_NOT_FOUND' : false) &&
+      String(err).includes("Cannot find module '@accomplish/llm-gateway-client'");
+    if (!isPackageMissing) {
+      log.error(
+        `[Daemon] llm-gateway-client present but failed to load: ${err instanceof Error ? err.message : String(err)}. Proxy task-tagging stays unwired.`,
+      );
+    }
+    // Missing package: pure OSS or dev hasn't installed. Stay silent.
   }
 
   const taskService = new TaskService(storage, {
