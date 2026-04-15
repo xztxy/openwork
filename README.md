@@ -302,7 +302,7 @@ packages/
   shared/         # Shared TypeScript types
 ```
 
-The desktop app uses Electron with a React UI bundled via Vite. The main process spawns [OpenCode](https://github.com/sst/opencode) CLI using `node-pty` to execute tasks. API keys are stored securely in the OS keychain.
+The desktop app uses Electron with a React UI bundled via Vite. A long-lived `apps/daemon` background process owns task execution — it spawns [OpenCode](https://github.com/sst/opencode) `opencode serve` children and talks to them via `@opencode-ai/sdk`. API keys are stored securely in the OS keychain.
 
 See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
 

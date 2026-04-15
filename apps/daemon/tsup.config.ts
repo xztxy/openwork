@@ -14,7 +14,6 @@ export default defineConfig({
   // and loaded from daemon/node_modules/ in the packaged app.
   external: [
     'better-sqlite3',
-    'node-pty',
     // Optional private package — resolved at runtime via dynamic import, not bundled.
     // In OSS builds it's absent (noop fallback). In Free builds CI copies it into dist/.
     '@accomplish/llm-gateway-client',

@@ -80,13 +80,8 @@ function hasWindowsPrebuiltNativeModules(commandEnv) {
     return false;
   }
 
-  const nodePtyPrebuildDir = path.join(
-    desktopRoot,
-    'node_modules',
-    'node-pty',
-    'prebuilds',
-    `win32-${arch}`,
-  );
+  // Phase 4c of the OpenCode SDK cutover port removed `node-pty`; only
+  // better-sqlite3 remains as an Electron-native module to verify on Windows.
   const betterSqliteBinary = path.join(
     desktopRoot,
     'node_modules',
@@ -96,17 +91,8 @@ function hasWindowsPrebuiltNativeModules(commandEnv) {
     'better_sqlite3.node',
   );
 
-  const hasNodePty = fs.existsSync(nodePtyPrebuildDir);
-  const hasBetterSqlite = fs.existsSync(betterSqliteBinary);
-
-  if (!hasNodePty) {
-    console.log(`[desktop] Missing node-pty prebuilds at ${nodePtyPrebuildDir}`);
-  }
-  if (!hasBetterSqlite) {
+  if (!fs.existsSync(betterSqliteBinary)) {
     console.log(`[desktop] Missing better-sqlite3 binary at ${betterSqliteBinary}`);
-  }
-
-  if (!hasNodePty || !hasBetterSqlite) {
     return false;
   }
 

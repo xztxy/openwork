@@ -85,115 +85,16 @@ exports.default = async function afterPack(context) {
   // For single-arch builds, just copy the target architecture
   await copyNodeBinary(context, nodePlatform, archName);
 
-  // On Windows, copy node-pty prebuilds to build/Release (required for packaged app)
-  if (platformName === 'windows') {
-    await copyNodePtyPrebuilds(context, archName);
-    await pruneNodePtyArm64(context, archName);
-  }
+  // Phase 4c of the OpenCode SDK cutover port removed `node-pty` from the
+  // desktop app (OAuth and task execution both moved to the SDK). The
+  // corresponding post-pack copy/prune steps are gone too — Windows builds
+  // no longer need a build/Release folder for node-pty's native binaries.
 
   // Re-sign macOS apps after modifying the bundle
   if (platformName === 'mac') {
     await resignMacApp(context);
   }
 };
-
-/**
- * Copy node-pty prebuilds to build/Release folder on Windows.
- *
- * node-pty looks for binaries in build/Release first, then falls back to prebuilds.
- * When we skip npmRebuild during packaging, the build/Release folder doesn't exist.
- * This copies the prebuilt binaries to where node-pty expects them.
- */
-async function copyNodePtyPrebuilds(context, arch) {
-  const { appOutDir } = context;
-
-  const nodePtyBase = path.join(
-    appOutDir,
-    'resources',
-    'app.asar.unpacked',
-    'node_modules',
-    'node-pty',
-  );
-  const prebuildsDir = path.join(nodePtyBase, 'prebuilds', `win32-${arch}`);
-  const buildReleaseDir = path.join(nodePtyBase, 'build', 'Release');
-
-  if (!fs.existsSync(prebuildsDir)) {
-    console.log(`[after-pack] node-pty prebuilds not found at ${prebuildsDir}, skipping`);
-    return;
-  }
-
-  console.log(`[after-pack] Copying node-pty prebuilds to build/Release`);
-
-  // Create build/Release directory
-  if (!fs.existsSync(buildReleaseDir)) {
-    fs.mkdirSync(buildReleaseDir, { recursive: true });
-  }
-
-  // Copy .node files and executables
-  const files = fs.readdirSync(prebuildsDir);
-  for (const file of files) {
-    const srcPath = path.join(prebuildsDir, file);
-    const destPath = path.join(buildReleaseDir, file);
-
-    const stat = fs.statSync(srcPath);
-    if (stat.isFile()) {
-      fs.copyFileSync(srcPath, destPath);
-      console.log(`[after-pack]   Copied: ${file}`);
-    } else if (stat.isDirectory()) {
-      // Copy subdirectories (like conpty/)
-      if (!fs.existsSync(destPath)) {
-        fs.mkdirSync(destPath, { recursive: true });
-      }
-      const subFiles = fs.readdirSync(srcPath);
-      for (const subFile of subFiles) {
-        fs.copyFileSync(path.join(srcPath, subFile), path.join(destPath, subFile));
-        console.log(`[after-pack]   Copied: ${file}/${subFile}`);
-      }
-    }
-  }
-
-  console.log(`[after-pack] Successfully copied node-pty prebuilds to ${buildReleaseDir}`);
-}
-
-/**
- * Remove arm64 node-pty binaries from x64 Windows builds to reduce size/time.
- */
-async function pruneNodePtyArm64(context, arch) {
-  if (arch !== 'x64') {
-    return;
-  }
-
-  const { appOutDir } = context;
-  const nodePtyBase = path.join(
-    appOutDir,
-    'resources',
-    'app.asar.unpacked',
-    'node_modules',
-    'node-pty',
-  );
-  const arm64Prebuilds = path.join(nodePtyBase, 'prebuilds', 'win32-arm64');
-  const conptyRoot = path.join(nodePtyBase, 'third_party', 'conpty');
-
-  // Remove win32-arm64 prebuilds
-  if (fs.existsSync(arm64Prebuilds)) {
-    fs.rmSync(arm64Prebuilds, { recursive: true, force: true });
-    console.log('[after-pack] Removed node-pty arm64 prebuilds (win32-arm64)');
-  }
-
-  // Remove win10-arm64 conpty binaries
-  if (fs.existsSync(conptyRoot)) {
-    const entries = fs.readdirSync(conptyRoot, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const versionDir = path.join(conptyRoot, entry.name);
-      const arm64Dir = path.join(versionDir, 'win10-arm64');
-      if (fs.existsSync(arm64Dir)) {
-        fs.rmSync(arm64Dir, { recursive: true, force: true });
-        console.log(`[after-pack] Removed node-pty conpty arm64 binaries: ${arm64Dir}`);
-      }
-    }
-  }
-}
 
 /**
  * Copy Node.js binary for a specific platform/arch combination

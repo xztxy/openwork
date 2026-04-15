@@ -4,7 +4,7 @@ This file provides general guidance for agents working with code in this reposit
 
 ## Project Overview
 
-Accomplish is an AI automation assistant with a split architecture: `apps/web` contains the standalone React UI, and `apps/desktop` is a thin Electron shell that loads web's build output. The main process spawns the OpenCode CLI (via `node-pty`) to execute user tasks. API keys are stored with AES-256-GCM encryption.
+Accomplish is an AI automation assistant with a split architecture: `apps/web` contains the standalone React UI, `apps/desktop` is a thin Electron shell that loads web's build output, and `apps/daemon` is a long-lived background process that owns task execution. The daemon spawns `opencode serve` subprocesses and speaks to them via `@opencode-ai/sdk` to run user tasks. API keys are stored with AES-256-GCM encryption.
 
 ## Common Commands
 

@@ -1,7 +1,7 @@
 # Base image with Playwright dependencies pre-installed
 FROM mcr.microsoft.com/playwright:v1.49.1-noble
 
-# Install Xvfb, build tools (for node-pty), and additional dependencies for Electron
+# Install Xvfb, build tools (for better-sqlite3), and additional dependencies for Electron
 RUN apt-get update && apt-get install -y \
     xvfb \
     build-essential \

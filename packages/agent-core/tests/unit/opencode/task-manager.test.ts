@@ -4,11 +4,11 @@ import { OpenCodeCliNotFoundError } from '../../../src/internal/classes/OpenCode
 /**
  * Tests for TaskManager module.
  *
- * Note: The TaskManager depends on OpenCodeAdapter which uses node-pty.
- * We test the TaskManager's business logic through interface verification
- * and state management tests that don't require the full PTY stack.
- *
- * Integration tests in the desktop app provide coverage for the full flow.
+ * Note: The TaskManager depends on OpenCodeAdapter which spawns an
+ * `opencode serve` child and speaks to it via `@opencode-ai/sdk`. We test
+ * TaskManager's business logic through interface verification and state
+ * management tests that don't require the full runtime. Integration tests
+ * in the daemon/desktop provide coverage for the full flow.
  */
 describe('TaskManager', () => {
   beforeEach(() => {

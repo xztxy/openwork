@@ -79,8 +79,11 @@ try {
   // Get command line args (everything after 'node scripts/package.js')
   const args = process.argv.slice(2).join(' ');
 
-  // On Windows, skip native module rebuild (use prebuilt binaries)
-  // This avoids issues with node-pty's winpty.gyp batch file handling
+  // On Windows, skip native module rebuild (use prebuilt binaries).
+  // Phase 4c of the OpenCode SDK cutover port removed `node-pty` (whose
+  // winpty.gyp batch-file handling was the original reason to skip rebuild);
+  // the skip remains because better-sqlite3's Windows prebuild is already
+  // Electron-ABI-compatible — rebuilding adds time and can fail in CI.
   const npmRebuildFlag = isWindows ? ' --config.npmRebuild=false' : '';
 
   // Use npx to run electron-builder to ensure it's found in node_modules

@@ -1,10 +1,12 @@
 /**
- * Custom postinstall script that handles Windows-specific node-pty build issues.
+ * Custom postinstall script for the desktop app.
  *
- * On Windows, we skip electron-rebuild because:
- * 1. node-pty has prebuilt binaries that work with Electron's ABI
- * 2. Building from source has issues with batch file path handling and Spectre mitigation
- * 3. The pnpm patch creates paths that exceed Windows' 260 character limit
+ * Phase 4c of the OpenCode SDK cutover port removed `node-pty`. The legacy
+ * reasons to skip electron-rebuild on Windows (node-pty's prebuilt binaries
+ * tripping up electron-rebuild, Spectre mitigation, pnpm's 260-char path
+ * limit) no longer apply — the only Electron-native module the desktop now
+ * ships is `better-sqlite3`. We still install an Electron-compatible
+ * better-sqlite3 prebuild on Windows for compatibility with packaged mode.
  *
  * On macOS/Linux, we run electron-rebuild normally.
  */
@@ -42,8 +44,9 @@ function runCommand(command, description) {
 }
 
 if (isWindows) {
-  // On Windows, we need to install Electron-compatible prebuilt binaries for better-sqlite3
-  // node-pty has working prebuilt binaries, so we skip it
+  // On Windows, install an Electron-compatible prebuilt for better-sqlite3.
+  // (Phase 4c: `node-pty` no longer ships, so the verify-prebuilds step for
+  // it is gone too.)
   console.log('\n> Windows: Installing Electron-compatible better-sqlite3 prebuild...');
 
   // Get the Electron version from package.json
@@ -78,18 +81,7 @@ if (isWindows) {
     console.warn('> Warning: better-sqlite3 not found, skipping prebuild installation');
   }
 
-  // Verify node-pty prebuilds exist
-  const pnpmNodePty = findNodePty();
-  if (pnpmNodePty) {
-    const prebuildsPath = path.join(pnpmNodePty, 'prebuilds', 'win32-x64');
-    if (fs.existsSync(prebuildsPath)) {
-      console.log('> node-pty prebuilds found, setup complete');
-    } else {
-      console.error('> Error: node-pty prebuilds not found at', prebuildsPath);
-      console.error('> The app will not work correctly without prebuilds on Windows.');
-      process.exit(1);
-    }
-  }
+  // Phase 4c: node-pty prebuild verification dropped with the dependency.
 } else {
   // On macOS/Linux, run electron-rebuild first (matches original behavior)
   runCommand('npx electron-rebuild', 'Running electron-rebuild');
@@ -110,14 +102,9 @@ if (!useBundledMcp) {
   // Install ALL dependencies (including devDependencies) during development
   // because esbuild needs them for bundling. The bundle-skills.cjs script
   // will reinstall with --omit=dev during packaged builds.
-  const tools = [
-    'dev-browser',
-    'dev-browser-mcp',
-    'file-permission',
-    'ask-user-question',
-    'complete-task',
-    'start-task',
-  ];
+  // Phase 3 of the SDK cutover port removed `file-permission` and
+  // `ask-user-question` MCP packages — don't try to install their deps.
+  const tools = ['dev-browser', 'dev-browser-mcp', 'complete-task', 'start-task'];
   for (const tool of tools) {
     runCommand(
       `npm --prefix "${mcpToolsPath}/${tool}" install --no-package-lock`,
@@ -127,10 +114,6 @@ if (!useBundledMcp) {
 }
 
 console.log('\n> Postinstall complete!');
-
-function findNodePty() {
-  return findPackage('node-pty');
-}
 
 function findBetterSqlite3() {
   return findPackage('better-sqlite3');

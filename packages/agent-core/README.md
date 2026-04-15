@@ -163,7 +163,7 @@ import {
 ## Requirements
 
 - **Node.js >= 20**
-- Native dependencies: [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) (SQLite), [`node-pty`](https://github.com/microsoft/node-pty) (PTY for CLI spawning). These require a C++ build toolchain for installation.
+- Native dependencies: [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3) (SQLite). Requires a C++ build toolchain for installation.
 
 ## License
 

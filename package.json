@@ -61,7 +61,6 @@
       "better-sqlite3",
       "electron",
       "esbuild",
-      "node-pty",
       "opencode-ai",
       "sharp"
     ]
