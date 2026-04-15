@@ -100,3 +100,74 @@ describe('DaemonClient offNotification', () => {
     client.close();
   });
 });
+
+describe('DaemonClient.call per-call timeoutMs', () => {
+  it('uses the client-wide default when no per-call override is given', async () => {
+    const socketPath = createTempSocketPath();
+    server = new DaemonRpcServer({ socketPath });
+    server.registerMethod(
+      'auth.openai.awaitCompletion' as never,
+      (async () => {
+        // Never resolve — simulates the daemon blocking on the OAuth flow.
+        await new Promise(() => {});
+      }) as never,
+    );
+    await server.start();
+
+    const transport = await createSocketTransport({ socketPath });
+    const client = new DaemonClient({ transport, timeout: 100 });
+
+    const start = Date.now();
+    await expect(
+      client.call('auth.openai.awaitCompletion' as never, undefined as never),
+    ).rejects.toThrow(/RPC timeout.*100ms/);
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeGreaterThanOrEqual(80);
+    expect(elapsed).toBeLessThan(500);
+
+    client.close();
+  });
+
+  it('per-call timeoutMs overrides the client-wide default — required for OAuth', async () => {
+    // REGRESSION (manual OAuth test, post-Phase-4a): the desktop OAuth IPC
+    // handler calls `auth.openai.awaitCompletion` which can legitimately
+    // block for up to 2 minutes while the user finishes the browser flow.
+    // The DaemonClient's default 30s timeout was firing first, surfacing
+    // `RPC timeout: auth.openai.awaitCompletion (30000ms)` in the desktop
+    // main log even though the daemon-side flow eventually succeeded.
+    // Fix: let `call()` accept an `options.timeoutMs` per-call override.
+    const socketPath = createTempSocketPath();
+    server = new DaemonRpcServer({ socketPath });
+    let resolveServerSide: (value: unknown) => void = () => {};
+    server.registerMethod(
+      'auth.openai.awaitCompletion' as never,
+      (async () => {
+        return new Promise((resolve) => {
+          resolveServerSide = resolve;
+        });
+      }) as never,
+    );
+    await server.start();
+
+    const transport = await createSocketTransport({ socketPath });
+    // Aggressively low default to prove the per-call override actually
+    // wins. If `options.timeoutMs` were ignored, this call would reject
+    // at ~50ms with "RPC timeout: ...50ms".
+    const client = new DaemonClient({ transport, timeout: 50 });
+
+    const callPromise = client.call('auth.openai.awaitCompletion' as never, undefined as never, {
+      timeoutMs: 5_000,
+    });
+
+    // Wait longer than the client-wide default — proves the per-call
+    // timeout is in effect.
+    await new Promise((r) => setTimeout(r, 200));
+
+    // Now resolve the server-side handler. The call should succeed
+    // because the per-call 5s budget hasn't expired.
+    resolveServerSide({ ok: true, plan: 'paid' });
+    await expect(callPromise).resolves.toEqual({ ok: true, plan: 'paid' });
+
+    client.close();
+  });
+});
