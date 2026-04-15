@@ -14,14 +14,16 @@ import { registerAnalyticsHandlers } from './analytics-handlers';
 import { registerGoogleAccountHandlers } from './google-account-handlers';
 import type { AccountManager } from '../../google-accounts/account-manager';
 import type { TokenManager } from '../../google-accounts/token-manager';
-import type { startGoogleOAuth } from '../../google-accounts/google-auth';
+import type { startGoogleOAuth, cancelGoogleOAuth } from '../../google-accounts/google-auth';
 
 type GoogleAuthFn = typeof startGoogleOAuth;
+type CancelGoogleOAuthFn = typeof cancelGoogleOAuth;
 
 export function registerIPCHandlers(
   googleAccountManager?: AccountManager,
   googleTokenManager?: TokenManager,
   googleAuth?: GoogleAuthFn,
+  cancelGoogleOAuthFn?: CancelGoogleOAuthFn,
 ): void {
   registerTaskHandlers();
   registerApiKeyHandlers();
@@ -36,7 +38,12 @@ export function registerIPCHandlers(
   registerWorkspaceHandlers();
   registerHuggingFaceHandlers();
   registerAnalyticsHandlers();
-  if (googleAccountManager && googleTokenManager && googleAuth) {
-    registerGoogleAccountHandlers(googleAccountManager, googleTokenManager, googleAuth);
+  if (googleAccountManager && googleTokenManager && googleAuth && cancelGoogleOAuthFn) {
+    registerGoogleAccountHandlers(
+      googleAccountManager,
+      googleTokenManager,
+      googleAuth,
+      cancelGoogleOAuthFn,
+    );
   }
 }

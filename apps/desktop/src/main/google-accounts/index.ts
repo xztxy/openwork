@@ -11,7 +11,7 @@ import { getStorage } from '../store/storage';
 import { AccountManager } from './account-manager';
 import { TokenManager } from './token-manager';
 
-export { startGoogleOAuth } from './google-auth';
+export { startGoogleOAuth, cancelGoogleOAuth } from './google-auth';
 
 let _accountManager: AccountManager | null = null;
 let _tokenManager: TokenManager | null = null;

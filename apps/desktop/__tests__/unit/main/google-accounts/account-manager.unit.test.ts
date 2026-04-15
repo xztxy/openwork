@@ -264,10 +264,13 @@ describe('AccountManager', () => {
 
       const manifestPath = manager.writeAccountsManifest(entries);
 
-      const stats = fs.statSync(manifestPath);
-      // On Linux/macOS: mode bits 0o100600 means regular file + 0o600 perms
-      const perms = stats.mode & 0o777;
-      expect(perms).toBe(0o600);
+      // fs.chmodSync is a no-op on Windows, so skip the permission check there
+      if (process.platform !== 'win32') {
+        const stats = fs.statSync(manifestPath);
+        // On Linux/macOS: mode bits 0o100600 means regular file + 0o600 perms
+        const perms = stats.mode & 0o777;
+        expect(perms).toBe(0o600);
+      }
     });
 
     it('returns the path to the manifest file', () => {

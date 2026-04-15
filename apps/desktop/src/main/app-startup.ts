@@ -225,17 +225,26 @@ export async function startApp(
   let startGoogleOAuthFn:
     | typeof import('./google-accounts/google-auth').startGoogleOAuth
     | undefined;
+  let cancelGoogleOAuthFn:
+    | typeof import('./google-accounts/google-auth').cancelGoogleOAuth
+    | undefined;
   try {
-    const { getAccountManager, getTokenManager, startGoogleOAuth } =
+    const { getAccountManager, getTokenManager, startGoogleOAuth, cancelGoogleOAuth } =
       await import('./google-accounts/index');
     googleAccountManager = getAccountManager();
     googleTokenManager = getTokenManager();
     startGoogleOAuthFn = startGoogleOAuth;
+    cancelGoogleOAuthFn = cancelGoogleOAuth;
   } catch (err) {
     logMain('WARN', '[Main] Google account managers unavailable', { err: String(err) });
   }
   // Register IPC handlers exactly once, after the import attempt settles
-  registerIPCHandlers(googleAccountManager, googleTokenManager, startGoogleOAuthFn);
+  registerIPCHandlers(
+    googleAccountManager,
+    googleTokenManager,
+    startGoogleOAuthFn,
+    cancelGoogleOAuthFn,
+  );
   logMain('INFO', '[Main] IPC handlers registered');
 
   createWindow();

@@ -173,6 +173,16 @@ export async function startGoogleOAuth(label: string): Promise<{
   return { state, authUrl, waitForCallback };
 }
 
+export function cancelGoogleOAuth(state: string): void {
+  const flow = pendingFlows.get(state);
+  if (!flow) {
+    return;
+  }
+  pendingFlows.delete(state);
+  flow.server.close();
+  flow.reject(new Error('OAuth cancelled by user'));
+}
+
 async function exchangeCodeForResult(
   code: string,
   codeVerifier: string,

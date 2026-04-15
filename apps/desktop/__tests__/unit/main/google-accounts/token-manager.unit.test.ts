@@ -340,6 +340,43 @@ describe('TokenManager', () => {
     });
   });
 
+  describe('refreshToken — in-flight snapshot guard', () => {
+    it('does not overwrite token if storage changed during in-flight refresh', async () => {
+      const mockStmt = { run: vi.fn(), get: vi.fn(), all: vi.fn(() => []) };
+      db.prepare.mockReturnValue(mockStmt);
+
+      const originalRaw = makeStoredToken();
+      const reconnectedRaw = makeStoredToken({
+        accessToken: 'reconnected-access',
+        refreshToken: 'new-refresh-token',
+      });
+
+      // First call returns the original token (snapshot); subsequent calls return the new token
+      let getCallCount = 0;
+      vi.mocked(storage.get).mockImplementation(() => {
+        getCallCount++;
+        return getCallCount === 1 ? originalRaw : reconnectedRaw;
+      });
+
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => ({ access_token: 'refreshed-access', expires_in: 3600 }),
+        }),
+      );
+
+      const scheduleSpy = vi.spyOn(manager, 'scheduleRefresh').mockImplementation(() => {});
+
+      await manager.refreshToken('uid-1');
+
+      // The stored token changed mid-flight, so the write must be suppressed
+      expect(storage.set).not.toHaveBeenCalled();
+      expect(scheduleSpy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('setWindow', () => {
     it('updates the window reference used for IPC events', async () => {
       const managerNoWindow = new TokenManager(storage as never, db as never, null);

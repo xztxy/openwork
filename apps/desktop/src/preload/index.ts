@@ -891,6 +891,8 @@ const accomplishAPI = {
     removeAccount: (id: string): Promise<void> => ipcRenderer.invoke('gws:accounts:remove', id),
     updateLabel: (id: string, label: string): Promise<void> =>
       ipcRenderer.invoke('gws:accounts:update-label', id, label),
+    cancelAuth: (state: string): Promise<void> =>
+      ipcRenderer.invoke('gws:accounts:cancel-auth', state),
     onStatusChanged: (callback: (id: string, status: string) => void): (() => void) => {
       const listener = (_: unknown, id: string, status: string) => callback(id, status);
       ipcRenderer.on('gws:account:status-changed', listener);

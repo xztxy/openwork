@@ -9,9 +9,18 @@ import {
 // Mock http so tests don't bind a real TCP port
 class MockHttpServer {
   listening = false;
+  private _errorHandler?: (err: Error) => void;
 
-  once(_event: string, _callback: (err?: Error) => void) {
+  once(event: string, callback: (err?: Error) => void) {
+    if (event === 'error') {
+      this._errorHandler = callback as (err: Error) => void;
+    }
     return this;
+  }
+
+  /** Expose stored error handler so tests can simulate startup errors. */
+  emitError(err: Error) {
+    this._errorHandler?.(err);
   }
 
   listen(_port: number, _host: string, callback: () => void) {

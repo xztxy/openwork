@@ -167,9 +167,18 @@ export async function cmdFreeTime(
   accounts: AccountEntry[],
   flags: Record<string, string>,
 ): Promise<unknown> {
-  const duration = parseInt(flags['duration'] ?? '30', 10);
+  const duration = Number.parseInt(flags['duration'] ?? '30', 10);
+  if (!Number.isFinite(duration) || duration <= 0) {
+    throw new Error('Invalid --duration: must be a positive integer (minutes)');
+  }
   const rangeStart = new Date(flags['start']);
+  if (Number.isNaN(rangeStart.getTime())) {
+    throw new Error('Invalid --start: must be a valid ISO 8601 date-time string');
+  }
   const rangeEnd = new Date(flags['end']);
+  if (Number.isNaN(rangeEnd.getTime())) {
+    throw new Error('Invalid --end: must be a valid ISO 8601 date-time string');
+  }
 
   const allEvents = await Promise.allSettled(accounts.map((acc) => cmdList(acc, flags)));
 

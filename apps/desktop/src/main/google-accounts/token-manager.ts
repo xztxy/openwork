@@ -94,6 +94,19 @@ export class TokenManager {
         scopes: parsed.scopes,
       };
 
+      // Guard: abort if the stored token changed while the network call was in flight
+      // (e.g. user removed the account or reconnected with a fresh token)
+      const currentRaw = this.storage.get(gwsTokenKey(accountId));
+      if (!currentRaw || currentRaw !== raw) {
+        getLogCollector().log(
+          'WARN',
+          'main',
+          'Token refresh: stored token changed during refresh, aborting write',
+          { accountId },
+        );
+        return;
+      }
+
       this.storage.set(gwsTokenKey(accountId), JSON.stringify(newToken));
       this.db
         .prepare('UPDATE google_accounts SET last_refreshed_at = ? WHERE google_account_id = ?')

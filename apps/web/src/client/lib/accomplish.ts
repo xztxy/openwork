@@ -50,6 +50,7 @@ interface GwsAPI {
   completeAuth(state: string, code: string): Promise<GoogleAccount>;
   removeAccount(id: string): Promise<void>;
   updateLabel(id: string, label: string): Promise<void>;
+  cancelAuth(state: string): Promise<void>;
   onStatusChanged(callback: (id: string, status: GoogleAccountStatus) => void): () => void;
 }
 

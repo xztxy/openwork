@@ -73,11 +73,33 @@ export class AccountManager {
   }
 
   removeAccount(googleAccountId: string): void {
-    // Clear token first; only remove the DB row if storage succeeds
+    // Capture the current token so we can restore it if the DB delete fails
+    const previousToken = this.storage.get(gwsTokenKey(googleAccountId)) ?? '';
     this.storage.set(gwsTokenKey(googleAccountId), '');
-    this.db.prepare('DELETE FROM google_accounts WHERE google_account_id = ?').run(googleAccountId);
+    try {
+      this.db
+        .prepare('DELETE FROM google_accounts WHERE google_account_id = ?')
+        .run(googleAccountId);
+    } catch (err) {
+      // DB delete failed — restore the token to stay in sync
+      this.storage.set(gwsTokenKey(googleAccountId), previousToken);
+      throw err;
+    }
 
     getLogCollector().log('INFO', 'main', 'Google account disconnected', { googleAccountId });
+  }
+
+  updateAccountToken(
+    googleAccountId: string,
+    token: GoogleAccountToken,
+    connectedAt: string,
+  ): void {
+    this.storage.set(gwsTokenKey(googleAccountId), JSON.stringify(token));
+    this.db
+      .prepare(
+        "UPDATE google_accounts SET status = 'connected', connected_at = ? WHERE google_account_id = ?",
+      )
+      .run(connectedAt, googleAccountId);
   }
 
   listAccounts(): GoogleAccount[] {

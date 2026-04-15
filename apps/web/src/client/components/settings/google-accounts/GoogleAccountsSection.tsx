@@ -1,19 +1,29 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { GoogleAccountCard } from './GoogleAccountCard';
 import { GoogleLabelDialog } from './GoogleLabelDialog';
 import { useGoogleAccountStore, initGoogleAccountListener } from '@/stores/googleAccountStore';
 import { Button } from '@/components/ui/button';
+
+const POLL_INTERVAL_MS = 2000;
+const POLL_MAX_ATTEMPTS = 15; // 30 s total
 
 export function GoogleAccountsSection() {
   const { accounts, loading, fetchAccounts, removeAccount } = useGoogleAccountStore();
   const [labelDialogOpen, setLabelDialogOpen] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [reconnectId, setReconnectId] = useState<string | null>(null);
+  const [pendingAuthState, setPendingAuthState] = useState<string | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const cleanup = initGoogleAccountListener();
     fetchAccounts();
-    return cleanup;
+    return () => {
+      cleanup();
+      if (pollTimerRef.current !== null) {
+        clearTimeout(pollTimerRef.current);
+      }
+    };
   }, [fetchAccounts]);
 
   const openAuth = async (label: string, onComplete?: () => void): Promise<void> => {
@@ -26,12 +36,28 @@ export function GoogleAccountsSection() {
         } else {
           window.open(result.authUrl, '_blank');
         }
-        // Refresh after a short delay to pick up the new account if auth completes quickly
-        setTimeout(() => {
-          fetchAccounts();
-          setConnecting(false);
-          onComplete?.();
-        }, 3000);
+
+        setPendingAuthState(result.state);
+
+        // Poll fetchAccounts until a new account appears or timeout
+        const knownIds = new Set(accounts.map((a) => a.googleAccountId));
+        let attempts = 0;
+        const poll = async (): Promise<void> => {
+          attempts++;
+          await fetchAccounts();
+          const current = useGoogleAccountStore.getState().accounts;
+          if (
+            current.some((a) => !knownIds.has(a.googleAccountId)) ||
+            attempts >= POLL_MAX_ATTEMPTS
+          ) {
+            setPendingAuthState(null);
+            setConnecting(false);
+            onComplete?.();
+            return;
+          }
+          pollTimerRef.current = setTimeout(() => void poll(), POLL_INTERVAL_MS);
+        };
+        pollTimerRef.current = setTimeout(() => void poll(), POLL_INTERVAL_MS);
       } else {
         setConnecting(false);
         onComplete?.();
@@ -57,7 +83,15 @@ export function GoogleAccountsSection() {
     await openAuth(account.label, () => setReconnectId(null));
   };
 
-  const handleCancelConnecting = () => {
+  const handleCancelConnecting = async () => {
+    if (pollTimerRef.current !== null) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    if (pendingAuthState) {
+      await window.accomplish?.gws?.cancelAuth(pendingAuthState);
+      setPendingAuthState(null);
+    }
     setConnecting(false);
   };
 

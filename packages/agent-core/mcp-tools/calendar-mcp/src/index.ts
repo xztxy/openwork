@@ -129,6 +129,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToo
         result = await cmdList(resolved[0], flags);
       } else {
         const allResults = await Promise.allSettled(resolved.map((acc) => cmdList(acc, flags)));
+        const rejected = allResults.filter(
+          (r): r is PromiseRejectedResult => r.status === 'rejected',
+        );
+        if (rejected.length > 0) {
+          const reasons = rejected.map((r) => String(r.reason)).join('; ');
+          throw new Error(`Failed to fetch calendar for one or more accounts: ${reasons}`);
+        }
         const merged: unknown[] = [];
         for (const r of allResults) {
           if (r.status === 'fulfilled') {
@@ -142,6 +149,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToo
       }
     } else if (subcommand === 'get') {
       const eventId = rest[0];
+      if (!eventId) {
+        return {
+          content: [
+            { type: 'text', text: 'Error: get requires an event ID. Usage: "get <eventId>"' },
+          ],
+          isError: true,
+        };
+      }
       result = await cmdGet(resolved[0], eventId);
     } else if (subcommand === 'create') {
       result = await cmdCreate(resolved[0], flags);
@@ -149,6 +164,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToo
       result = await cmdUpdate(resolved[0], flags);
     } else if (subcommand === 'delete') {
       const eventId = rest[0];
+      if (!eventId) {
+        return {
+          content: [
+            { type: 'text', text: 'Error: delete requires an event ID. Usage: "delete <eventId>"' },
+          ],
+          isError: true,
+        };
+      }
       result = await cmdDelete(resolved[0], eventId);
     } else if (subcommand === 'rsvp') {
       result = await cmdRsvp(resolved[0], flags);

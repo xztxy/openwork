@@ -37,6 +37,13 @@ export function resolveAccounts(
   accountParam: string | undefined,
   subcommand: string,
 ): { resolved: AccountEntry[]; clarificationNeeded?: string; error?: string } {
+  if (accounts.length === 0) {
+    return {
+      resolved: [],
+      error: 'No Google accounts configured. Add accounts in Settings → Integrations.',
+    };
+  }
+
   if (accountParam) {
     const needle = accountParam.toLowerCase();
     const match = accounts.find(
