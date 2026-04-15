@@ -402,6 +402,16 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
    *     answer list via `question.reject`.
    */
   async sendResponse(response: PermissionResponse): Promise<void> {
+    // Defense-in-depth: today the daemon guarantees one adapter per task,
+    // so `response.taskId` should always match `this.currentTaskId`. A
+    // future refactor that shares adapters (pooling, session multiplexing)
+    // would break this assumption silently and route responses to the
+    // wrong task's pending request. Fail loudly instead.
+    if (response.taskId && this.currentTaskId && response.taskId !== this.currentTaskId) {
+      throw new Error(
+        `sendResponse taskId mismatch: adapter task=${this.currentTaskId}, response task=${response.taskId}`,
+      );
+    }
     const pending = this.pendingRequest;
     if (!pending) {
       throw new Error('No pending permission or question request to respond to');
@@ -594,6 +604,22 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       if (!this.isDisposed && !this.wasInterrupted && !signal.aborted) {
         this.emit('error', err instanceof Error ? err : new Error(String(err)));
         this.markComplete('error', err instanceof Error ? err.message : String(err));
+      }
+    } finally {
+      // Belt-and-braces teardown of the SDK subscription. The AbortSignal
+      // path already halts event iteration, but long-running daemons that
+      // run many tasks may accumulate subtle socket/fd leaks if the
+      // subscription's own handle isn't explicitly released. Best-effort:
+      // call `.close()` if the SDK exposes one (version-dependent), else
+      // no-op. Swallow errors — the subscription may already be closed by
+      // the abort path.
+      const maybeClose = (subscription as { close?: () => void | Promise<void> }).close;
+      if (typeof maybeClose === 'function') {
+        try {
+          await Promise.resolve(maybeClose.call(subscription));
+        } catch {
+          /* ignore — best-effort cleanup */
+        }
       }
     }
   }
