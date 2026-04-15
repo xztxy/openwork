@@ -49,12 +49,23 @@ class MockWhatsAppService extends EventEmitter {
 class MockTaskService extends EventEmitter {
   tasks: Array<{ id: string; sessionId?: string; status: string }> = [];
   startTaskMock = vi.fn();
+  /**
+   * Phase 2 of the SDK cutover port: `wireTaskBridge` auto-deny routes
+   * through `taskService.sendResponse` instead of the deleted
+   * `permissionService.resolvePermission/resolveQuestion`. Expose a mock so
+   * assertions can verify the structured payload.
+   */
+  sendResponseMock = vi.fn(async () => {});
 
-  async startTask(params: { prompt: string; taskId: string; sessionId?: string }) {
+  async startTask(params: { prompt: string; taskId: string; sessionId?: string; source?: string }) {
     this.startTaskMock(params);
     this.tasks.push({ id: params.taskId, status: 'running' });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return { id: params.taskId, status: 'running' } as any;
+  }
+
+  async sendResponse(taskId: string, response: unknown) {
+    await this.sendResponseMock(taskId, response);
   }
 
   listTasks() {
@@ -63,14 +74,13 @@ class MockTaskService extends EventEmitter {
   }
 }
 
-function createMockPermissionService() {
-  return {
-    resolvePermission: vi.fn(() => true),
-    resolveQuestion: vi.fn(() => true),
-    isFilePermissionRequest: vi.fn((id: string) => id.startsWith('file-perm-')),
-    isQuestionRequest: vi.fn((id: string) => id.startsWith('question-')),
-  };
-}
+// Request-ID prefixes used in tests below. Must match the constants exported
+// from `@accomplish_ai/agent-core/common/types/permission`; wireTaskBridge
+// uses those for auto-deny classification after the Phase 2 PermissionService
+// deletion. We rely on real strings rather than the mocked module's actual
+// constants so the test module graph stays simple.
+const TEST_FILE_PERMISSION_PREFIX = 'filereq_';
+const TEST_QUESTION_PREFIX = 'questionreq_';
 
 function createMockStorage() {
   let messagingConfig: Record<string, unknown> | null = {
@@ -99,27 +109,22 @@ function createMockStorage() {
 describe('wireTaskBridge (daemon version)', () => {
   let service: MockWhatsAppService;
   let taskService: MockTaskService;
-  let permissionService: ReturnType<typeof createMockPermissionService>;
   let mockStorage: ReturnType<typeof createMockStorage>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     service = new MockWhatsAppService();
     taskService = new MockTaskService();
-    permissionService = createMockPermissionService();
     mockStorage = createMockStorage();
   });
 
-  // Helper to create the bridge via dynamic import (avoids mock ordering issues)
+  // Helper to create the bridge via dynamic import (avoids mock ordering issues).
+  // Phase 2 of the SDK cutover port dropped the `permissionService` parameter
+  // — wireTaskBridge now auto-denies via `taskService.sendResponse`.
   async function createBridge() {
     const { wireTaskBridge } = await import('../../../src/whatsapp/wireTaskBridge.js');
     /* eslint-disable @typescript-eslint/no-explicit-any */
-    return wireTaskBridge(
-      service as any,
-      taskService as any,
-      permissionService as any,
-      mockStorage as any,
-    );
+    return wireTaskBridge(service as any, taskService as any, mockStorage as any);
     /* eslint-enable @typescript-eslint/no-explicit-any */
   }
 
@@ -144,17 +149,27 @@ describe('wireTaskBridge (daemon version)', () => {
         expect(taskService.startTaskMock).toHaveBeenCalled();
       });
 
-      // Simulate a file permission request from the task
-      // TaskService emits raw PermissionRequest with id at top level
+      // Simulate a file permission request from the task.
+      // TaskService emits raw PermissionRequest with id at top level.
+      // Phase 2 auto-deny routes through taskService.sendResponse — the id
+      // prefix gates whether wireTaskBridge treats it as auto-deniable.
+      const requestId = `${TEST_FILE_PERMISSION_PREFIX}123`;
       taskService.emit('permission', {
-        id: 'file-perm-123',
+        id: requestId,
         taskId: 'test-task-id',
         type: 'file',
         fileOperation: 'create',
         filePath: '/tmp/test.txt',
       });
 
-      expect(permissionService.resolvePermission).toHaveBeenCalledWith('file-perm-123', false);
+      await vi.waitFor(() => {
+        expect(taskService.sendResponseMock).toHaveBeenCalled();
+      });
+      expect(taskService.sendResponseMock).toHaveBeenCalledWith('test-task-id', {
+        requestId,
+        taskId: 'test-task-id',
+        decision: 'deny',
+      });
     });
 
     it('should auto-deny question requests using PermissionRequest.id', async () => {
@@ -175,16 +190,22 @@ describe('wireTaskBridge (daemon version)', () => {
         expect(taskService.startTaskMock).toHaveBeenCalled();
       });
 
-      // Simulate a question request
+      // Simulate a question request (Phase 2 auto-deny via sendResponse).
+      const requestId = `${TEST_QUESTION_PREFIX}456`;
       taskService.emit('permission', {
-        id: 'question-456',
+        id: requestId,
         taskId: 'test-task-id',
         type: 'question',
         question: 'Which option?',
       });
 
-      expect(permissionService.resolveQuestion).toHaveBeenCalledWith('question-456', {
-        denied: true,
+      await vi.waitFor(() => {
+        expect(taskService.sendResponseMock).toHaveBeenCalled();
+      });
+      expect(taskService.sendResponseMock).toHaveBeenCalledWith('test-task-id', {
+        requestId,
+        taskId: 'test-task-id',
+        decision: 'deny',
       });
     });
 
@@ -207,7 +228,7 @@ describe('wireTaskBridge (daemon version)', () => {
       });
 
       taskService.emit('permission', {
-        id: 'file-perm-789',
+        id: `${TEST_FILE_PERMISSION_PREFIX}789`,
         taskId: 'test-task-id',
         type: 'file',
       });

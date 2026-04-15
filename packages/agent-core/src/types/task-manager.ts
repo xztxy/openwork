@@ -6,7 +6,7 @@
 
 // Import DTOs from common types
 import type { Task, TaskConfig, TaskStatus, TaskMessage, TaskResult } from '../common/types/task';
-import type { PermissionRequest } from '../common/types/permission';
+import type { PermissionRequest, PermissionResponse } from '../common/types/permission';
 import type { TodoItem } from '../common/types/todo';
 import type { OpenCodeMessage } from '../common/types/opencode';
 import type { SandboxConfig, SandboxProvider } from '../common/types/sandbox.js';
@@ -109,6 +109,14 @@ export interface TaskAdapterOptions {
    */
   getServerUrl?: (taskId: string) => Promise<string | undefined>;
   /**
+   * Optional LLM-gateway proxy tagger (Phase 2 of the SDK cutover port).
+   * Called by the adapter on task start (with `taskId`) and teardown (with
+   * `undefined`). Wired by the daemon when `@accomplish/llm-gateway-client`
+   * is resolvable — Accomplish Free CI fusion or dev-local file-dep install.
+   * Undefined in pure OSS builds.
+   */
+  setProxyTaskId?: (taskId: string | undefined) => void;
+  /**
    * Lazy sandbox factory, called once per adapter/task instance.
    * Preferred over static sandboxProvider/sandboxConfig — ensures runtime
    * changes (e.g. via sandbox:set-config) are reflected without recreating
@@ -167,11 +175,18 @@ export interface TaskManagerAPI {
   cancelQueuedTask(taskId: string): boolean;
 
   /**
-   * Send a response to a waiting task (e.g., permission response)
-   * @param taskId - ID of the task
-   * @param response - Response to send
+   * Send a permission / question response to a waiting task.
+   *
+   * Signature changed in Phase 2 of the SDK cutover port (commercial PR #720):
+   * pre-port this was `(taskId, response: string)` — the PTY adapter wrote the
+   * raw string to stdin. The SDK adapter needs the structured shape so it can
+   * route to either `client.permission.reply` or `client.question.reply`.
+   *
+   * @param taskId   - ID of the task awaiting a reply
+   * @param response - Structured response (requestId + decision + optional
+   *                   `selectedOptions` / `customText` for question payloads)
    */
-  sendResponse(taskId: string, response: string): Promise<void>;
+  sendResponse(taskId: string, response: PermissionResponse): Promise<void>;
 
   /**
    * Get the session ID for a task

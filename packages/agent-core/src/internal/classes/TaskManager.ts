@@ -7,7 +7,7 @@ import type {
   TaskStatus,
 } from '../../common/types/task.js';
 import type { OpenCodeMessage } from '../../common/types/opencode.js';
-import type { PermissionRequest } from '../../common/types/permission.js';
+import type { PermissionRequest, PermissionResponse } from '../../common/types/permission.js';
 import type { TodoItem } from '../../common/types/todo.js';
 import type { BrowserFramePayload } from '../../common/types/browser-view.js';
 import {
@@ -413,7 +413,7 @@ export class TaskManager {
     return true;
   }
 
-  async sendResponse(taskId: string, response: string): Promise<void> {
+  async sendResponse(taskId: string, response: PermissionResponse): Promise<void> {
     const managedTask = this.activeTasks.get(taskId);
     if (!managedTask) {
       throw new Error(`Task ${taskId} not found or not active`);

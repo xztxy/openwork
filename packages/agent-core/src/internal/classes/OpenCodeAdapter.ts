@@ -55,7 +55,7 @@ import {
 
 import type { TaskConfig, Task, TaskResult } from '../../common/types/task.js';
 import type { OpenCodeMessage } from '../../common/types/opencode.js';
-import type { PermissionRequest } from '../../common/types/permission.js';
+import type { PermissionRequest, PermissionResponse } from '../../common/types/permission.js';
 import {
   FILE_PERMISSION_REQUEST_PREFIX,
   QUESTION_REQUEST_PREFIX,
@@ -361,15 +361,22 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   /**
    * Send a response to an in-flight permission or question request.
    *
-   * Current signature accepts a string for back-compat with the pre-port
-   * TaskManager surface (the plan defers the `PermissionResponse` type
-   * change to Phase 2). Allowed string values:
-   *   - 'allow' / 'accept' → SDK reply: 'once'
-   *   - 'always'           → SDK reply: 'always'
-   *   - 'deny' / 'reject'  → SDK reply: 'reject'
-   *   - anything else      → treated as question answer text
+   * Signature finalised in Phase 2 of the SDK cutover port — takes a
+   * structured `PermissionResponse` carrying:
+   *   - `requestId`: the OSS-facing request ID (`filereq_*` or `questionreq_*`)
+   *   - `decision`:  'allow' | 'deny'
+   *   - `selectedOptions` / `customText`: question-response payload (optional)
+   *
+   * Routing:
+   *   - permission.asked: maps decision to SDK reply shape. 'allow' → 'once'.
+   *     There is no 'always' signal at this layer; callers that want
+   *     sticky-permission behaviour need a follow-up feature.
+   *   - question.asked: packages `selectedOptions` + `customText` as the
+   *     SDK's `QuestionAnswer[]`. At least one non-empty answer is required;
+   *     if neither is provided and decision is 'deny', we send an empty
+   *     answer list via `question.reject`.
    */
-  async sendResponse(response: string): Promise<void> {
+  async sendResponse(response: PermissionResponse): Promise<void> {
     const pending = this.pendingRequest;
     if (!pending) {
       throw new Error('No pending permission or question request to respond to');
@@ -379,23 +386,33 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     }
 
     if (pending.kind === 'permission') {
-      const reply: 'once' | 'always' | 'reject' =
-        response === 'allow' || response === 'accept'
-          ? 'once'
-          : response === 'always'
-            ? 'always'
-            : 'reject';
+      const reply: 'once' | 'always' | 'reject' = response.decision === 'allow' ? 'once' : 'reject';
       await this.client.permission.reply(
         { requestID: pending.sdkRequestId, reply },
         { throwOnError: true },
       );
     } else {
-      // question.asked reply — answers is an array of answer arrays; for
-      // free-form responses we send a single answer.
-      await this.client.question.reply(
-        { requestID: pending.sdkRequestId, answers: [[response]] },
-        { throwOnError: true },
-      );
+      // Question reply. Build the `answers` payload from selectedOptions +
+      // customText. If both are empty and decision is 'deny', use reject.
+      const answers: string[][] = [];
+      if (response.selectedOptions && response.selectedOptions.length > 0) {
+        answers.push(response.selectedOptions);
+      }
+      if (response.customText) {
+        answers.push([response.customText]);
+      }
+      if (response.decision === 'deny' && answers.length === 0) {
+        await this.client.question.reject(
+          { requestID: pending.sdkRequestId },
+          { throwOnError: true },
+        );
+      } else {
+        // The SDK expects Array<QuestionAnswer>; QuestionAnswer = Array<string>.
+        await this.client.question.reply(
+          { requestID: pending.sdkRequestId, answers },
+          { throwOnError: true },
+        );
+      }
     }
     this.pendingRequest = null;
   }

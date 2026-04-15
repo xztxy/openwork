@@ -10,14 +10,11 @@ import {
   noopRuntime,
   type PidLockHandle,
   type AccomplishRuntime,
-  PERMISSION_API_PORT,
-  QUESTION_API_PORT,
   THOUGHT_STREAM_PORT,
   WHATSAPP_API_PORT,
 } from '@accomplish_ai/agent-core';
 import { StorageService } from './storage-service.js';
 import { TaskService } from './task-service.js';
-import { PermissionService } from './permission-service.js';
 import { ThoughtStreamService } from './thought-stream-service.js';
 import { SchedulerService } from './scheduler-service.js';
 import { HealthService, VERSION } from './health.js';
@@ -115,29 +112,9 @@ async function main(): Promise<void> {
     ? path.join(resourcesPath, 'mcp-tools')
     : process.env.MCP_TOOLS_PATH ||
       path.resolve(__dirname, '..', '..', '..', 'packages', 'agent-core', 'mcp-tools');
-  const taskService = new TaskService(storage, {
-    userDataPath,
-    mcpToolsPath,
-    isPackaged,
-    resourcesPath,
-    appPath,
-    accomplishRuntime,
-  });
-  const healthService = new HealthService();
-  const permissionService = new PermissionService(authToken);
-  const thoughtStreamService = new ThoughtStreamService(authToken);
-  const schedulerService = new SchedulerService(storage, (prompt, workspaceId) => {
-    void taskService.startTask({ prompt, workspaceId });
-  });
-  const whatsappService = new WhatsAppDaemonService(
-    storage,
-    userDataPath,
-    taskService,
-    permissionService,
-  );
-  const whatsappSendApi = new WhatsAppSendApi(whatsappService, authToken);
-
-  // 6. Create RPC server — socket path derived from dataDir for profile isolation
+  // 5a. RPC server first — TaskService needs its `hasConnectedClients` probe
+  // for the no-UI auto-deny policy introduced in Phase 2 of the SDK cutover
+  // port. Socket path derived from dataDir for profile isolation.
   const socketPath = args.socketPath || getSocketPath(dataDir);
   const rpc = new DaemonRpcServer({
     socketPath,
@@ -145,12 +122,55 @@ async function main(): Promise<void> {
     onDisconnection: (clientId) => log.info(`[Daemon] Client disconnected: ${clientId}`),
   });
 
-  // 7. Initialize permission service
-  permissionService.init(
-    () => taskService.getActiveTaskId(),
-    (request) => rpc.notify('permission.request', request),
-    () => rpc.hasConnectedClients(),
-  );
+  // 5b. LLM-gateway proxy detection. `@accomplish/llm-gateway-client` is fused
+  // into the daemon's node_modules by CI for Accomplish Free builds (see
+  // accomplish-release/.github/workflows/release.yml:281), or installed
+  // locally by developers via
+  //   pnpm -F @accomplish/daemon add @accomplish/llm-gateway-client@file:...
+  // plus an ACCOMPLISH_GATEWAY_URL env var. Pure OSS builds don't have it;
+  // the require fails cleanly and the adapter's proxy-tagging path stays a
+  // no-op.
+  let setProxyTaskId: ((taskId: string | undefined) => void) | undefined;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const gateway = require('@accomplish/llm-gateway-client') as {
+      setProxyTaskId?: (taskId: string | undefined) => void;
+    };
+    if (typeof gateway.setProxyTaskId === 'function') {
+      setProxyTaskId = gateway.setProxyTaskId;
+      log.info('[Daemon] llm-gateway-client detected; proxy task-tagging wired');
+    }
+  } catch {
+    // No gateway present — pure OSS build or developer hasn't installed it.
+  }
+
+  const taskService = new TaskService(storage, {
+    userDataPath,
+    mcpToolsPath,
+    isPackaged,
+    resourcesPath,
+    appPath,
+    accomplishRuntime,
+    rpcConnectivityProbe: { hasConnectedClients: () => rpc.hasConnectedClients() },
+    setProxyTaskId,
+  });
+  const healthService = new HealthService();
+  const thoughtStreamService = new ThoughtStreamService(authToken);
+  // Scheduler-sourced tasks: `source: 'scheduler'` drives the no-UI auto-deny
+  // policy in task-callbacks. If no RPC client is connected when a scheduled
+  // task asks for a permission, it auto-denies immediately (matches the
+  // pre-port PermissionService safeguard that Phase 2 replaced).
+  const schedulerService = new SchedulerService(storage, (prompt, workspaceId) => {
+    void taskService.startTask({ prompt, workspaceId, source: 'scheduler' });
+  });
+  const whatsappService = new WhatsAppDaemonService(storage, userDataPath, taskService);
+  const whatsappSendApi = new WhatsAppSendApi(whatsappService, authToken);
+
+  // Phase 2 of the SDK cutover port deleted PermissionService. Permission and
+  // question requests now flow adapter → task-callbacks → taskService emit
+  // → daemon-routes 'permission.request' RPC notification, and replies come
+  // back via 'permission.respond' RPC → taskService.sendResponse → SDK reply.
+  // The /permission and /question HTTP endpoints are gone with the service.
 
   // 8. Set up thought stream event forwarding
   thoughtStreamService.setEventHandlers(
@@ -162,7 +182,6 @@ async function main(): Promise<void> {
   const routeServices = {
     rpc,
     taskService,
-    permissionService,
     thoughtStreamService,
     healthService,
     storageService,
@@ -173,26 +192,18 @@ async function main(): Promise<void> {
   registerRpcMethods(routeServices);
   registerTaskEventForwarding(routeServices);
 
-  // 11. Start all servers on well-known ports so MCP tools can connect reliably.
-  // The constants (PERMISSION_API_PORT=9226, QUESTION_API_PORT=9227,
-  // THOUGHT_STREAM_PORT=9228) must match what config-generator writes
-  // into the MCP tool environment.
+  // 11. Start remaining HTTP / RPC services on well-known ports.
+  // PERMISSION_API_PORT (9226) and QUESTION_API_PORT (9227) are no longer
+  // listened on — their MCP shims (file-permission, ask-user-question) were
+  // replaced by native SDK events in Phase 2. THOUGHT_STREAM_PORT (9228)
+  // stays as today.
   await rpc.start();
-  await permissionService.startPermissionApiServer(PERMISSION_API_PORT);
-  await permissionService.startQuestionApiServer(QUESTION_API_PORT);
   await thoughtStreamService.start(THOUGHT_STREAM_PORT);
   await whatsappSendApi.start(WHATSAPP_API_PORT);
 
   // Pass auth token and actual ports to child processes via environment
-  const permPorts = permissionService.getPorts();
   const thoughtPort = thoughtStreamService.getPort();
   process.env.ACCOMPLISH_DAEMON_AUTH_TOKEN = authToken;
-  if (permPorts.permissionPort) {
-    process.env.ACCOMPLISH_PERMISSION_API_PORT = String(permPorts.permissionPort);
-  }
-  if (permPorts.questionPort) {
-    process.env.ACCOMPLISH_QUESTION_API_PORT = String(permPorts.questionPort);
-  }
   if (thoughtPort) {
     process.env.ACCOMPLISH_THOUGHT_STREAM_PORT = String(thoughtPort);
     // MCP tools (report-thought, report-checkpoint) read THOUGHT_STREAM_PORT
@@ -259,7 +270,6 @@ async function main(): Promise<void> {
     whatsappSendApi.stop();
     whatsappService.dispose();
     thoughtStreamService.close();
-    permissionService.close();
     taskService.dispose();
     await rpc.stop();
     storageService.close();

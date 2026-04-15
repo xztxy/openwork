@@ -21,7 +21,6 @@ import {
 } from './whatsapp/index.js';
 import type { ChatSummary, MessageSummary } from './whatsapp/WhatsAppService.js';
 import type { TaskService } from './task-service.js';
-import type { PermissionService } from './permission-service.js';
 import { log } from './logger.js';
 
 export interface WhatsAppDaemonConfig {
@@ -38,21 +37,14 @@ export class WhatsAppDaemonService extends EventEmitter {
   private storage: StorageAPI;
   private dataDir: string;
   private taskService: TaskService;
-  private permissionService: PermissionService;
   private service: WhatsAppService | null = null;
   private bridge: TaskBridge | null = null;
 
-  constructor(
-    storage: StorageAPI,
-    dataDir: string,
-    taskService: TaskService,
-    permissionService: PermissionService,
-  ) {
+  constructor(storage: StorageAPI, dataDir: string, taskService: TaskService) {
     super();
     this.storage = storage;
     this.dataDir = dataDir;
     this.taskService = taskService;
-    this.permissionService = permissionService;
   }
 
   /**
@@ -69,13 +61,12 @@ export class WhatsAppDaemonService extends EventEmitter {
     const service = new WhatsAppService(this.dataDir);
     this.service = service;
 
-    // Wire task bridge (direct calls to taskService, not RPC)
-    const { bridge } = wireTaskBridge(
-      service,
-      this.taskService,
-      this.permissionService,
-      this.storage,
-    );
+    // Wire task bridge (direct calls to taskService, not RPC).
+    //
+    // Phase 2 of the SDK cutover port removed the `permissionService` parameter:
+    // auto-deny now routes through `taskService.sendResponse(taskId, {decision:'deny'})`
+    // instead of resolving a promise held by the deleted PermissionService.
+    const { bridge } = wireTaskBridge(service, this.taskService, this.storage);
     this.bridge = bridge;
 
     // Initialize watermark on first connect (or first post-upgrade connect).

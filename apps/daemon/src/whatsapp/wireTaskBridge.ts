@@ -8,8 +8,8 @@
  */
 import type { WhatsAppService } from './WhatsAppService.js';
 import type { TaskService } from '../task-service.js';
-import type { PermissionService } from '../permission-service.js';
 import type { StorageAPI } from '@accomplish_ai/agent-core';
+import { FILE_PERMISSION_REQUEST_PREFIX, QUESTION_REQUEST_PREFIX } from '@accomplish_ai/agent-core';
 import { TaskBridge, MAX_MESSAGE_LENGTH } from './taskBridge.js';
 import { createTaskId } from '@accomplish_ai/agent-core';
 import { log } from '../logger.js';
@@ -55,7 +55,6 @@ function setWatermark(storage: StorageAPI, timestamp: number, messageId: string)
 export function wireTaskBridge(
   service: WhatsAppService,
   taskService: TaskService,
-  permissionService: PermissionService,
   storage: StorageAPI,
 ): { bridge: TaskBridge } {
   const bridge = new TaskBridge(
@@ -125,14 +124,25 @@ export function wireTaskBridge(
           )
           .catch(() => {});
         const requestId = data.id;
-        if (requestId) {
-          // Auto-deny both file permissions and question requests
-          if (permissionService.isFilePermissionRequest(requestId)) {
-            permissionService.resolvePermission(requestId, false);
-          } else if (permissionService.isQuestionRequest(requestId)) {
-            permissionService.resolveQuestion(requestId, { denied: true });
-          }
-        }
+        if (!requestId) return;
+        // Auto-deny both file permissions and question requests.
+        //
+        // Phase 2 of the SDK cutover port removed `PermissionService`; auto-deny
+        // now routes through `taskService.sendResponse(taskId, {decision:'deny'})`
+        // which dispatches to the SDK's `permission.reply` or `question.reject`
+        // via `OpenCodeAdapter.sendResponse`. The request-ID prefix check is
+        // preserved only as a sanity gate — the structured response is the
+        // same shape for both request types.
+        const isFile = requestId.startsWith(FILE_PERMISSION_REQUEST_PREFIX);
+        const isQuestion = requestId.startsWith(QUESTION_REQUEST_PREFIX);
+        if (!isFile && !isQuestion) return;
+        taskService.sendResponse(taskId, { requestId, taskId, decision: 'deny' }).catch((err) => {
+          log.warn(
+            `[WhatsApp] auto-deny sendResponse failed for ${requestId}: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        });
       };
 
       const onComplete = (data: { taskId: string }): void => {
@@ -204,12 +214,17 @@ export function wireTaskBridge(
           )
           .catch(() => {});
 
-        // Start task directly via taskService (no RPC — we're in the daemon)
+        // Start task directly via taskService (no RPC — we're in the daemon).
+        // `source: 'whatsapp'` drives the no-UI auto-deny policy added in
+        // Phase 2 of the SDK cutover port: it tells task-callbacks to route
+        // permission events through this WhatsApp bridge (which always
+        // auto-denies) rather than immediately denying via the no-UI path.
         await taskService.startTask({
           prompt,
           taskId,
           sessionId: existingSessionId ?? undefined,
           systemPromptAppend,
+          source: 'whatsapp',
         });
       } catch (err) {
         // Clean up handlers on failure — prevents leak when task.start rejects

@@ -10,13 +10,11 @@ import {
   permissionResponseSchema,
   resumeSessionSchema,
   validate,
-  logger,
 } from '@accomplish_ai/agent-core';
 import type { AccomplishRuntime, StorageDeps } from '@accomplish_ai/agent-core';
 import { z } from 'zod';
 import { homedir } from 'node:os';
 import type { TaskService } from './task-service.js';
-import type { PermissionService } from './permission-service.js';
 import type { ThoughtStreamService } from './thought-stream-service.js';
 import type { HealthService } from './health.js';
 import type { StorageService } from './storage-service.js';
@@ -55,7 +53,6 @@ export function safeHandler(
 export interface RouteServices {
   rpc: DaemonRpcServer;
   taskService: TaskService;
-  permissionService: PermissionService;
   thoughtStreamService: ThoughtStreamService;
   healthService: HealthService;
   storageService: StorageService;
@@ -68,15 +65,8 @@ export interface RouteServices {
  * Register all RPC methods on the server.
  */
 export function registerRpcMethods(services: RouteServices): void {
-  const {
-    rpc,
-    taskService,
-    permissionService,
-    healthService,
-    schedulerService,
-    accomplishRuntime,
-    whatsappService,
-  } = services;
+  const { rpc, taskService, healthService, schedulerService, accomplishRuntime, whatsappService } =
+    services;
   const storage = services.storageService.getStorage();
 
   rpc.registerMethod(
@@ -159,30 +149,29 @@ export function registerRpcMethods(services: RouteServices): void {
   );
   rpc.registerMethod(
     'permission.respond',
-    safeHandler((params) => {
+    // Rewritten in Phase 2 of the SDK cutover port (commercial PR #720).
+    //
+    // Pre-port: resolved an in-memory promise map held by `PermissionService`;
+    // the HTTP handler awaiting the promise returned the decision back to
+    // the `opencode` CLI over its /permission or /question callback.
+    //
+    // Post-port: `PermissionService` is deleted. The daemon forwards the
+    // structured response directly to `TaskService.sendResponse`, which
+    // routes to `TaskManager.sendResponse` → `OpenCodeAdapter.sendResponse` →
+    // `client.permission.reply` / `client.question.reply` on the SDK v2
+    // client. The `taskId` field was added to `permissionResponseSchema`
+    // specifically for this routing — without it the daemon cannot scope
+    // the reply to a specific in-flight task.
+    safeHandler(async (params) => {
       const validated = validate(permissionResponseSchema, params);
-      const { requestId, decision, selectedOptions, customText } = validated;
-
-      if (requestId && permissionService.isFilePermissionRequest(requestId)) {
-        const resolved = permissionService.resolvePermission(requestId, decision === 'allow');
-        if (resolved) {
-          return Promise.resolve();
-        }
-      }
-      if (requestId && permissionService.isQuestionRequest(requestId)) {
-        const resolved = permissionService.resolveQuestion(requestId, {
-          selectedOptions,
-          customText,
-          denied: decision === 'deny',
-        });
-        if (resolved) {
-          return Promise.resolve();
-        }
-      }
-      // requestId is always present after schema validation — fall through means
-      // neither a file-permission nor a question request matched.
-      logger.warn(`[Daemon] Permission response for unmatched requestId: ${requestId}`);
-      return Promise.reject(new Error(`No pending permission request with id: ${requestId}`));
+      const { taskId, requestId, decision, selectedOptions, customText } = validated;
+      await taskService.sendResponse(taskId, {
+        requestId,
+        taskId,
+        decision,
+        ...(selectedOptions ? { selectedOptions } : {}),
+        ...(customText ? { customText } : {}),
+      });
     }),
   );
   rpc.registerMethod(
