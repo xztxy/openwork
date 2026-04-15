@@ -283,6 +283,20 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   private awaitingIdle = false;
 
   /**
+   * Whether we've observed the server actually start generating for
+   * the current turn. `session.idle` only transitions the task to
+   * complete when this is true AND `awaitingIdle` is true. Rationale:
+   * the SDK's event subscription often delivers a "current state"
+   * `session.idle` for a session that was already idle before we
+   * subscribed, even if the event is received AFTER we set
+   * `awaitingIdle = true`. That stale idle would incorrectly complete
+   * the task before the new turn's reply streamed in. Flipping this
+   * flag only on `message.updated` with `role=assistant` guarantees
+   * the next idle we see is truly end-of-generation.
+   */
+  private sawAssistantProgress = false;
+
+  /**
    * Monotonic counter bumped in `handleSdkEvent` on every SDK event. Feeds
    * the `TaskInactivityWatchdog` fingerprint — each real SDK event advances
    * it, so a stuck task (LLM generation hung, server silent) produces a
@@ -339,6 +353,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.messageRoles.clear();
     this.countedToolCallIds.clear();
     this.awaitingIdle = false;
+    this.sawAssistantProgress = false;
     this.completionEnforcer.reset();
     this.lastWorkingDirectory = config.workingDirectory;
 
@@ -797,13 +812,21 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
         // anything else → success). The user can send a follow-up prompt
         // via the existing resumeSession path if they want more work.
         if (this.hasCompleted) return;
-        // Ignore `session.idle` until we've actually submitted the
-        // prompt for this turn. `event.subscribe` can replay a pending
-        // idle event from a previously-idle session (follow-up turns
-        // attach to sessions where the last turn already ended) —
-        // without this gate we marked the task complete BEFORE the
-        // SDK had a chance to produce the new turn's reply.
-        if (!this.awaitingIdle) return;
+        // Ignore `session.idle` until TWO conditions hold:
+        //   1. `awaitingIdle` — we've issued a `session.prompt` for this
+        //      turn.
+        //   2. `sawAssistantProgress` — the server has emitted at least
+        //      one `message.updated` with role=assistant, i.e. started
+        //      generating a reply.
+        // Condition #1 alone is not enough: the SDK's event subscription
+        // may deliver a "current state" `session.idle` for a previously-
+        // idle session even after we've set `awaitingIdle = true`. That
+        // stale idle would complete the task before the new turn's reply
+        // streamed in (user-visible: follow-up turn showed the user
+        // bubble but no agent reply). Requiring evidence of generation
+        // ensures we only treat an idle as terminal once the server has
+        // actually started responding.
+        if (!this.awaitingIdle || !this.sawAssistantProgress) return;
         this.awaitingIdle = false;
         const enforcerState = this.completionEnforcer.getState();
         if (enforcerState === CompletionFlowState.BLOCKED) {
@@ -862,6 +885,11 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       if (assistant.providerID && !this.currentProviderId) {
         this.currentProviderId = assistant.providerID;
       }
+      // Observing an assistant message.updated means the server started
+      // generating a reply for this turn — any `session.idle` we see
+      // from here on is a real end-of-generation signal, not a stale
+      // pre-prompt replay. See `sawAssistantProgress` field comment.
+      this.sawAssistantProgress = true;
     }
   }
 
