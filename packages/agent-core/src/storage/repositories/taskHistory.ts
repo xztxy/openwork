@@ -188,18 +188,19 @@ export function addTaskMessage(taskId: string, message: TaskMessage): void {
     );
 
     if (message.attachments) {
-      // Attachments are content-stable for a given message id, so
-      // dedupe on (message_id, type, data) — re-running with the same
-      // payload must not create duplicates. The existing rows stay
-      // intact; INSERT OR IGNORE is sufficient because
-      // `task_attachments` does not have a unique constraint on the
-      // logical tuple today (we rely on the caller not to mutate
-      // attachment content for a given message_id, which the SDK
-      // honours).
+      // Re-stamp attachments on every upsert. The SDK's merge semantics
+      // (see `mergeTaskMessage` / `upsertTaskMessages`) emit the FULL
+      // attachment list per message update, so the authoritative view is
+      // always the latest one. DELETE-then-INSERT models this exactly and
+      // — critically — is the only approach that dedupes correctly: the
+      // v001 `task_attachments` schema has only an autoincrement PK, no
+      // UNIQUE constraint on `(message_id, type, data)`, so an earlier
+      // `INSERT OR IGNORE` attempt was a no-op and would still accumulate
+      // duplicates on repeated writes (Codex R3 P2).
+      db.prepare('DELETE FROM task_attachments WHERE message_id = ?').run(message.id);
       const insertAttachment = db.prepare(
-        `INSERT OR IGNORE INTO task_attachments (message_id, type, data, label) VALUES (?, ?, ?, ?)`,
+        `INSERT INTO task_attachments (message_id, type, data, label) VALUES (?, ?, ?, ?)`,
       );
-
       for (const att of message.attachments) {
         insertAttachment.run(message.id, att.type, att.data, att.label || null);
       }

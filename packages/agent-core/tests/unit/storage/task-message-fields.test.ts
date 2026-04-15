@@ -174,6 +174,58 @@ describe('TaskMessage new fields round-trip (v028)', () => {
     expect(loaded!.messages[0].providerId).toBeUndefined();
   });
 
+  it('does not accumulate attachments across repeat addTaskMessage calls (Codex R3 P2)', () => {
+    if (!databaseModule || !repoModule) return;
+    databaseModule.initializeDatabase({ databasePath: dbPath });
+
+    const taskId = 'task-attachment-dedupe';
+    repoModule.saveTask({
+      id: taskId,
+      prompt: 'tool with attachment',
+      status: 'running',
+      createdAt: new Date().toISOString(),
+      messages: [],
+    });
+
+    const attachment = {
+      type: 'image' as const,
+      data: 'data:image/png;base64,iVBORw0KGgo=',
+      label: 'screenshot',
+    };
+
+    // First write — running with attachment.
+    repoModule.addTaskMessage(taskId, {
+      id: 'msg-stable',
+      type: 'tool',
+      content: '',
+      toolName: 'dev-browser-mcp',
+      toolStatus: 'running',
+      timestamp: new Date().toISOString(),
+      attachments: [attachment],
+    });
+
+    // Second write — completed with the SAME attachment. The SDK's
+    // `mergeTaskMessage` helper emits the FULL attachment list on every
+    // update, so repeat writes with the same payload are common. Before
+    // the DELETE+INSERT fix this INSERT OR IGNORE against a schema with
+    // no UNIQUE constraint silently duplicated the row.
+    repoModule.addTaskMessage(taskId, {
+      id: 'msg-stable',
+      type: 'tool',
+      content: 'finished',
+      toolName: 'dev-browser-mcp',
+      toolStatus: 'completed',
+      timestamp: new Date().toISOString(),
+      attachments: [attachment],
+    });
+
+    const loaded = repoModule.getTask(taskId);
+    expect(loaded!.messages).toHaveLength(1);
+    // Exactly ONE attachment, not two.
+    expect(loaded!.messages[0].attachments).toHaveLength(1);
+    expect(loaded!.messages[0].attachments![0].label).toBe('screenshot');
+  });
+
   it('preserves toolStatus=error and round-trips via rowToTask', () => {
     if (!databaseModule || !repoModule) return;
     databaseModule.initializeDatabase({ databasePath: dbPath });
