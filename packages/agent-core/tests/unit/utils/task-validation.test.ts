@@ -54,4 +54,34 @@ describe('validateTaskConfig', () => {
     const validated = validateTaskConfig(config);
     expect(validated.files).toHaveLength(2);
   });
+
+  it('preserves source=ui through validation', () => {
+    const config: TaskConfig = { prompt: 'UI task', source: 'ui' };
+    const validated = validateTaskConfig(config);
+    expect(validated.source).toBe('ui');
+  });
+
+  it('preserves source=whatsapp through validation', () => {
+    const config: TaskConfig = { prompt: 'WA task', source: 'whatsapp' };
+    const validated = validateTaskConfig(config);
+    expect(validated.source).toBe('whatsapp');
+  });
+
+  it('preserves source=scheduler through validation', () => {
+    const config: TaskConfig = { prompt: 'Scheduled task', source: 'scheduler' };
+    const validated = validateTaskConfig(config);
+    expect(validated.source).toBe('scheduler');
+  });
+
+  it('omits source when not provided (defaults at consumer)', () => {
+    const config: TaskConfig = { prompt: 'No source' };
+    const validated = validateTaskConfig(config);
+    expect(validated.source).toBeUndefined();
+  });
+
+  it('drops unknown source values (sanity guard beyond Zod)', () => {
+    const config = { prompt: 'Bad source', source: 'pirate' } as unknown as TaskConfig;
+    const validated = validateTaskConfig(config);
+    expect(validated.source).toBeUndefined();
+  });
 });

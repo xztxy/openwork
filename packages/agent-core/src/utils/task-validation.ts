@@ -41,6 +41,13 @@ export function validateTaskConfig(config: TaskConfig): TaskConfig {
   if (Array.isArray(config.files) && config.files.length > 0) {
     validated.files = config.files;
   }
+  // Copy task-origin through. The no-UI auto-deny policy in task-callbacks depends on
+  // this field; silently dropping it would misclassify WhatsApp/scheduler tasks as 'ui'.
+  // The Zod enum at taskConfigSchema rejects invalid values upstream; double-check here
+  // so bypassed callers (WhatsApp/scheduler) still get the sanity check.
+  if (config.source === 'ui' || config.source === 'whatsapp' || config.source === 'scheduler') {
+    validated.source = config.source;
+  }
 
   return validated;
 }

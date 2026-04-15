@@ -22,6 +22,11 @@ export const taskConfigSchema = z.object({
   attachments: z.array(fileAttachmentSchema).optional(),
   modelId: z.string().optional(),
   provider: z.string().optional(),
+  /**
+   * Originating surface. Consumed by the daemon's no-UI auto-deny policy.
+   * Defaults to 'ui' when omitted.
+   */
+  source: z.enum(['ui', 'whatsapp', 'scheduler']).optional(),
 });
 
 export const permissionResponseSchema = z.object({

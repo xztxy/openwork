@@ -5,8 +5,10 @@ import {
   toTaskMessage,
   getToolDisplayName,
   extractScreenshots,
+  mergeTaskMessage,
 } from '../../../src/opencode/message-processor.js';
 import type { OpenCodeMessage } from '../../../src/common/types/opencode.js';
+import type { TaskMessage } from '../../../src/common/types/task.js';
 
 describe('sanitizeAssistantTextForDisplay', () => {
   it('preserves plain assistant text unchanged', () => {
@@ -197,6 +199,198 @@ describe('toTaskMessage', () => {
     expect(result).not.toBeNull();
     expect(result!.content).toContain('[Screenshot captured]');
     expect(result!.attachments).toBeUndefined();
+  });
+
+  // --- New behaviours from commercial PR #720 (OpenCode SDK cutover) -----------------
+
+  it('emits a tool message in running state (previously dropped in OSS)', () => {
+    const message: OpenCodeMessage = {
+      type: 'tool_use',
+      part: {
+        id: 'tool-part-1',
+        sessionID: 'sess-A',
+        messageID: 'm-running',
+        type: 'tool_use',
+        tool: 'bash',
+        state: { status: 'running' },
+      },
+    } as OpenCodeMessage;
+
+    const result = toTaskMessage(message);
+    expect(result).not.toBeNull();
+    expect(result!.toolStatus).toBe('running');
+    expect(result!.toolName).toBe('bash');
+    expect(result!.type).toBe('tool');
+  });
+
+  it('uses stable sessionID:partID as id for tool_use (enables upsert coalescing)', () => {
+    const running: OpenCodeMessage = {
+      type: 'tool_use',
+      part: {
+        id: 'stable-1',
+        sessionID: 'sess-B',
+        messageID: 'm-run',
+        type: 'tool_use',
+        tool: 'read',
+        state: { status: 'running' },
+      },
+    } as OpenCodeMessage;
+    const completed: OpenCodeMessage = {
+      type: 'tool_use',
+      part: {
+        id: 'stable-1',
+        sessionID: 'sess-B',
+        messageID: 'm-done',
+        type: 'tool_use',
+        tool: 'read',
+        state: { status: 'completed', output: 'hello world' },
+      },
+    } as OpenCodeMessage;
+
+    const runRes = toTaskMessage(running);
+    const doneRes = toTaskMessage(completed);
+    expect(runRes!.id).toBe('sess-B:stable-1');
+    expect(doneRes!.id).toBe('sess-B:stable-1');
+    // Same id = store upsert collapses the two into one row
+    expect(runRes!.id).toBe(doneRes!.id);
+  });
+
+  it('uses stable sessionID:messageID for assistant text messages', () => {
+    const message: OpenCodeMessage = {
+      type: 'text',
+      part: {
+        id: 'text-part',
+        sessionID: 'sess-C',
+        messageID: 'msg-42',
+        type: 'text',
+        text: 'Hello',
+      },
+    };
+    const result = toTaskMessage(message);
+    expect(result!.id).toBe('sess-C:msg-42');
+  });
+
+  it('stamps modelId / providerId from ModelContext on assistant message', () => {
+    const message: OpenCodeMessage = {
+      type: 'text',
+      part: {
+        id: 'p',
+        sessionID: 's',
+        messageID: 'm',
+        type: 'text',
+        text: 'Hello',
+      },
+    };
+    const result = toTaskMessage(message, { modelId: 'claude-opus-4-6', providerId: 'anthropic' });
+    expect(result!.modelId).toBe('claude-opus-4-6');
+    expect(result!.providerId).toBe('anthropic');
+  });
+
+  it('stamps modelId / providerId on tool_use messages', () => {
+    const message: OpenCodeMessage = {
+      type: 'tool_use',
+      part: {
+        id: 'p',
+        sessionID: 's',
+        messageID: 'm',
+        type: 'tool_use',
+        tool: 'bash',
+        state: { status: 'running' },
+      },
+    } as OpenCodeMessage;
+    const result = toTaskMessage(message, { modelId: 'gpt-5.4', providerId: 'openai' });
+    expect(result!.modelId).toBe('gpt-5.4');
+    expect(result!.providerId).toBe('openai');
+  });
+
+  it('omits modelId / providerId when ModelContext not provided (back-compat)', () => {
+    const message: OpenCodeMessage = {
+      type: 'text',
+      part: {
+        id: 'p',
+        sessionID: 's',
+        messageID: 'm',
+        type: 'text',
+        text: 'Hello',
+      },
+    };
+    const result = toTaskMessage(message);
+    expect(result!.modelId).toBeUndefined();
+    expect(result!.providerId).toBeUndefined();
+  });
+
+  it('derives timestamp from the SDK message (not call time)', () => {
+    const fixed = 1_700_000_000_000;
+    const message: OpenCodeMessage = {
+      type: 'text',
+      timestamp: fixed,
+      part: {
+        id: 'p',
+        sessionID: 's',
+        messageID: 'm',
+        type: 'text',
+        text: 'Hello',
+      },
+    };
+    const result = toTaskMessage(message);
+    expect(result!.timestamp).toBe(new Date(fixed).toISOString());
+  });
+});
+
+describe('mergeTaskMessage', () => {
+  const base: TaskMessage = {
+    id: 's:1',
+    type: 'tool',
+    content: '',
+    toolName: 'bash',
+    toolStatus: 'running',
+    timestamp: '2026-04-15T00:00:00.000Z',
+    modelId: 'claude-opus-4-6',
+  };
+
+  it('takes newer toolStatus on running -> completed transition', () => {
+    const incoming: TaskMessage = {
+      ...base,
+      content: 'done',
+      toolStatus: 'completed',
+      timestamp: '2026-04-15T00:00:05.000Z',
+    };
+    const merged = mergeTaskMessage(base, incoming);
+    expect(merged.toolStatus).toBe('completed');
+    expect(merged.content).toBe('done');
+  });
+
+  it('preserves original timestamp to avoid UI re-sorting', () => {
+    const incoming: TaskMessage = {
+      ...base,
+      toolStatus: 'completed',
+      timestamp: '2026-04-15T00:00:05.000Z',
+    };
+    const merged = mergeTaskMessage(base, incoming);
+    expect(merged.timestamp).toBe(base.timestamp);
+  });
+
+  it('preserves existing modelId/providerId when incoming omits them', () => {
+    const incoming: TaskMessage = {
+      id: base.id,
+      type: base.type,
+      content: 'update',
+      toolStatus: 'completed',
+      timestamp: '2026-04-15T00:00:05.000Z',
+    };
+    const merged = mergeTaskMessage(base, incoming);
+    expect(merged.modelId).toBe('claude-opus-4-6');
+  });
+
+  it('prefers incoming modelId/providerId when provided', () => {
+    const incoming: TaskMessage = {
+      ...base,
+      modelId: 'gpt-5.4',
+      providerId: 'openai',
+    };
+    const merged = mergeTaskMessage(base, incoming);
+    expect(merged.modelId).toBe('gpt-5.4');
+    expect(merged.providerId).toBe('openai');
   });
 });
 

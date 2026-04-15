@@ -1,0 +1,174 @@
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+
+/**
+ * Round-trip persistence test for the new TaskMessage fields introduced by
+ * migration v028 (OpenCode SDK cutover port, commercial PR #720):
+ *   - tool_status
+ *   - model_id
+ *   - provider_id
+ *
+ * Covers both write paths — `saveTask()` bulk insert and `addTaskMessage()` —
+ * and the read path via `rowToTask()` → `getMessagesForTask()`.
+ *
+ * Requires the better-sqlite3 native module. Skipped on ABI mismatch.
+ */
+
+describe('TaskMessage new fields round-trip (v028)', () => {
+  let testDir: string;
+  let dbPath: string;
+  let databaseModule: typeof import('../../../src/storage/database.js') | null = null;
+  let repoModule: typeof import('../../../src/storage/repositories/taskHistory.js') | null = null;
+
+  beforeAll(async () => {
+    if (process.env.SKIP_SQLITE_TESTS) {
+      console.warn('Skipping: better-sqlite3 native module not available');
+      return;
+    }
+    try {
+      const BetterSqlite3 = await import('better-sqlite3');
+      const probe = new (
+        BetterSqlite3 as unknown as { default: new (p: string) => { close(): void } }
+      ).default(':memory:');
+      probe.close();
+      databaseModule = await import('../../../src/storage/database.js');
+      repoModule = await import('../../../src/storage/repositories/taskHistory.js');
+    } catch (_err) {
+      console.warn('Skipping: better-sqlite3 native module not available');
+    }
+  });
+
+  beforeEach(() => {
+    testDir = path.join(
+      os.tmpdir(),
+      `msg-fields-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    fs.mkdirSync(testDir, { recursive: true });
+    dbPath = path.join(testDir, 'test.db');
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    if (databaseModule) databaseModule.resetDatabaseInstance();
+    if (fs.existsSync(testDir)) fs.rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('persists toolStatus / modelId / providerId via saveTask bulk insert', () => {
+    if (!databaseModule || !repoModule) return;
+    databaseModule.initializeDatabase({ databasePath: dbPath });
+
+    const task = {
+      id: 'task-bulk-1',
+      prompt: 'do the thing',
+      status: 'completed' as const,
+      createdAt: new Date().toISOString(),
+      messages: [
+        {
+          id: 'msg-1',
+          type: 'tool' as const,
+          content: 'bash output',
+          toolName: 'bash',
+          toolStatus: 'completed' as const,
+          timestamp: new Date().toISOString(),
+          modelId: 'claude-opus-4-6',
+          providerId: 'anthropic',
+        },
+      ],
+    };
+
+    repoModule.saveTask(task);
+
+    const loaded = repoModule.getTask(task.id);
+    expect(loaded).toBeDefined();
+    expect(loaded!.messages).toHaveLength(1);
+    const m = loaded!.messages[0];
+    expect(m.toolStatus).toBe('completed');
+    expect(m.modelId).toBe('claude-opus-4-6');
+    expect(m.providerId).toBe('anthropic');
+    expect(m.toolName).toBe('bash');
+  });
+
+  it('persists toolStatus=running via addTaskMessage and survives update to completed', () => {
+    if (!databaseModule || !repoModule) return;
+    databaseModule.initializeDatabase({ databasePath: dbPath });
+
+    const taskId = 'task-add-1';
+    repoModule.saveTask({
+      id: taskId,
+      prompt: 'streaming tool',
+      status: 'running',
+      createdAt: new Date().toISOString(),
+      messages: [],
+    });
+
+    repoModule.addTaskMessage(taskId, {
+      id: 'msg-running',
+      type: 'tool',
+      content: '',
+      toolName: 'read',
+      toolStatus: 'running',
+      timestamp: new Date().toISOString(),
+      modelId: 'gpt-5.4',
+      providerId: 'openai',
+    });
+
+    const afterRunning = repoModule.getTask(taskId);
+    expect(afterRunning!.messages).toHaveLength(1);
+    expect(afterRunning!.messages[0].toolStatus).toBe('running');
+    expect(afterRunning!.messages[0].modelId).toBe('gpt-5.4');
+  });
+
+  it('accepts messages without new fields (back-compat, NULL columns)', () => {
+    if (!databaseModule || !repoModule) return;
+    databaseModule.initializeDatabase({ databasePath: dbPath });
+
+    const task = {
+      id: 'task-back-compat',
+      prompt: 'legacy-shape',
+      status: 'completed' as const,
+      createdAt: new Date().toISOString(),
+      messages: [
+        {
+          id: 'msg-legacy',
+          type: 'assistant' as const,
+          content: 'hello',
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    };
+
+    repoModule.saveTask(task);
+    const loaded = repoModule.getTask(task.id);
+    expect(loaded!.messages[0].toolStatus).toBeUndefined();
+    expect(loaded!.messages[0].modelId).toBeUndefined();
+    expect(loaded!.messages[0].providerId).toBeUndefined();
+  });
+
+  it('preserves toolStatus=error and round-trips via rowToTask', () => {
+    if (!databaseModule || !repoModule) return;
+    databaseModule.initializeDatabase({ databasePath: dbPath });
+
+    const taskId = 'task-error';
+    repoModule.saveTask({
+      id: taskId,
+      prompt: 'failing tool',
+      status: 'failed',
+      createdAt: new Date().toISOString(),
+      messages: [
+        {
+          id: 'msg-error',
+          type: 'tool',
+          content: 'EACCES',
+          toolName: 'write',
+          toolStatus: 'error',
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    });
+
+    const loaded = repoModule.getTask(taskId);
+    expect(loaded!.messages[0].toolStatus).toBe('error');
+  });
+});

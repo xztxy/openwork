@@ -35,6 +35,9 @@ export interface MessageRow {
   tool_input: string | null;
   timestamp: string;
   sort_order: number;
+  tool_status: string | null;
+  model_id: string | null;
+  provider_id: string | null;
 }
 
 export interface AttachmentRow {
@@ -96,14 +99,18 @@ export function getMessagesForTask(taskId: string): TaskMessage[] {
         toolInput = row.tool_input;
       }
     }
+    const toolStatus = row.tool_status as TaskMessage['toolStatus'] | null;
     messages.push({
       id: row.id,
       type: row.type as TaskMessage['type'],
       content: row.content,
       toolName: row.tool_name || undefined,
+      toolStatus: toolStatus || undefined,
       toolInput,
       timestamp: row.timestamp,
       attachments,
+      modelId: row.model_id || undefined,
+      providerId: row.provider_id || undefined,
     });
   }
 

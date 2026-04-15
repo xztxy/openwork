@@ -68,8 +68,9 @@ export function saveTask(task: Task, workspaceId?: string | null): void {
 
     const insertMessage = db.prepare(
       `INSERT INTO task_messages
-        (id, task_id, type, content, tool_name, tool_input, timestamp, sort_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, task_id, type, content, tool_name, tool_input, timestamp, sort_order,
+         tool_status, model_id, provider_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
 
     const insertAttachment = db.prepare(
@@ -87,6 +88,9 @@ export function saveTask(task: Task, workspaceId?: string | null): void {
         msg.toolInput ? JSON.stringify(msg.toolInput) : null,
         msg.timestamp,
         sortOrder++,
+        msg.toolStatus || null,
+        msg.modelId || null,
+        msg.providerId || null,
       );
 
       if (msg.attachments) {
@@ -144,8 +148,9 @@ export function addTaskMessage(taskId: string, message: TaskMessage): void {
 
     db.prepare(
       `INSERT INTO task_messages
-        (id, task_id, type, content, tool_name, tool_input, timestamp, sort_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, task_id, type, content, tool_name, tool_input, timestamp, sort_order,
+         tool_status, model_id, provider_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       message.id,
       taskId,
@@ -155,6 +160,9 @@ export function addTaskMessage(taskId: string, message: TaskMessage): void {
       message.toolInput ? JSON.stringify(message.toolInput) : null,
       message.timestamp,
       sortOrder,
+      message.toolStatus || null,
+      message.modelId || null,
+      message.providerId || null,
     );
 
     if (message.attachments) {

@@ -10,6 +10,15 @@ export type TaskStatus =
   | 'cancelled'
   | 'interrupted';
 
+/**
+ * Originating surface for a task. Drives the no-UI auto-deny safeguard for
+ * file-permission and question prompts:
+ *   - `'ui'` (default): prompt the UI if connected; auto-deny if no UI client is attached.
+ *   - `'whatsapp'`: route through the WhatsApp task-bridge, which auto-denies all prompts.
+ *   - `'scheduler'`: scheduled/headless task; prompt UI only when connected, otherwise auto-deny.
+ */
+export type TaskSource = 'ui' | 'whatsapp' | 'scheduler';
+
 export interface TaskConfig {
   prompt: string;
   taskId?: string;
@@ -27,6 +36,11 @@ export interface TaskConfig {
    * the host filesystem at submission time and are not persisted with the task.
    */
   files?: FileAttachmentInfo[];
+  /**
+   * Originating surface. Callers (UI RPC, WhatsApp bridge, scheduler) set this so the
+   * daemon can apply the right permission-prompt policy. Defaults to `'ui'` when omitted.
+   */
+  source?: TaskSource;
 }
 
 /** Metadata for a user-attached file in a task. */
@@ -70,9 +84,24 @@ export interface TaskMessage {
   type: 'assistant' | 'user' | 'tool' | 'system';
   content: string;
   toolName?: string;
+  /**
+   * Tool-execution state for `type: 'tool'` messages. Populated by the SDK adapter from
+   * `message.part.updated` events so the UI can render live state transitions:
+   *   - `'running'`: tool invocation in progress (spinner)
+   *   - `'completed'`: tool finished successfully (checkmark)
+   *   - `'error'`: tool failed (red)
+   *
+   * Consumers should merge tool messages by stable `id` and preserve the latest `toolStatus`
+   * rather than appending a new row per state transition.
+   */
+  toolStatus?: 'running' | 'completed' | 'error';
   toolInput?: unknown;
   timestamp: string;
   attachments?: TaskAttachment[];
+  /** Model ID that produced this message (populated by the SDK adapter). */
+  modelId?: string;
+  /** Provider ID that produced this message (populated by the SDK adapter). */
+  providerId?: string;
 }
 
 export interface TaskPauseAction {

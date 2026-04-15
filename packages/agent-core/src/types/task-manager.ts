@@ -97,6 +97,18 @@ export interface TaskAdapterOptions {
   /** Function to get display name for a model ID */
   getModelDisplayName?: (modelId: string) => string;
   /**
+   * Resolve the OpenCode server URL for a task runtime.
+   *
+   * Populated by the daemon-side server-manager (Phase 2 of the SDK cutover port).
+   * Consumed by the SDK-based adapter (Phase 1b) when connecting its `createOpencodeClient`.
+   * Optional during Phase 1a — the legacy PTY adapter ignores it; the SDK adapter requires it.
+   *
+   * @param taskId - ID of the task whose runtime server URL is needed
+   * @returns Base URL of the opencode-serve instance hosting this task, or `undefined`
+   *          if no runtime exists for that task.
+   */
+  getServerUrl?: (taskId: string) => Promise<string | undefined>;
+  /**
    * Lazy sandbox factory, called once per adapter/task instance.
    * Preferred over static sandboxProvider/sandboxConfig — ensures runtime
    * changes (e.g. via sandbox:set-config) are reflected without recreating
