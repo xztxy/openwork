@@ -36,8 +36,19 @@ import { migration as v026 } from './v026-language.js';
 import { migration as v027 } from './v027-reconcile-commercial-schema.js';
 import { migration as v028 } from './v028-google-accounts.js';
 // v029 — added by the OpenCode SDK cutover port. Originally numbered v028
-// on the port branch, renumbered to v029 at merge time because the
+// on the port branch; renumbered to v029 at merge time because the
 // google-accounts migration (#921) claimed v028 first on `main`.
+//
+// UPGRADE NOTE — for developers who ran the port branch BEFORE the merge:
+// your `schema_meta.version` already advanced to 28 against the old v028
+// (sdk-message-fields). After this merge, the runner correctly only runs
+// migrations with `version > storedVersion`, so it will skip v028
+// (google-accounts) entirely and jump to v029. That leaves the
+// `google_accounts` table uncreated and the GWS feature crashes the first
+// time `AccountManager.listAccounts()` runs. Fix: delete the dev SQLite
+// (`rm "$ACCOMPLISH_USERDATA/accomplish-dev.db"`) so the next launch starts
+// from migration 0 and applies both v028 and v029 in order. Fresh installs
+// and `main`-line upgrades are unaffected.
 import { migration as v029 } from './v029-opencode-sdk-message-fields.js';
 
 const migrations: Migration[] = [

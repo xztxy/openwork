@@ -89,6 +89,25 @@ export async function onBeforeStart(
 
   const skills = getEnabledSkills();
 
+  // KNOWN GAP — Google Workspace (GWS) feature merged from main (#921) is
+  // not wired into the daemon's task-execution path. `generator-mcp.ts`
+  // only registers `gmail-mcp`, `calendar-mcp`, `gws-mcp`, and
+  // `request-google-file-picker` when `gwsAccountsManifestPath` is set on
+  // the config-generator options below. The only producer of that manifest
+  // is `apps/desktop/src/main/opencode/config-generator.ts`'s
+  // `prepareGwsManifest`, which is no longer on the task-execution path
+  // under SDK architecture (the daemon owns runtime config generation).
+  // Result: users can connect Google accounts in Settings, but real daemon
+  // tasks won't get the GWS MCP tools.
+  //
+  // Wiring it requires the daemon to (a) read `google_accounts` from the
+  // shared SQLite, (b) materialise per-account token files, and (c) pass
+  // `gwsAccountsManifestPath`/`gwsAccountsSummary` into `generateConfig`.
+  // Step (b) is non-trivial because tokens live in Electron's SecureStorage
+  // (AES-256-GCM) which is not directly daemon-accessible — we'd need
+  // either a daemon→desktop "prepare manifest" RPC or a token-storage
+  // layer the daemon can decrypt. Tracked as a follow-up; not in scope
+  // for this merge.
   const result = generateConfig({
     platform: process.platform,
     mcpToolsPath: opts.mcpToolsPath,
