@@ -4,9 +4,13 @@ import { composeRfc2822, base64url } from './gmail-client.js';
 type Gmail = gmail_v1.Gmail;
 
 export async function execSend(gmail: Gmail, email: string, flags: Record<string, string>) {
+  const to = flags['to'];
+  if (!to || to.trim() === '') {
+    throw new Error('Missing required flag --to');
+  }
   const raw = base64url(
     composeRfc2822({
-      to: flags['to'] ?? '',
+      to,
       subject: flags['subject'] ?? '',
       body: flags['body'] ?? '',
       cc: flags['cc'],

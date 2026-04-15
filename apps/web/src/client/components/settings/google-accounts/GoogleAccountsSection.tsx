@@ -26,7 +26,7 @@ export function GoogleAccountsSection() {
     };
   }, [fetchAccounts]);
 
-  const openAuth = async (label: string, onComplete?: () => void): Promise<void> => {
+  const openAuth = async (label: string, onComplete?: () => void, accountId?: string): Promise<void> => {
     setConnecting(true);
     try {
       const result = await window.accomplish?.gws?.startAuth(label);
@@ -39,17 +39,32 @@ export function GoogleAccountsSection() {
 
         setPendingAuthState(result.state);
 
-        // Poll fetchAccounts until a new account appears or timeout
+        // Poll fetchAccounts until a new account appears or reconnect completes
         const knownIds = new Set(accounts.map((a) => a.googleAccountId));
+        const targetAccountId = accountId || reconnectId;
         let attempts = 0;
         const poll = async (): Promise<void> => {
           attempts++;
           await fetchAccounts();
           const current = useGoogleAccountStore.getState().accounts;
-          if (
-            current.some((a) => !knownIds.has(a.googleAccountId)) ||
-            attempts >= POLL_MAX_ATTEMPTS
-          ) {
+
+          // Check for new account (add flow)
+          const hasNewAccount = current.some((a) => !knownIds.has(a.googleAccountId));
+
+          // Check for reconnect completion (in-place update)
+          let reconnectComplete = false;
+          if (targetAccountId) {
+            const targetAccount = current.find((a) => a.googleAccountId === targetAccountId);
+            if (targetAccount?.status === 'connected') {
+              reconnectComplete = true;
+            }
+          }
+
+          if (hasNewAccount || reconnectComplete || attempts >= POLL_MAX_ATTEMPTS) {
+            if (pollTimerRef.current !== null) {
+              clearTimeout(pollTimerRef.current);
+              pollTimerRef.current = null;
+            }
             setPendingAuthState(null);
             setConnecting(false);
             onComplete?.();
@@ -80,7 +95,7 @@ export function GoogleAccountsSection() {
     }
     setReconnectId(id);
     // Clear reconnectId only after connecting is fully finished (inside onComplete)
-    await openAuth(account.label, () => setReconnectId(null));
+    await openAuth(account.label, () => setReconnectId(null), id);
   };
 
   const handleCancelConnecting = async () => {
@@ -90,8 +105,9 @@ export function GoogleAccountsSection() {
     }
     if (pendingAuthState) {
       await window.accomplish?.gws?.cancelAuth(pendingAuthState);
-      setPendingAuthState(null);
     }
+    setReconnectId(null);
+    setPendingAuthState(null);
     setConnecting(false);
   };
 

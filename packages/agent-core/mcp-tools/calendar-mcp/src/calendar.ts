@@ -116,8 +116,11 @@ export async function cmdCreate(account: AccountEntry, flags: Record<string, str
 }
 
 export async function cmdUpdate(account: AccountEntry, flags: Record<string, string>) {
-  const cal = createCalendarClient(account.tokenFilePath);
   const { eventId, title, start, end, location, description } = flags;
+  if (!eventId) {
+    throw new Error('eventId is required');
+  }
+  const cal = createCalendarClient(account.tokenFilePath);
   const patch: Record<string, unknown> = {};
   if (title) {
     patch['summary'] = title;
@@ -145,8 +148,18 @@ export async function cmdDelete(account: AccountEntry, eventId: string) {
 }
 
 export async function cmdRsvp(account: AccountEntry, flags: Record<string, string>) {
-  const cal = createCalendarClient(account.tokenFilePath);
   const { eventId, status } = flags;
+  if (!eventId) {
+    throw new Error('Missing required flag --eventId');
+  }
+  if (!status) {
+    throw new Error('Missing required flag --status');
+  }
+  const validStatuses = ['accepted', 'declined', 'tentative', 'needsAction'];
+  if (!validStatuses.includes(status)) {
+    throw new Error(`Invalid --status: ${status}`);
+  }
+  const cal = createCalendarClient(account.tokenFilePath);
   const getRes = await cal.events.get({ calendarId: 'primary', eventId });
   const attendees = (getRes.data.attendees ?? []).map((a) =>
     a.self ? { ...a, responseStatus: status } : a,

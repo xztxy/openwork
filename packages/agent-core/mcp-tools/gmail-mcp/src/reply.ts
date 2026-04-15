@@ -21,7 +21,7 @@ export async function execReply(gmail: Gmail, email: string, flags: Record<strin
   const raw = base64url(
     composeRfc2822({
       to: getHeader(hdrs, 'From'),
-      subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
+      subject: /^re:/i.test(subject.trim()) ? subject : `Re: ${subject}`,
       body: flags['body'] ?? '',
       cc: flags['cc'],
       inReplyTo: origMsgId,

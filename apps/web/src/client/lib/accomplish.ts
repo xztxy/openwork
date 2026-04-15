@@ -663,14 +663,6 @@ interface AccomplishAPI {
   // Google Workspace multi-account
   gws?: GwsAPI;
 
-  // Google Workspace — flat convenience methods
-  gwsListAccounts(): Promise<GoogleAccount[]>;
-  gwsStartAuth(label: string): Promise<{ state: string; authUrl: string }>;
-  gwsCompleteAuth(state: string, code: string): Promise<GoogleAccount>;
-  gwsRemoveAccount(id: string): Promise<void>;
-  gwsUpdateLabel(id: string, label: string): Promise<void>;
-  gwsOnStatusChanged(cb: (id: string, status: GoogleAccountStatus) => void): () => void;
-
   // Analytics — renderer-side tracking bridge
   analytics: {
     track(eventName: string, params?: Record<string, string | number | boolean>): Promise<void>;
