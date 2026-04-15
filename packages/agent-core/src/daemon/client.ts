@@ -53,12 +53,22 @@ export class DaemonClient {
 
   /**
    * Send a typed RPC request to the daemon and await the result.
+   *
+   * `options.timeoutMs` lets a single call override the client-wide default
+   * (typically 30s). Required for long-blocking RPCs like
+   * `auth.openai.awaitCompletion`, which the daemon may legitimately hold
+   * open for up to two minutes while the user completes the OAuth flow in
+   * a browser. Without this override, OAuth always failed at the 30s mark
+   * with `RPC timeout: auth.openai.awaitCompletion (30000ms)` even though
+   * the daemon-side flow had succeeded.
    */
   async call<M extends DaemonMethod>(
     method: M,
     params?: DaemonMethodMap[M]['params'],
+    options?: { timeoutMs?: number },
   ): Promise<DaemonMethodMap[M]['result']> {
     const id = this.nextId++;
+    const timeoutMs = options?.timeoutMs ?? this.timeout;
 
     const request: JsonRpcRequest<DaemonMethodMap[M]['params']> = {
       jsonrpc: '2.0',
@@ -70,8 +80,8 @@ export class DaemonClient {
     return new Promise<DaemonMethodMap[M]['result']>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`RPC timeout: ${method} (${this.timeout}ms)`));
-      }, this.timeout);
+        reject(new Error(`RPC timeout: ${method} (${timeoutMs}ms)`));
+      }, timeoutMs);
 
       this.pending.set(id, {
         resolve: resolve as (result: unknown) => void,
