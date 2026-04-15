@@ -58,11 +58,12 @@ function formatEvent(
 }
 
 function handleApiError(error: unknown, email: string): string {
-  const err = error as { code?: number; message?: string };
-  if (err.code === 401 || err.code === 403) {
+  const err = error as { code?: number; status?: number; message?: string };
+  const status = err.status ?? err.code;
+  if (status === 401 || status === 403) {
     return `Access denied for account ${email}. Reconnect in Settings → Integrations.`;
   }
-  if (err.code === 404) {
+  if (status === 404) {
     return 'Event not found. It may have been deleted or is from a different account.';
   }
   return err.message ?? String(error);
@@ -171,6 +172,12 @@ export async function cmdFreeTime(
   const rangeEnd = new Date(flags['end']);
 
   const allEvents = await Promise.allSettled(accounts.map((acc) => cmdList(acc, flags)));
+
+  const rejected = allEvents.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+  if (rejected.length > 0) {
+    const reasons = rejected.map((r) => String(r.reason)).join('; ');
+    throw new Error(`Failed to fetch events for one or more accounts: ${reasons}`);
+  }
 
   const busy: Array<{ start: Date; end: Date }> = [];
   for (const result of allEvents) {

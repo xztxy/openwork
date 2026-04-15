@@ -112,9 +112,18 @@ Use empty array [] if no skills apply to your task.
     systemPrompt += skillsSection;
   }
 
-  if (gwsAccountsSummary && gwsAccountsSummary.length > 0) {
+  if (gwsAccountsManifestPath && gwsAccountsSummary && gwsAccountsSummary.length > 0) {
+    const sanitizeField = (v: string) =>
+      v
+        .replace(/\|/g, '\\|')
+        .replace(/[\r\n]/g, ' ')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
     const accountRows = gwsAccountsSummary
-      .map((a) => `| ${a.label} | ${a.email} | ${a.status} |`)
+      .map(
+        (a) =>
+          `| ${sanitizeField(a.label)} | ${sanitizeField(a.email)} | ${sanitizeField(a.status)} |`,
+      )
       .join('\n');
     const gwsSection = `
 

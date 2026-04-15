@@ -27,10 +27,30 @@ export function registerGoogleAccountHandlers(
     ): Promise<{ state: string; authUrl: string }> => {
       const { state, authUrl, waitForCallback } = await googleAuth(label);
 
-      // Kick off the background wait; the renderer completes via gws:accounts:complete-auth
-      waitForCallback().catch(() => {
-        /* resolved separately */
-      });
+      // Wait for the OAuth callback in the background and register the account when resolved
+      waitForCallback()
+        .then((result) => {
+          const now = new Date().toISOString();
+          try {
+            accountManager.addAccount(
+              {
+                googleAccountId: result.googleAccountId,
+                email: result.email,
+                displayName: result.displayName,
+                pictureUrl: result.pictureUrl,
+                label,
+                connectedAt: now,
+              },
+              result.token,
+            );
+            tokenManager.scheduleRefresh(result.googleAccountId, result.token.expiresAt);
+          } catch {
+            // Duplicate account or storage error — silently ignore
+          }
+        })
+        .catch(() => {
+          /* OAuth timed out or user cancelled */
+        });
 
       return { state, authUrl };
     },
@@ -39,38 +59,12 @@ export function registerGoogleAccountHandlers(
   handle(
     'gws:accounts:complete-auth',
     async (_event: IpcMainInvokeEvent, _state: string, _code: string): Promise<GoogleAccount> => {
-      // The local HTTP server in google-auth resolves the callback automatically.
-      // This channel triggers a full auth + account registration flow from a
-      // deep-link or renderer-provided code path.
-      const label = 'My Account';
-      const { waitForCallback } = await googleAuth(label);
-      const result = await waitForCallback();
-
-      const now = new Date().toISOString();
-      accountManager.addAccount(
-        {
-          googleAccountId: result.googleAccountId,
-          email: result.email,
-          displayName: result.displayName,
-          pictureUrl: result.pictureUrl,
-          label,
-          connectedAt: now,
-        },
-        result.token,
+      // Account registration is handled automatically by the background waitForCallback()
+      // started in gws:accounts:start-auth when the local HTTP server receives the callback.
+      // This channel is kept for API compatibility but the normal flow does not call it.
+      throw new Error(
+        'This flow is handled automatically by the start-auth callback. No action needed.',
       );
-
-      tokenManager.scheduleRefresh(result.googleAccountId, result.token.expiresAt);
-
-      return {
-        googleAccountId: result.googleAccountId,
-        email: result.email,
-        displayName: result.displayName,
-        pictureUrl: result.pictureUrl,
-        label,
-        status: 'connected',
-        connectedAt: now,
-        lastRefreshedAt: null,
-      };
     },
   );
 

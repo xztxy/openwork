@@ -30,7 +30,7 @@ This skill guides you in using the `google_calendar` MCP tool to manage calendar
 
 ```
 google_calendar(command: "list")                                     // all accounts
-google_calendar(command: "free-time --duration 60", )               // all accounts
+google_calendar(command: "free-time --duration 60")                 // all accounts
 google_calendar(command: "create --title 'Team Sync'", account: "Work")
 ```
 

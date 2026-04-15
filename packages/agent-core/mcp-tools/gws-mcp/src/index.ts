@@ -119,7 +119,10 @@ function tokenizeCommand(command: string): string[] {
 
   for (let i = 0; i < command.length; i++) {
     const ch = command[i];
-    if (ch === "'" && !inDouble) {
+    if (ch === '\\' && !inSingle && i + 1 < command.length) {
+      current += command[i + 1];
+      i++;
+    } else if (ch === "'" && !inDouble) {
       inSingle = !inSingle;
     } else if (ch === '"' && !inSingle) {
       inDouble = !inDouble;
@@ -276,21 +279,9 @@ for (const tool of SERVICE_TOOLS) {
 
       const fullCommand = `${tool.servicePrefix} ${command}`;
       try {
-        const { stdout, stderr } = await runGws(fullCommand, token);
-        const parts: string[] = [];
-        if (stdout) {
-          parts.push(stdout);
-        }
-        if (stderr) {
-          parts.push(`stderr:\n${stderr}`);
-        }
-        const text = parts.join('\n') || '(no output)';
-        if (stderr) {
-          return {
-            content: [{ type: 'text', text: `Error running command:\n${text}` }],
-            isError: true,
-          };
-        }
+        const { stdout } = await runGws(fullCommand, token);
+        // runGws only resolves on successful exit (exit code 0); treat output as success
+        const text = stdout || '(no output)';
         return { content: [{ type: 'text', text }] };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

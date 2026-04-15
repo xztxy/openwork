@@ -33,7 +33,7 @@ export const useGoogleAccountStore = create<GoogleAccountStore>((set) => ({
       set((state) => (state._requestToken === token ? { accounts, loading: false } : {}));
     } catch (err) {
       logger.error('Failed to fetch Google accounts:', err);
-      set({ loading: false, error: String(err) });
+      set((state) => (state._requestToken === token ? { loading: false, error: String(err) } : {}));
     }
   },
 

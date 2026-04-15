@@ -25,14 +25,16 @@ async function execList(
   const listRes = await gmail.users.messages.list({ userId: 'me', q, maxResults });
   const messages = listRes.data.messages ?? [];
   const results = await Promise.allSettled(
-    messages.map((m) =>
-      gmail.users.messages.get({
-        userId: 'me',
-        id: m.id!,
-        format: 'metadata',
-        metadataHeaders: ['Subject', 'From', 'Date'],
-      }),
-    ),
+    messages
+      .filter((m) => m.id != null)
+      .map((m) =>
+        gmail.users.messages.get({
+          userId: 'me',
+          id: m.id as string,
+          format: 'metadata',
+          metadataHeaders: ['Subject', 'From', 'Date'],
+        }),
+      ),
   );
   return results.flatMap((r) => {
     if (r.status === 'rejected') {
@@ -126,11 +128,17 @@ async function execReply(gmail: Gmail, email: string, flags: Record<string, stri
       references: refs,
     }),
   );
-  const res = await gmail.users.messages.send({
-    userId: 'me',
-    requestBody: { raw, threadId: orig.data.threadId! },
-  });
-  return { account: email, messageId: res.data.id, threadId: res.data.threadId, status: 'sent' };
+  const requestBody: { raw: string; threadId?: string } = { raw };
+  if (orig.data.threadId) {
+    requestBody.threadId = orig.data.threadId;
+  }
+  const res = await gmail.users.messages.send({ userId: 'me', requestBody });
+  return {
+    account: email,
+    messageId: res.data.id,
+    threadId: res.data.threadId ?? orig.data.threadId ?? null,
+    status: 'sent',
+  };
 }
 
 async function execDraft(gmail: Gmail, email: string, flags: Record<string, string>) {

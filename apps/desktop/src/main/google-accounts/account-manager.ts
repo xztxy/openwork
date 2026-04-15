@@ -38,6 +38,9 @@ export class AccountManager {
     if (this.isDuplicate(account.googleAccountId)) {
       throw new Error('Account already connected');
     }
+    if (this.isDuplicateLabel(account.label)) {
+      throw new Error('Label already in use');
+    }
 
     this.db
       .prepare(
@@ -54,7 +57,15 @@ export class AccountManager {
         account.connectedAt,
       );
 
-    this.storage.set(gwsTokenKey(account.googleAccountId), JSON.stringify(token));
+    // Compensate: delete the DB row if storage.set fails to keep them in sync
+    try {
+      this.storage.set(gwsTokenKey(account.googleAccountId), JSON.stringify(token));
+    } catch (err) {
+      this.db
+        .prepare('DELETE FROM google_accounts WHERE google_account_id = ?')
+        .run(account.googleAccountId);
+      throw err;
+    }
 
     getLogCollector().log('INFO', 'main', 'Google account connected', {
       googleAccountId: account.googleAccountId,
@@ -62,9 +73,9 @@ export class AccountManager {
   }
 
   removeAccount(googleAccountId: string): void {
-    this.db.prepare('DELETE FROM google_accounts WHERE google_account_id = ?').run(googleAccountId);
-
+    // Clear token first; only remove the DB row if storage succeeds
     this.storage.set(gwsTokenKey(googleAccountId), '');
+    this.db.prepare('DELETE FROM google_accounts WHERE google_account_id = ?').run(googleAccountId);
 
     getLogCollector().log('INFO', 'main', 'Google account disconnected', { googleAccountId });
   }
@@ -105,6 +116,9 @@ export class AccountManager {
   }
 
   updateAccountLabel(googleAccountId: string, label: string): void {
+    if (this.isDuplicateLabel(label, googleAccountId)) {
+      throw new Error('Label already in use');
+    }
     this.db
       .prepare('UPDATE google_accounts SET label = ? WHERE google_account_id = ?')
       .run(label, googleAccountId);
@@ -114,6 +128,21 @@ export class AccountManager {
     const row = this.db
       .prepare('SELECT 1 FROM google_accounts WHERE google_account_id = ?')
       .get(googleAccountId);
+    return row !== undefined;
+  }
+
+  private isDuplicateLabel(label: string, excludeGoogleAccountId?: string): boolean {
+    if (excludeGoogleAccountId) {
+      const row = this.db
+        .prepare(
+          'SELECT 1 FROM google_accounts WHERE LOWER(label) = LOWER(?) AND google_account_id != ?',
+        )
+        .get(label, excludeGoogleAccountId);
+      return row !== undefined;
+    }
+    const row = this.db
+      .prepare('SELECT 1 FROM google_accounts WHERE LOWER(label) = LOWER(?)')
+      .get(label);
     return row !== undefined;
   }
 

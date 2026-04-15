@@ -125,6 +125,10 @@ function formatFileList(files: DriveFile[]): string {
   return files.map((f) => `- **${f.name}** (ID: \`${f.id}\`, type: ${f.mimeType})`).join('\n');
 }
 
+function sanitizeMarkerValue(v: string): string {
+  return v.replace(/[\r\n]/g, ' ');
+}
+
 // ── MCP server ────────────────────────────────────────────────────────────────
 
 const server = new McpServer(
@@ -205,12 +209,12 @@ server.registerTool(
                 type: 'text' as const,
                 text: [
                   GOOGLE_FILE_PICKER_MARKER,
-                  `Message: ${message ?? `Found ${files.length} files matching "${query}". Please select which file(s) to use.`}`,
-                  `Label: ${label?.trim() || 'Select Files'}`,
-                  `PendingLabel: ${pendingLabel?.trim() || 'Selecting files...'}`,
-                  `Query: ${query.trim()}`,
-                  `Account: ${accountEntry.label}`,
-                  `AccountEmail: ${accountEntry.email}`,
+                  `Message: ${sanitizeMarkerValue(message ?? `Found ${files.length} files matching "${query}". Please select which file(s) to use.`)}`,
+                  `Label: ${sanitizeMarkerValue(label?.trim() || 'Select Files')}`,
+                  `PendingLabel: ${sanitizeMarkerValue(pendingLabel?.trim() || 'Selecting files...')}`,
+                  `Query: ${sanitizeMarkerValue(query.trim())}`,
+                  `Account: ${sanitizeMarkerValue(accountEntry.label)}`,
+                  `AccountEmail: ${sanitizeMarkerValue(accountEntry.email)}`,
                 ].join('\n'),
               },
             ],
@@ -224,14 +228,14 @@ server.registerTool(
     // No query, no matches, or error — show the picker
     const lines = [
       GOOGLE_FILE_PICKER_MARKER,
-      `Message: ${message ?? 'I need access to files in your Google Drive. Click Select Files to choose which files to share.'}`,
-      `Label: ${label?.trim() || 'Select Files'}`,
-      `PendingLabel: ${pendingLabel?.trim() || 'Selecting files...'}`,
-      `Account: ${accountEntry.label}`,
-      `AccountEmail: ${accountEntry.email}`,
+      `Message: ${sanitizeMarkerValue(message ?? 'I need access to files in your Google Drive. Click Select Files to choose which files to share.')}`,
+      `Label: ${sanitizeMarkerValue(label?.trim() || 'Select Files')}`,
+      `PendingLabel: ${sanitizeMarkerValue(pendingLabel?.trim() || 'Selecting files...')}`,
+      `Account: ${sanitizeMarkerValue(accountEntry.label)}`,
+      `AccountEmail: ${sanitizeMarkerValue(accountEntry.email)}`,
     ];
     if (query?.trim()) {
-      lines.push(`Query: ${query.trim()}`);
+      lines.push(`Query: ${sanitizeMarkerValue(query.trim())}`);
     }
 
     return {

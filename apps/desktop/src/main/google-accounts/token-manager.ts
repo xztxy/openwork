@@ -147,7 +147,11 @@ export class TokenManager {
       .prepare("UPDATE google_accounts SET status = 'expired' WHERE google_account_id = ?")
       .run(accountId);
 
-    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+    if (
+      this.mainWindow &&
+      !this.mainWindow.isDestroyed() &&
+      !this.mainWindow.webContents.isDestroyed()
+    ) {
       this.mainWindow.webContents.send('gws:account:status-changed', accountId, 'expired');
     }
 

@@ -57,10 +57,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToo
     };
   }
 
-  const { command, account: accountParam } = request.params.arguments as {
-    command: string;
-    account?: string;
-  };
+  const args = request.params.arguments;
+  if (!args || typeof args !== 'object') {
+    return { content: [{ type: 'text', text: 'Error: Missing tool arguments' }], isError: true };
+  }
+  const rawArgs = args as { command?: unknown; account?: unknown };
+  if (typeof rawArgs.command !== 'string' || !rawArgs.command.trim()) {
+    return {
+      content: [{ type: 'text', text: 'Error: command must be a non-empty string' }],
+      isError: true,
+    };
+  }
+  if (rawArgs.account !== undefined && typeof rawArgs.account !== 'string') {
+    return {
+      content: [{ type: 'text', text: 'Error: account must be a string' }],
+      isError: true,
+    };
+  }
+  const command = rawArgs.command;
+  const accountParam = rawArgs.account as string | undefined;
 
   const accounts = loadManifest();
   if (accounts.length === 0) {

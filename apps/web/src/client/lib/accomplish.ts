@@ -855,21 +855,47 @@ export function getAccomplish() {
     ) => window.accomplish!.onHuggingFaceDownloadProgress(callback),
 
     // Google Workspace flat helpers — delegate to the gws namespace
-    gwsListAccounts: (): Promise<GoogleAccount[]> => window.accomplish!.gws!.listAccounts(),
+    gwsListAccounts: (): Promise<GoogleAccount[]> => {
+      if (!window.accomplish?.gws) {
+        return Promise.reject(new Error('GWS API not available'));
+      }
+      return window.accomplish.gws.listAccounts();
+    },
 
-    gwsStartAuth: (label: string): Promise<{ state: string; authUrl: string }> =>
-      window.accomplish!.gws!.startAuth(label),
+    gwsStartAuth: (label: string): Promise<{ state: string; authUrl: string }> => {
+      if (!window.accomplish?.gws) {
+        return Promise.reject(new Error('GWS API not available'));
+      }
+      return window.accomplish.gws.startAuth(label);
+    },
 
-    gwsCompleteAuth: (state: string, code: string): Promise<GoogleAccount> =>
-      window.accomplish!.gws!.completeAuth(state, code),
+    gwsCompleteAuth: (state: string, code: string): Promise<GoogleAccount> => {
+      if (!window.accomplish?.gws) {
+        return Promise.reject(new Error('GWS API not available'));
+      }
+      return window.accomplish.gws.completeAuth(state, code);
+    },
 
-    gwsRemoveAccount: (id: string): Promise<void> => window.accomplish!.gws!.removeAccount(id),
+    gwsRemoveAccount: (id: string): Promise<void> => {
+      if (!window.accomplish?.gws) {
+        return Promise.reject(new Error('GWS API not available'));
+      }
+      return window.accomplish.gws.removeAccount(id);
+    },
 
-    gwsUpdateLabel: (id: string, label: string): Promise<void> =>
-      window.accomplish!.gws!.updateLabel(id, label),
+    gwsUpdateLabel: (id: string, label: string): Promise<void> => {
+      if (!window.accomplish?.gws) {
+        return Promise.reject(new Error('GWS API not available'));
+      }
+      return window.accomplish.gws.updateLabel(id, label);
+    },
 
-    gwsOnStatusChanged: (cb: (id: string, status: GoogleAccountStatus) => void): (() => void) =>
-      window.accomplish!.gws!.onStatusChanged(cb),
+    gwsOnStatusChanged: (cb: (id: string, status: GoogleAccountStatus) => void): (() => void) => {
+      if (!window.accomplish?.gws) {
+        throw new Error('GWS API not available');
+      }
+      return window.accomplish.gws.onStatusChanged(cb);
+    },
   };
 }
 

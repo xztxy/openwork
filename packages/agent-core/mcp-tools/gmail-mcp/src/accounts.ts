@@ -27,7 +27,11 @@ export function loadManifest(): AccountEntry[] {
 }
 
 export function loadToken(tokenFilePath: string): TokenData {
-  return JSON.parse(fs.readFileSync(tokenFilePath, 'utf-8')) as TokenData;
+  try {
+    return JSON.parse(fs.readFileSync(tokenFilePath, 'utf-8')) as TokenData;
+  } catch (err) {
+    throw new Error(`Failed to load token from ${tokenFilePath}: ${String(err)}`);
+  }
 }
 
 const READ_COMMANDS = new Set(['list', 'read']);

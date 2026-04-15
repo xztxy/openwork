@@ -28,7 +28,7 @@ This skill guides you in using the `google_gmail` MCP tool to manage email acros
 ## Account Routing
 
 - **Reads** (list, read): Omit `account` to query **all** accounts simultaneously.
-- **Writes** (send, reply, draft, archive, label, mark-read): You **must** specify `account`. If the user hasn't said which account, ask them first.
+- **Writes** (send, reply, draft, archive, label, mark-read, mark-unread): You **must** specify `account`. If the user hasn't said which account, ask them first.
 
 ```
 google_gmail(command: "list --query 'is:unread'")                    // all accounts

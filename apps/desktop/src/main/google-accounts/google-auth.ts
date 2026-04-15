@@ -103,6 +103,20 @@ export async function startGoogleOAuth(label: string): Promise<{
             return;
           }
 
+          const errorParam = url.searchParams.get('error');
+          if (errorParam) {
+            res
+              .writeHead(400, { 'Content-Type': 'text/html' })
+              .end(
+                '<html><body><h2>Authentication cancelled. You can close this tab.</h2></body></html>',
+              );
+            clearTimeout(timeout);
+            server.close();
+            pendingFlows.delete(state);
+            reject(new Error(`OAuth error: ${errorParam}`));
+            return;
+          }
+
           const code = url.searchParams.get('code');
           const returnedState = url.searchParams.get('state');
 
@@ -149,7 +163,12 @@ export async function startGoogleOAuth(label: string): Promise<{
       });
     });
 
-  await shell.openExternal(authUrl);
+  try {
+    await shell.openExternal(authUrl);
+  } catch (err) {
+    server.close();
+    throw err;
+  }
 
   return { state, authUrl, waitForCallback };
 }

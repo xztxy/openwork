@@ -31,6 +31,10 @@ export function getHeader(
   return headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? '';
 }
 
+function sanitizeHeader(value: string): string {
+  return value.replace(/[\r\n]/g, ' ');
+}
+
 export function composeRfc2822(fields: {
   to: string;
   from?: string;
@@ -42,18 +46,18 @@ export function composeRfc2822(fields: {
   threadId?: string;
 }): string {
   const lines: string[] = [];
-  lines.push(`To: ${fields.to}`);
+  lines.push(`To: ${sanitizeHeader(fields.to)}`);
   if (fields.cc) {
-    lines.push(`Cc: ${fields.cc}`);
+    lines.push(`Cc: ${sanitizeHeader(fields.cc)}`);
   }
-  lines.push(`Subject: ${fields.subject}`);
+  lines.push(`Subject: ${sanitizeHeader(fields.subject)}`);
   lines.push('MIME-Version: 1.0');
   lines.push('Content-Type: text/plain; charset=UTF-8');
   if (fields.inReplyTo) {
-    lines.push(`In-Reply-To: ${fields.inReplyTo}`);
+    lines.push(`In-Reply-To: ${sanitizeHeader(fields.inReplyTo)}`);
   }
   if (fields.references) {
-    lines.push(`References: ${fields.references}`);
+    lines.push(`References: ${sanitizeHeader(fields.references)}`);
   }
   lines.push('');
   lines.push(fields.body);
@@ -69,11 +73,12 @@ export function base64url(raw: string): string {
 }
 
 export function handleGmailError(email: string, error: unknown): string {
-  const err = error as { code?: number; message?: string };
-  if (err.code === 401 || err.code === 403) {
+  const err = error as { code?: number; status?: number; message?: string };
+  const status = err.status ?? err.code;
+  if (status === 401 || status === 403) {
     return `Access denied for account ${email}. The account may need to be reconnected in Settings → Integrations.`;
   }
-  if (err.code === 429) {
+  if (status === 429) {
     return `Rate limit reached for account ${email}. Please wait a moment and try again.`;
   }
   return `Error for account ${email}: ${err.message ?? String(error)}`;

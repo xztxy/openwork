@@ -220,18 +220,22 @@ export async function startApp(
   }
 
   // Initialize Google account managers (lazy singletons — safe after initializeStorage())
-  let googleAccountManager;
-  let googleTokenManager;
+  let googleAccountManager: import('./google-accounts/account-manager').AccountManager | undefined;
+  let googleTokenManager: import('./google-accounts/token-manager').TokenManager | undefined;
+  let startGoogleOAuthFn:
+    | typeof import('./google-accounts/google-auth').startGoogleOAuth
+    | undefined;
   try {
     const { getAccountManager, getTokenManager, startGoogleOAuth } =
       await import('./google-accounts/index');
     googleAccountManager = getAccountManager();
     googleTokenManager = getTokenManager();
-    registerIPCHandlers(googleAccountManager, googleTokenManager, startGoogleOAuth);
+    startGoogleOAuthFn = startGoogleOAuth;
   } catch (err) {
     logMain('WARN', '[Main] Google account managers unavailable', { err: String(err) });
-    registerIPCHandlers();
   }
+  // Register IPC handlers exactly once, after the import attempt settles
+  registerIPCHandlers(googleAccountManager, googleTokenManager, startGoogleOAuthFn);
   logMain('INFO', '[Main] IPC handlers registered');
 
   createWindow();
@@ -315,6 +319,14 @@ export async function startApp(
     const windows = BrowserWindow.getAllWindows();
     if (windows.length === 0) {
       createWindow();
+      // Rebind TokenManager to the newly created window so background
+      // notifications target the fresh BrowserWindow reference
+      if (googleTokenManager) {
+        const newWindow = getMainWindow();
+        if (newWindow) {
+          googleTokenManager.setWindow(newWindow);
+        }
+      }
       try {
         getLogCollector()?.logEnv?.('INFO', '[Main] Application reactivated; recreated window');
       } catch (_e) {
@@ -323,6 +335,10 @@ export async function startApp(
     } else {
       windows[0].show();
       windows[0].focus();
+      // Ensure TokenManager always holds a reference to the current focused window
+      if (googleTokenManager) {
+        googleTokenManager.setWindow(windows[0]);
+      }
       try {
         getLogCollector()?.logEnv?.(
           'INFO',

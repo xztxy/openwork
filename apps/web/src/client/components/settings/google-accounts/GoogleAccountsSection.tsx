@@ -16,7 +16,7 @@ export function GoogleAccountsSection() {
     return cleanup;
   }, [fetchAccounts]);
 
-  const openAuth = async (label: string): Promise<void> => {
+  const openAuth = async (label: string, onComplete?: () => void): Promise<void> => {
     setConnecting(true);
     try {
       const result = await window.accomplish?.gws?.startAuth(label);
@@ -30,12 +30,15 @@ export function GoogleAccountsSection() {
         setTimeout(() => {
           fetchAccounts();
           setConnecting(false);
+          onComplete?.();
         }, 3000);
       } else {
         setConnecting(false);
+        onComplete?.();
       }
     } catch {
       setConnecting(false);
+      onComplete?.();
     }
   };
 
@@ -50,8 +53,8 @@ export function GoogleAccountsSection() {
       return;
     }
     setReconnectId(id);
-    await openAuth(account.label);
-    setReconnectId(null);
+    // Clear reconnectId only after connecting is fully finished (inside onComplete)
+    await openAuth(account.label, () => setReconnectId(null));
   };
 
   const handleCancelConnecting = () => {
@@ -64,52 +67,62 @@ export function GoogleAccountsSection() {
         Google Accounts
       </h4>
 
-      {loading && accounts.length === 0 ? (
-        <div className="flex h-[80px] items-center justify-center">
-          <span className="text-sm text-muted-foreground">Loading accounts...</span>
-        </div>
-      ) : accounts.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border py-8">
-          <p className="text-sm text-muted-foreground">No Google accounts connected</p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setLabelDialogOpen(true)}
-            disabled={connecting}
-          >
-            Add Google Account
-          </Button>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {accounts.map((account) => (
-            <GoogleAccountCard
-              key={account.googleAccountId}
-              account={account}
-              onDisconnect={removeAccount}
-              onReconnect={handleReconnect}
-            />
-          ))}
-          <div className="mt-2 flex items-center justify-between">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setLabelDialogOpen(true)}
-              disabled={connecting || !!reconnectId}
-            >
-              Add Google Account
-            </Button>
-            {connecting && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Waiting for Google...</span>
-                <Button variant="ghost" size="sm" onClick={handleCancelConnecting}>
-                  Cancel
-                </Button>
-              </div>
-            )}
+      {(() => {
+        if (loading && accounts.length === 0) {
+          return (
+            <div className="flex h-[80px] items-center justify-center">
+              <span className="text-sm text-muted-foreground">Loading accounts...</span>
+            </div>
+          );
+        }
+
+        if (accounts.length === 0) {
+          return (
+            <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border py-8">
+              <p className="text-sm text-muted-foreground">No Google accounts connected</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLabelDialogOpen(true)}
+                disabled={connecting}
+              >
+                Add Google Account
+              </Button>
+            </div>
+          );
+        }
+
+        return (
+          <div className="flex flex-col gap-2">
+            {accounts.map((account) => (
+              <GoogleAccountCard
+                key={account.googleAccountId}
+                account={account}
+                onDisconnect={removeAccount}
+                onReconnect={handleReconnect}
+              />
+            ))}
+            <div className="mt-2 flex items-center justify-between">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLabelDialogOpen(true)}
+                disabled={connecting || !!reconnectId}
+              >
+                Add Google Account
+              </Button>
+              {connecting && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Waiting for Google...</span>
+                  <Button variant="ghost" size="sm" onClick={handleCancelConnecting}>
+                    Cancel
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {connecting && accounts.length === 0 && (
         <div className="mt-2 flex items-center gap-2">

@@ -106,6 +106,7 @@ describe('TokenManager', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   describe('scheduleRefresh', () => {
@@ -216,11 +217,14 @@ describe('TokenManager', () => {
       db.prepare.mockReturnValue(mockStmt);
       vi.mocked(storage.get).mockReturnValue(makeStoredToken());
 
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 401,
-        json: async () => ({ error: 'unauthorized' }),
-      });
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: false,
+          status: 401,
+          json: async () => ({ error: 'unauthorized' }),
+        }),
+      );
 
       await manager.refreshToken('uid-1');
 
@@ -233,11 +237,14 @@ describe('TokenManager', () => {
       db.prepare.mockReturnValue(mockStmt);
       vi.mocked(storage.get).mockReturnValue(makeStoredToken());
 
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 403,
-        json: async () => ({ error: 'forbidden' }),
-      });
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: false,
+          status: 403,
+          json: async () => ({ error: 'forbidden' }),
+        }),
+      );
 
       await manager.refreshToken('uid-1');
 
@@ -249,11 +256,14 @@ describe('TokenManager', () => {
       db.prepare.mockReturnValue(mockStmt);
       vi.mocked(storage.get).mockReturnValue(makeStoredToken());
 
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 400,
-        json: async () => ({ error: 'invalid_grant' }),
-      });
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: false,
+          status: 400,
+          json: async () => ({ error: 'invalid_grant' }),
+        }),
+      );
 
       await manager.refreshToken('uid-1');
 
@@ -265,11 +275,14 @@ describe('TokenManager', () => {
       db.prepare.mockReturnValue(mockStmt);
       vi.mocked(storage.get).mockReturnValue(makeStoredToken());
 
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 401,
-        json: async () => ({}),
-      });
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: false,
+          status: 401,
+          json: async () => ({}),
+        }),
+      );
 
       await manager.refreshToken('uid-1');
 
@@ -286,11 +299,14 @@ describe('TokenManager', () => {
       db.prepare.mockReturnValue(mockStmt);
       vi.mocked(storage.get).mockReturnValue(makeStoredToken());
 
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 401,
-        json: async () => ({}),
-      });
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: false,
+          status: 401,
+          json: async () => ({}),
+        }),
+      );
 
       // Should not throw
       await expect(managerNoWindow.refreshToken('uid-1')).resolves.toBeUndefined();
@@ -303,11 +319,14 @@ describe('TokenManager', () => {
       db.prepare.mockReturnValue(mockStmt);
       vi.mocked(storage.get).mockReturnValue(makeStoredToken());
 
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => ({ access_token: 'new-access-token', expires_in: 3600 }),
-      });
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => ({ access_token: 'new-access-token', expires_in: 3600 }),
+        }),
+      );
 
       const scheduleSpy = vi.spyOn(manager, 'scheduleRefresh').mockImplementation(() => {});
 
@@ -331,11 +350,14 @@ describe('TokenManager', () => {
       db.prepare.mockReturnValue(mockStmt);
       vi.mocked(storage.get).mockReturnValue(makeStoredToken());
 
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 401,
-        json: async () => ({}),
-      });
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: false,
+          status: 401,
+          json: async () => ({}),
+        }),
+      );
 
       await managerNoWindow.refreshToken('uid-1');
 
