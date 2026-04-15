@@ -23,6 +23,7 @@ import { registerRpcMethods, safeHandler } from './daemon-routes.js';
 import { registerTaskEventForwarding } from './task-event-forwarding.js';
 import { WhatsAppDaemonService } from './whatsapp-service.js';
 import { WhatsAppSendApi } from './whatsapp/whatsapp-send-api.js';
+import { OpenAiOauthManager } from './opencode/auth-openai.js';
 import { log } from './logger.js';
 
 // __dirname is available natively in CJS (the daemon is built as CJS by tsup)
@@ -166,6 +167,19 @@ async function main(): Promise<void> {
   const whatsappService = new WhatsAppDaemonService(storage, userDataPath, taskService);
   const whatsappSendApi = new WhatsAppSendApi(whatsappService, authToken);
 
+  // OpenAI ChatGPT OAuth manager (Phase 4a of the SDK cutover port). Owns
+  // the transient `opencode serve` + SDK auth flow so desktop only handles
+  // the Electron-only `shell.openExternal` step.
+  const openAiOauthManager = new OpenAiOauthManager({
+    storage,
+    userDataPath,
+    mcpToolsPath,
+    isPackaged,
+    resourcesPath,
+    appPath,
+    accomplishRuntime,
+  });
+
   // Phase 2 of the SDK cutover port deleted PermissionService. Permission and
   // question requests now flow adapter → task-callbacks → taskService emit
   // → daemon-routes 'permission.request' RPC notification, and replies come
@@ -188,6 +202,7 @@ async function main(): Promise<void> {
     schedulerService,
     accomplishRuntime,
     whatsappService,
+    openAiOauthManager,
   };
   registerRpcMethods(routeServices);
   registerTaskEventForwarding(routeServices);
@@ -269,6 +284,7 @@ async function main(): Promise<void> {
 
     whatsappSendApi.stop();
     whatsappService.dispose();
+    openAiOauthManager.dispose();
     thoughtStreamService.close();
     taskService.dispose();
     await rpc.stop();

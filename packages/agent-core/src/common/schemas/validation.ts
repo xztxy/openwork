@@ -38,6 +38,20 @@ export const permissionResponseSchema = z.object({
   customText: z.string().optional(),
 });
 
+// OpenAI ChatGPT OAuth RPC payload schemas. Added in Phase 4a of the
+// OpenCode SDK cutover port so the daemon can own the SDK-based flow.
+//
+// Desktop IPC handler two-call protocol:
+//   startLogin()                           → { sessionId, authorizeUrl }
+//   shell.openExternal(authorizeUrl)       (Electron-only)
+//   awaitCompletion({ sessionId, timeoutMs })
+//                                          → { ok: true, plan } | { ok: false, error }
+
+export const authOpenAiAwaitCompletionSchema = z.object({
+  sessionId: z.string().min(1, 'sessionId is required'),
+  timeoutMs: z.number().int().positive().optional(),
+});
+
 export const resumeSessionSchema = z.object({
   sessionId: z.string().min(1, 'Session ID is required'),
   prompt: z.string().min(1, 'Prompt is required'),

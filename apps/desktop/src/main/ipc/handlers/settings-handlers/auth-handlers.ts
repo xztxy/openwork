@@ -1,11 +1,7 @@
 import type { IpcMainInvokeEvent } from 'electron';
+import { shell } from 'electron';
 import { validateHttpUrl } from '@accomplish_ai/agent-core';
-import { getOpenAiOauthStatus, getSlackMcpOauthStatus } from '@accomplish_ai/agent-core';
-import { loginOpenAiWithChatGpt } from '../../../opencode/auth-browser';
-import {
-  isOpenCodeCliInstallError,
-  INSTALL_ERROR_MESSAGE,
-} from '../../../opencode/cli-error-utils';
+import { getSlackMcpOauthStatus } from '@accomplish_ai/agent-core';
 import { loginSlackMcp, logoutSlackMcp } from '../../../opencode/slack-auth';
 import {
   loginGithubCopilot,
@@ -14,6 +10,7 @@ import {
 } from '../../../opencode/copilot-auth';
 import type { IpcHandler } from '../../types';
 import { getStorage } from '../../../store/storage';
+import { ensureDaemonRunning } from '../../../daemon/daemon-connector';
 
 export function registerAuthHandlers(handle: IpcHandler): void {
   const storage = getStorage();
@@ -37,24 +34,46 @@ export function registerAuthHandlers(handle: IpcHandler): void {
     storage.setOpenAiBaseUrl(trimmed.replace(/\/+$/, ''));
   });
 
+  // Phase 4a of the SDK cutover port: OpenAI OAuth moved into the daemon
+  // via a 4-method RPC protocol. Desktop's role is reduced to:
+  //   - opening the authorize URL in the user's browser
+  //     (Electron-only `shell.openExternal`)
+  //   - proxying status / login RPCs from the renderer
+  //
+  // Renderer-facing IPC contracts kept unchanged:
+  //   opencode:auth:openai:status → { connected, expires? }
+  //   opencode:auth:openai:login  → { ok, openedUrl? }
+  //
+  // `plan` returned by `auth.openai.awaitCompletion` is consumed internally
+  // by the Settings UI's model-dropdown logic via a subsequent status / model
+  // fetch; it is intentionally NOT surfaced here to preserve the existing
+  // renderer contract (plan lives on the agent-core type surface but is
+  // only exposed where its consumers are).
   handle('opencode:auth:openai:status', async (_event: IpcMainInvokeEvent) => {
-    return getOpenAiOauthStatus();
+    const client = await ensureDaemonRunning();
+    return (await client.call('auth.openai.status')) as { connected: boolean; expires?: number };
   });
 
   handle('opencode:auth:openai:login', async (_event: IpcMainInvokeEvent) => {
-    try {
-      const result = await loginOpenAiWithChatGpt();
-      return { ok: true, ...result };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (isOpenCodeCliInstallError(message)) {
-        throw new Error(INSTALL_ERROR_MESSAGE, { cause: err });
-      }
-      if (err instanceof Error) {
-        throw err;
-      }
-      throw new Error(String(err));
+    const client = await ensureDaemonRunning();
+    const { sessionId, authorizeUrl } = (await client.call('auth.openai.startLogin')) as {
+      sessionId: string;
+      authorizeUrl: string;
+    };
+    // Electron-only step: open the authorize URL in the user's default browser.
+    // Keeping this on the desktop side is deliberate per plan decision #6 —
+    // the daemon does not have access to Electron's `shell` API.
+    await shell.openExternal(authorizeUrl);
+    const completion = (await client.call('auth.openai.awaitCompletion', {
+      sessionId,
+      timeoutMs: 2 * 60_000,
+    })) as { ok: boolean; plan?: unknown; error?: string };
+    if (!completion.ok) {
+      throw new Error(completion.error ?? 'OpenAI authentication failed.');
     }
+    // Preserve the existing { ok, openedUrl? } contract expected by
+    // apps/desktop/src/preload/index.ts and apps/web/src/client/lib/accomplish.ts.
+    return { ok: true, openedUrl: authorizeUrl };
   });
 
   handle('opencode:auth:slack:status', async (_event: IpcMainInvokeEvent) => {

@@ -9,6 +9,7 @@ import {
   taskConfigSchema,
   permissionResponseSchema,
   resumeSessionSchema,
+  authOpenAiAwaitCompletionSchema,
   validate,
 } from '@accomplish_ai/agent-core';
 import type { AccomplishRuntime, StorageDeps } from '@accomplish_ai/agent-core';
@@ -20,6 +21,7 @@ import type { HealthService } from './health.js';
 import type { StorageService } from './storage-service.js';
 import type { SchedulerService } from './scheduler-service.js';
 import type { WhatsAppDaemonService } from './whatsapp-service.js';
+import type { OpenAiOauthManager } from './opencode/auth-openai.js';
 
 const taskIdSchema = z.object({ taskId: z.string().min(1) });
 // taskConfigSchema already includes modelId — no extension needed
@@ -59,14 +61,24 @@ export interface RouteServices {
   schedulerService: SchedulerService;
   accomplishRuntime: AccomplishRuntime;
   whatsappService: WhatsAppDaemonService;
+  /** OAuth manager (Phase 4a of the SDK cutover port). Owns transient
+   *  `opencode serve` spawns + the SDK auth flow + plan detection. */
+  openAiOauthManager: OpenAiOauthManager;
 }
 
 /**
  * Register all RPC methods on the server.
  */
 export function registerRpcMethods(services: RouteServices): void {
-  const { rpc, taskService, healthService, schedulerService, accomplishRuntime, whatsappService } =
-    services;
+  const {
+    rpc,
+    taskService,
+    healthService,
+    schedulerService,
+    accomplishRuntime,
+    whatsappService,
+    openAiOauthManager,
+  } = services;
   const storage = services.storageService.getStorage();
 
   rpc.registerMethod(
@@ -303,5 +315,35 @@ export function registerRpcMethods(services: RouteServices): void {
       whatsappService.setEnabled(validated.enabled);
       return Promise.resolve();
     }),
+  );
+
+  // ---------------------------------------------------------------------------
+  // OpenAI ChatGPT OAuth (Phase 4a of the SDK cutover port, commercial PR #720)
+  //
+  // Four-method protocol. Desktop IPC handler runs:
+  //   startLogin → shell.openExternal(authorizeUrl) → awaitCompletion.
+  // `status` and `getAccessToken` are non-flow reads used by settings UI
+  // and model-discovery respectively.
+  // ---------------------------------------------------------------------------
+  rpc.registerMethod(
+    'auth.openai.startLogin',
+    safeHandler(async () => {
+      return openAiOauthManager.startLogin();
+    }),
+  );
+  rpc.registerMethod(
+    'auth.openai.awaitCompletion',
+    safeHandler(async (params) => {
+      const validated = validate(authOpenAiAwaitCompletionSchema, params);
+      return openAiOauthManager.awaitCompletion(validated);
+    }),
+  );
+  rpc.registerMethod(
+    'auth.openai.status',
+    safeHandler(() => Promise.resolve(openAiOauthManager.status())),
+  );
+  rpc.registerMethod(
+    'auth.openai.getAccessToken',
+    safeHandler(() => Promise.resolve(openAiOauthManager.getAccessToken())),
   );
 }

@@ -436,3 +436,26 @@ export const PROVIDER_ID_TO_OPENCODE: Record<ProviderId, string> = {
   copilot: 'github-copilot',
   'accomplish-ai': 'accomplish-ai',
 };
+
+// -----------------------------------------------------------------------------
+// OpenAI ChatGPT-OAuth plan classification
+// -----------------------------------------------------------------------------
+//
+// Ported from commercial 1a320029 as part of the OpenCode SDK cutover port
+// (Phase 4a). The Phase 4a daemon RPC `auth.openai.awaitCompletion` returns
+// the plan so the renderer / model-discovery flow can choose between the
+// free and paid OpenAI OAuth model lists.
+//
+// "free"  — ChatGPT free-tier subscription; limited to `OPENAI_OAUTH_FREE_MODEL_IDS`.
+// "paid"  — ChatGPT Plus / Team / Enterprise; access to `OPENAI_OAUTH_MODEL_IDS`.
+//
+// Plan is detected by decoding the JWT access token stored under
+// `openai` in `~/.local/share/opencode/auth.json` and reading
+// `https://api.openai.com/auth.chatgpt_plan_type`. See
+// `packages/agent-core/src/opencode/auth.ts:readOpenAiOauthPlan`.
+
+export type OpenAiOauthPlan = 'free' | 'paid';
+
+export const OPENAI_OAUTH_MODEL_IDS = ['gpt-5', 'gpt-5-codex', 'codex-mini-latest'] as const;
+
+export const OPENAI_OAUTH_FREE_MODEL_IDS = ['gpt-5'] as const;

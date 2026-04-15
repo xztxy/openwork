@@ -263,6 +263,27 @@ export interface DaemonMethodMap {
   };
   'accomplish-ai.get-usage': { params: undefined; result: CreditUsage };
   'accomplish-ai.disconnect': { params: undefined; result: void };
+
+  // OpenAI ChatGPT OAuth (Phase 4a of the SDK cutover port).
+  // Four-method protocol — desktop calls `startLogin` + `awaitCompletion`
+  // around an `Electron shell.openExternal`; `status` and `getAccessToken`
+  // are non-flow reads used by settings UI and model discovery respectively.
+  'auth.openai.startLogin': {
+    params: undefined;
+    result: { sessionId: string; authorizeUrl: string };
+  };
+  'auth.openai.awaitCompletion': {
+    params: { sessionId: string; timeoutMs?: number };
+    result: { ok: true; plan: 'free' | 'paid' } | { ok: false; error: string };
+  };
+  'auth.openai.status': {
+    params: undefined;
+    result: { connected: boolean; expires?: number };
+  };
+  'auth.openai.getAccessToken': {
+    params: undefined;
+    result: string | null;
+  };
 }
 
 /** All valid daemon RPC method names. */

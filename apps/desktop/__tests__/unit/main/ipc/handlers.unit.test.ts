@@ -154,6 +154,16 @@ const mockDaemonClient = {
     if (method === 'task.getTodos') {
       return [];
     }
+    // Phase 4a of the SDK cutover port: `api-keys:has-any` and a few other
+    // IPC handlers now route OAuth status reads through the daemon instead
+    // of reading `auth.json` directly. Stub the new surface so unit tests
+    // don't try to spawn a real daemon process.
+    if (method === 'auth.openai.status') {
+      return { connected: false };
+    }
+    if (method === 'auth.openai.getAccessToken') {
+      return null;
+    }
     return undefined;
   }),
   ping: vi.fn(async () => ({ status: 'ok' as const, uptime: 1000 })),
@@ -167,6 +177,25 @@ vi.mock('@main/daemon-bootstrap', () => ({
   shutdownDaemon: vi.fn(),
   bootstrapDaemon: vi.fn(),
   registerNotificationForwarding: vi.fn(),
+}));
+
+// Phase 4a of the SDK cutover port introduced IPC handlers that call
+// `ensureDaemonRunning()` directly (auth-handlers, api-key-validation-handlers,
+// model-discovery-handlers). Stub it with the same mock client so tests don't
+// try to spawn a real daemon.
+vi.mock('@main/daemon/daemon-connector', () => ({
+  ensureDaemonRunning: vi.fn(async () => mockDaemonClient),
+  getDataDir: vi.fn(() => '/tmp/test-data'),
+  getDaemonEntryPath: vi.fn(() => '/tmp/test-daemon.js'),
+  spawnDaemon: vi.fn(),
+  tailDaemonLog: vi.fn(),
+  stopTailingDaemonLog: vi.fn(),
+  isDaemonStopped: vi.fn(() => false),
+  suppressReconnect: vi.fn(),
+  enableReconnect: vi.fn(),
+  onReconnect: vi.fn(() => () => {}),
+  setupDisconnectHandler: vi.fn(),
+  DaemonRestartError: class DaemonRestartError extends Error {},
 }));
 
 const authBrowserMocks = vi.hoisted(() => ({

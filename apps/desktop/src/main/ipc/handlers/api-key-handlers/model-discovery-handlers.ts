@@ -1,13 +1,10 @@
 import type { IpcMainInvokeEvent } from 'electron';
-import {
-  fetchOpenRouterModels,
-  fetchProviderModels,
-  getOpenAiOauthAccessToken,
-} from '@accomplish_ai/agent-core';
+import { fetchOpenRouterModels, fetchProviderModels } from '@accomplish_ai/agent-core';
 import { DEFAULT_PROVIDERS, ZAI_ENDPOINTS } from '@accomplish_ai/agent-core';
 import type { ZaiRegion } from '@accomplish_ai/agent-core';
 import { getApiKey } from '../../../store/secureStorage';
 import { handle, API_KEY_VALIDATION_TIMEOUT_MS } from '../utils';
+import { ensureDaemonRunning } from '../../../daemon/daemon-connector';
 
 export function registerModelDiscoveryHandlers(): void {
   handle('openrouter:fetch-models', async (_event: IpcMainInvokeEvent) => {
@@ -27,8 +24,18 @@ export function registerModelDiscoveryHandlers(): void {
         return { success: false, error: 'No models endpoint configured for this provider' };
       }
 
+      // Phase 4a of the SDK cutover port: OAuth access tokens live on the
+      // daemon now (the daemon owns the transient `opencode serve` that
+      // produced them). Desktop no longer reads `auth.json` directly — it
+      // asks the daemon over RPC. This keeps both writes and reads on the
+      // same side of the process boundary so XDG / auth-path drift can't
+      // cause a stale-token fallback to the hardcoded model list.
       const storedApiKey = getApiKey(providerId);
-      const apiKey = storedApiKey || (providerId === 'openai' ? getOpenAiOauthAccessToken() : null);
+      let apiKey: string | null = storedApiKey || null;
+      if (!apiKey && providerId === 'openai') {
+        const client = await ensureDaemonRunning();
+        apiKey = await client.call('auth.openai.getAccessToken');
+      }
       if (!apiKey) {
         return { success: false, error: 'No API key found for this provider' };
       }

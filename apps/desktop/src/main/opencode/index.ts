@@ -31,7 +31,10 @@ export {
   ACCOMPLISH_AGENT_NAME,
 } from './config-generator';
 
-export { loginOpenAiWithChatGpt } from './auth-browser';
+// `loginOpenAiWithChatGpt` export removed in Phase 4a of the SDK cutover port.
+// The IPC handler for `opencode:auth:openai:login` now delegates directly to
+// the daemon's `auth.openai.{startLogin, awaitCompletion}` RPCs — see
+// `apps/desktop/src/main/ipc/handlers/settings-handlers/auth-handlers.ts`.
 
 import { isCliAvailable, getBundledOpenCodeVersion } from './electron-options';
 

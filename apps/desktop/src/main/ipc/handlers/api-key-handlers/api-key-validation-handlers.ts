@@ -8,8 +8,8 @@ import type { ZaiRegion } from '@accomplish_ai/agent-core';
 import { storeApiKey, getApiKey, deleteApiKey, hasAnyApiKey } from '../../../store/secureStorage';
 import { getStorage } from '../../../store/storage';
 import { getLogCollector } from '../../../logging';
-import { getOpenAiOauthStatus } from '@accomplish_ai/agent-core';
 import { handle, API_KEY_VALIDATION_TIMEOUT_MS } from '../utils';
+import { ensureDaemonRunning } from '../../../daemon/daemon-connector';
 
 /**
  * Allowed shape of the `options` parameter for provider validation.
@@ -178,7 +178,12 @@ export function registerApiKeyValidationHandlers(): void {
     }
     const hasKey = await hasAnyApiKey();
     if (hasKey) return true;
-    return getOpenAiOauthStatus().connected;
+    // Phase 4a of the SDK cutover port: OAuth status is owned by the daemon.
+    // Route this check through `auth.openai.status` rather than reading the
+    // auth.json directly, so desktop and daemon agree on the status surface.
+    const client = await ensureDaemonRunning();
+    const status = await client.call('auth.openai.status');
+    return status.connected;
   });
 }
 

@@ -138,8 +138,22 @@ export {
   getOpenCodeAuthPath,
   getOpenCodeAuthJsonPath,
   getOpenCodeMcpAuthJsonPath,
+  // Re-exported so the daemon's OAuth manager
+  // (`apps/daemon/src/opencode/auth-openai.ts`) can consume them through
+  // agent-core's public surface. Desktop MUST NOT import these directly —
+  // Phase 4a of the SDK cutover port routes desktop's status / access-token
+  // reads through the daemon's `auth.openai.*` RPCs so desktop and daemon
+  // agree on auth.json path (XDG drift would otherwise produce silent
+  // fallbacks to the hardcoded OpenAI model list).
+  //
+  // The verification grep in the plan enforces this:
+  //   grep -rnE "import.*getOpenAiOauth(Status|AccessToken)" apps packages \
+  //     | grep -vE "packages/agent-core/src/opencode/|apps/daemon/src/opencode/auth-openai\.ts"
+  //   # expected: zero hits
   getOpenAiOauthStatus,
   getOpenAiOauthAccessToken,
+  readOpenAiOauthPlan,
+  detectOpenAiOauthPlan,
   getSlackMcpOauthStatus,
   getSlackMcpCallbackUrl,
   setSlackMcpPendingAuth,
@@ -151,7 +165,12 @@ export {
   OPENCODE_SLACK_MCP_CALLBACK_PORT,
   OPENCODE_SLACK_MCP_CALLBACK_PATH,
 } from './opencode/auth.js';
-export type { OpenCodeMcpOauthStatus } from './opencode/auth.js';
+export type { OpenCodeMcpOauthStatus, DetectOpenAiOauthPlanOptions } from './opencode/auth.js';
+export type { OpenAiOauthPlan } from './common/types/providerSettings.js';
+export {
+  OPENAI_OAUTH_MODEL_IDS,
+  OPENAI_OAUTH_FREE_MODEL_IDS,
+} from './common/types/providerSettings.js';
 
 export { sanitizeAssistantTextForDisplay } from './opencode/message-processor.js';
 // Message processing is now internal to TaskManager (use onBatchedMessages callback)
@@ -538,6 +557,7 @@ export {
   taskConfigSchema,
   permissionResponseSchema,
   resumeSessionSchema,
+  authOpenAiAwaitCompletionSchema,
   validate,
 } from './common/schemas/validation.js';
 

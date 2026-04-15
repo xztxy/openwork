@@ -79,9 +79,20 @@ export function useOAuthSignIn({
       const POLL_INTERVAL_MS = 5000;
       const MAX_ATTEMPTS = 36; // 3 minutes
 
+      // Phase 4a of the SDK cutover port: the `loginOpenAiWithChatGpt()` IPC
+      // now blocks until the daemon-side `auth.openai.awaitCompletion` RPC
+      // resolves — so by the time we reach here the underlying OAuth flow is
+      // already complete. Checking status immediately (before the loop's 5s
+      // sleep) removes a redundant 5-second wait between "auth done" and
+      // "provider marked connected" that was baked in for the old
+      // fire-and-forget IPC shape. The loop retains its 5s inter-attempt
+      // sleep as a retry cadence for the rare case where the first check
+      // races the auth-state file write.
       const poll = async () => {
         for (let i = 0; i < MAX_ATTEMPTS; i++) {
-          await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+          if (i > 0) {
+            await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+          }
 
           if (abortController.signal.aborted || attemptId !== signInAttemptRef.current) {
             return;
