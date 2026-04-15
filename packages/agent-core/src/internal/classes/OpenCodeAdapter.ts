@@ -1,19 +1,65 @@
-import * as crypto from 'crypto';
-import * as pty from 'node-pty';
-import { EventEmitter } from 'events';
-import fs from 'fs';
-import path from 'path';
+/**
+ * OpenCodeAdapter — SDK-based runtime bridge between Accomplish task lifecycle
+ * and the `opencode serve` process (via `@opencode-ai/sdk/v2`).
+ *
+ * Replaces the earlier PTY + stdout-JSON-parsing implementation. Lifecycle:
+ *
+ *   TaskManager creates adapter →
+ *     startTask(config) →
+ *       getServerUrl(taskId) resolves URL →
+ *       createOpencodeClient({ baseUrl }) →
+ *       event.subscribe() opens SSE stream →
+ *       session.create(...) → session.prompt(...) →
+ *       subscriber loop maps SDK events to OSS adapter events.
+ *   sendResponse(response) → permission.reply or question.reply (whichever was
+ *     last asked).
+ *   cancelTask() → session.abort + abort event subscription.
+ *
+ * Preserves the full OSS `OpenCodeAdapterEvents` surface so TaskManager and
+ * consumers downstream stay unchanged. OSS-only features preserved:
+ *   - `'browser-frame'` event (ENG-695 / PR #414) — detected off SDK tool-output
+ *     events produced by `dev-browser-mcp`.
+ *   - `'auth-error'` event — surfaced both from SDK `session.error` events and
+ *     the existing OpenCodeLogWatcher tail.
+ *   - CONNECTOR_AUTH_REQUIRED_MARKER detection in assistant text output.
+ *   - Sandbox provider wiring (unchanged from the prior adapter).
+ *
+ * Part of the OpenCode SDK cutover port (commercial PR #720, Phase 1b).
+ *
+ * NOTE: Runtime task execution does not work end-to-end in this phase — the
+ * `getServerUrl` resolver is populated by the daemon in Phase 2. During Phase
+ * 1b, unit tests cover adapter construction + event mapping shapes; real task
+ * execution requires Phase 2 to wire up a live `opencode serve` instance.
+ */
 
-import { StreamParser } from './StreamParser.js';
+import * as crypto from 'crypto';
+import { EventEmitter } from 'events';
+
+import {
+  createOpencodeClient,
+  type OpencodeClient,
+  type Event as OpenCodeSdkEvent,
+  type Part as OpenCodeSdkPart,
+  type PermissionRequest as OpenCodeSdkPermissionRequest,
+  type QuestionRequest as OpenCodeSdkQuestionRequest,
+  type AssistantMessage,
+  type Message as OpenCodeSdkMessage,
+  type ToolPart,
+} from '@opencode-ai/sdk/v2';
+
 import { OpenCodeLogWatcher, createLogWatcher, OpenCodeLogError } from './OpenCodeLogWatcher.js';
-import { classifyProcessError } from '../utils/process-error-classifier.js';
 import {
   CompletionEnforcer,
   CompletionEnforcerCallbacks,
 } from '../../opencode/completion/index.js';
-import type { TaskConfig, Task, TaskMessage, TaskResult } from '../../common/types/task.js';
+
+import type { TaskConfig, Task, TaskResult } from '../../common/types/task.js';
 import type { OpenCodeMessage } from '../../common/types/opencode.js';
 import type { PermissionRequest } from '../../common/types/permission.js';
+import {
+  FILE_PERMISSION_REQUEST_PREFIX,
+  QUESTION_REQUEST_PREFIX,
+} from '../../common/types/permission.js';
 import type { TodoItem } from '../../common/types/todo.js';
 import type { SandboxConfig, SandboxProvider } from '../../common/types/sandbox.js';
 import type { BrowserFramePayload } from '../../common/types/browser-view.js';
@@ -23,26 +69,17 @@ import { serializeError } from '../../utils/error.js';
 import { getOAuthProviderDisplayName, isOAuthProviderId } from '../../common/types/connector.js';
 import { CONNECTOR_AUTH_REQUIRED_MARKER } from '../../common/constants.js';
 import { createConsoleLogger } from '../../utils/logging.js';
-import {
-  generateTaskId,
-  generateMessageId,
-  buildPtySpawnArgs,
-  isStartTaskTool,
-  isExemptTool,
-  isRequestConnectorAuthTool,
-  isNonTaskContinuationTool,
-  appendToCircularBuffer,
-} from './adapter/adapter-utils.js';
-import { parseBrowserFrames } from './adapter/browser-frame-parser.js';
-import { buildPlanMessage, type StartTaskInput } from './adapter/message-synthesis.js';
+// `toTaskMessage` and `ModelContext` will be wired when we move to emitting
+// pre-processed `TaskMessage` shapes on the event bus (Phase 1c / Phase 2 —
+// renderer upsert-by-ID lands there). Today we still emit `OpenCodeMessage`
+// synthetic shapes via `partToOpenCodeMessage` for back-compat with the
+// existing `message` event consumers.
+//
+// Keeping this comment so future readers see the intended trajectory.
 
 const log = createConsoleLogger({ prefix: 'OpenCodeAdapter' });
 
-const LOG_TRUNCATION_LIMIT = 500;
-
-/** Windows STATUS_CONTROL_C_EXIT — exit code produced when a process is
- *  terminated via Ctrl+C (0xC000013A). On Windows this is not an error;
- *  treat it the same as a clean exit (code === 0). */
+/** Retained for call-site back-compat; the SDK flow no longer uses exit codes. */
 export const WINDOWS_CTRL_C_EXIT_CODE = -1073741510;
 
 export const isNormalExit = (code: number | null, platform?: string): boolean =>
@@ -59,9 +96,24 @@ interface ConnectorAuthPauseInput {
 export class OpenCodeCliNotFoundError extends Error {
   constructor() {
     super(
-      'OpenCode CLI is not available. The bundled CLI may be missing or corrupted. Please reinstall the application.',
+      'OpenCode runtime is not available. The bundled runtime may be missing or corrupted. Please reinstall the application.',
     );
     this.name = 'OpenCodeCliNotFoundError';
+  }
+}
+
+/**
+ * Thrown when startTask is invoked without a `getServerUrl` resolver — the
+ * SDK adapter requires a live `opencode serve` URL to connect. Phase 2
+ * populates this from the daemon's server-manager.
+ */
+export class OpenCodeRuntimeUnavailableError extends Error {
+  constructor(message?: string) {
+    super(
+      message ??
+        'OpenCode runtime URL is not available. Ensure the daemon has started the serve process before starting a task.',
+    );
+    this.name = 'OpenCodeRuntimeUnavailableError';
   }
 }
 
@@ -69,20 +121,39 @@ export interface AdapterOptions {
   platform: NodeJS.Platform;
   isPackaged: boolean;
   tempPath: string;
-  getCliCommand: () => { command: string; args: string[] };
-  buildEnvironment: (taskId: string) => Promise<NodeJS.ProcessEnv>;
-  buildCliArgs: (config: TaskConfig) => Promise<string[]>;
+  /**
+   * Resolve the base URL of an `opencode serve` instance for a given task.
+   * Populated in Phase 2 by the daemon's server-manager. Required for the
+   * SDK adapter; constructors that omit it will succeed, but startTask will
+   * throw `OpenCodeRuntimeUnavailableError` until it is wired up.
+   */
+  getServerUrl?: (taskId: string) => Promise<string | undefined>;
+  /**
+   * Back-compat fields retained while other call sites still reference them.
+   * Not used by the SDK flow; the daemon will eliminate these in Phase 2.
+   */
+  getCliCommand?: () => { command: string; args: string[] };
+  buildEnvironment?: (taskId: string) => Promise<NodeJS.ProcessEnv>;
+  buildCliArgs?: (config: TaskConfig) => Promise<string[]>;
   onBeforeStart?: () => Promise<NodeJS.ProcessEnv | void>;
   getModelDisplayName?: (modelId: string) => string;
-  /**
-   * Lazy sandbox factory, called once per adapter instance.
-   * When present, overrides sandboxProvider and sandboxConfig.
-   */
+  /** Lazy sandbox factory, called once per adapter instance. */
   sandboxFactory?: () => { provider: SandboxProvider; config: SandboxConfig };
-  /** Optional sandbox provider for restricting agent FS/network access */
   sandboxProvider?: SandboxProvider;
-  /** Sandbox configuration used when sandboxProvider is set */
   sandboxConfig?: SandboxConfig;
+  /**
+   * Optional LLM-gateway proxy tagger. Called with the current task ID when a
+   * task starts, and with `undefined` when it tears down. Allows the fused
+   * `@accomplish/llm-gateway-client` (Accomplish Free builds) or a developer-
+   * integrated gateway to attribute LLM requests to the originating task.
+   *
+   * Wired by the daemon at startup: if `@accomplish/llm-gateway-client` is
+   * resolvable (Free build CI fuses it into `apps/daemon/dist/node_modules/`
+   * per `accomplish-release/.github/workflows/release.yml`), the daemon
+   * forwards its `setProxyTaskId` here. In pure OSS builds this stays
+   * undefined and the adapter becomes a no-op on this axis.
+   */
+  setProxyTaskId?: (taskId: string | undefined) => void;
 }
 
 export interface OpenCodeAdapterEvents {
@@ -96,8 +167,7 @@ export interface OpenCodeAdapterEvents {
   debug: [{ type: string; message: string; data?: unknown }];
   'todo:update': [TodoItem[]];
   'auth-error': [{ providerId: string; message: string }];
-  /** Live browser preview frame — emitted when the dev-browser-mcp tool writes a JSON frame to stdout.
-   *  Contributed by samarthsinh2660 (PR #414) for ENG-695. */
+  /** Live browser preview frame (ENG-695 / PR #414), preserved in the SDK port. */
   'browser-frame': [BrowserFramePayload];
   reasoning: [string];
   'tool-call-complete': [
@@ -123,73 +193,55 @@ export interface OpenCodeAdapterEvents {
   ];
 }
 
+/** Shape of an active in-flight request awaiting a caller reply. */
+interface PendingRequest {
+  kind: 'permission' | 'question';
+  /** OSS-facing request ID (prefixed so isFilePermissionRequest/isQuestionRequest work). */
+  requestId: string;
+  /** Native SDK request ID used for the reply API call. */
+  sdkRequestId: string;
+  sessionId: string;
+}
+
 export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
-  private ptyProcess: pty.IPty | null = null;
-  private streamParser: StreamParser;
-  private logWatcher: OpenCodeLogWatcher | null = null;
-  private currentSessionId: string | null = null;
-  private currentTaskId: string | null = null;
-  private messages: TaskMessage[] = [];
-  private hasCompleted: boolean = false;
-  private isDisposed: boolean = false;
-  private wasInterrupted: boolean = false;
-  private completionEnforcer: CompletionEnforcer;
-  private lastWorkingDirectory: string | undefined;
-  private currentModelId: string | null = null;
-  private waitingTransitionTimer: ReturnType<typeof setTimeout> | null = null;
-  private hasReceivedFirstTool: boolean = false;
-  private startTaskCalled: boolean = false;
-  private outputBuffer: string = '';
-  /** Rolling buffer for reassembling split JSON lines from dev-browser-mcp stdout.
-   *  Contributed by samarthsinh2660 (PR #414) for ENG-695. */
-  private browserFrameBuffer: string = '';
-  private externalEnv: NodeJS.ProcessEnv | undefined;
-  private static readonly OUTPUT_BUFFER_MAX = 4096;
-
-  private appendToOutputBuffer(data: string): void {
-    this.outputBuffer = appendToCircularBuffer(
-      this.outputBuffer,
-      data,
-      OpenCodeAdapter.OUTPUT_BUFFER_MAX,
-    );
-  }
-
-  /**
-   * Scan stdout data for JSON-encoded browser frame messages written by dev-browser-mcp.
-   * Each frame line has the shape: `{"type":"browser-frame","taskId":...,"pageName":...,"frame":...,"timestamp":...}`.
-   *
-   * Lines may be split across PTY data chunks, so we maintain a rolling buffer to reassemble them.
-   * On match, emits the `'browser-frame'` event consumed by TaskManager → task-callbacks → renderer.
-   *
-   * Returns only the non-browser-frame lines so callers can safely feed the result into
-   * `appendToOutputBuffer` / `StreamParser` without polluting them with large base64 payloads.
-   *
-   * Contributed by samarthsinh2660 (PR #414) for ENG-695.
-   */
-  private checkForBrowserFrame(data: string): string {
-    const result = parseBrowserFrames(data, this.browserFrameBuffer, (payload) => {
-      this.emit('browser-frame', payload);
-    });
-    this.browserFrameBuffer = result.buffer;
-    return result.output;
-  }
-
   private options: AdapterOptions;
   private sandboxProvider: SandboxProvider;
   private sandboxConfig: SandboxConfig;
+  private client: OpencodeClient | null = null;
+  private logWatcher: OpenCodeLogWatcher | null = null;
+  private completionEnforcer: CompletionEnforcer;
+
+  private currentSessionId: string | null = null;
+  private currentTaskId: string | null = null;
+  private currentModelId: string | null = null;
+  private currentProviderId: string | null = null;
+  private lastWorkingDirectory: string | undefined;
+
+  private eventAbortController: AbortController | null = null;
+  private eventStreamPromise: Promise<void> | null = null;
+
+  private hasCompleted = false;
+  private isDisposed = false;
+  private wasInterrupted = false;
+  private externalEnv: NodeJS.ProcessEnv | undefined;
+
+  /** Most recent permission/question request awaiting a caller reply. */
+  private pendingRequest: PendingRequest | null = null;
+
+  /** Screenshot/frame payload buffer for dev-browser-mcp outputs emitted via SDK tool events. */
+  private browserFrameSeen = new Set<string>();
 
   constructor(options: AdapterOptions, taskId?: string) {
     super();
     this.options = options;
-    this.currentTaskId = taskId || null;
-    // Prefer the lazy factory so runtime config changes (e.g. sandbox:set-config)
-    // are picked up for each new task without recreating the TaskManager.
+    this.currentTaskId = taskId ?? null;
+
+    // Sandbox wiring preserved from the prior PTY adapter.
     if (options.sandboxFactory) {
       const { provider, config } = options.sandboxFactory();
       this.sandboxProvider = provider;
       this.sandboxConfig = config;
     } else {
-      // Guard against fail-open: a non-disabled sandboxConfig requires an explicit provider.
       if (
         options.sandboxConfig &&
         options.sandboxConfig.mode !== 'disabled' &&
@@ -203,274 +255,160 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       this.sandboxProvider = options.sandboxProvider ?? new DisabledSandboxProvider();
       this.sandboxConfig = options.sandboxConfig ?? DEFAULT_SANDBOX_CONFIG;
     }
-    this.streamParser = new StreamParser();
+
     this.completionEnforcer = this.createCompletionEnforcer();
-    this.setupStreamParsing();
     this.setupLogWatcher();
   }
 
-  private createCompletionEnforcer(): CompletionEnforcer {
-    const callbacks: CompletionEnforcerCallbacks = {
-      onStartContinuation: async (prompt: string) => {
-        await this.spawnSessionResumption(prompt);
-      },
-      onComplete: () => {
-        this.hasCompleted = true;
-        this.emit('complete', {
-          status: 'success',
-          sessionId: this.currentSessionId || undefined,
-        });
-      },
-      onDebug: (type: string, message: string, data?: unknown) => {
-        this.emit('debug', { type, message, data });
-      },
-    };
-    return new CompletionEnforcer(callbacks);
-  }
-
-  private setupLogWatcher(): void {
-    this.logWatcher = createLogWatcher();
-
-    this.logWatcher.on('error', (error: OpenCodeLogError) => {
-      if (!this.hasCompleted && this.ptyProcess) {
-        log.info(`[OpenCode Adapter] Log watcher detected error: ${error.errorName}`);
-
-        const errorMessage = OpenCodeLogWatcher.getErrorMessage(error);
-
-        this.emit('debug', {
-          type: 'error',
-          message: `[${error.errorName}] ${errorMessage}`,
-          data: {
-            errorName: error.errorName,
-            statusCode: error.statusCode,
-            providerID: error.providerID,
-            modelID: error.modelID,
-            message: error.message,
-          },
-        });
-
-        if (error.isAuthError && error.providerID) {
-          log.info(`[OpenCode Adapter] Emitting auth-error for provider: ${error.providerID}`);
-          this.emit('auth-error', {
-            providerId: error.providerID,
-            message: errorMessage,
-          });
-        }
-
-        this.hasCompleted = true;
-        this.emit('complete', {
-          status: 'error',
-          sessionId: this.currentSessionId || undefined,
-          error: errorMessage,
-        });
-
-        if (this.ptyProcess) {
-          try {
-            this.ptyProcess.kill();
-          } catch (err) {
-            log.warn('[OpenCode Adapter] Error killing PTY after log error:', {
-              error: String(err),
-            });
-          }
-          this.ptyProcess = null;
-        }
-      }
-    });
-  }
+  // ──────────────────────────── public API ─────────────────────────────────
 
   async startTask(config: TaskConfig): Promise<Task> {
     if (this.isDisposed) {
       throw new Error('Adapter has been disposed and cannot start new tasks');
     }
 
-    const taskId = config.taskId || generateTaskId();
+    const taskId = config.taskId || this.generateTaskId();
     this.currentTaskId = taskId;
     this.currentSessionId = null;
-    this.currentModelId = config.modelId || null;
-    this.messages = [];
-    this.streamParser.reset();
+    this.currentModelId = config.modelId ?? null;
+    this.currentProviderId = config.provider ?? null;
     this.hasCompleted = false;
     this.wasInterrupted = false;
+    this.pendingRequest = null;
+    this.browserFrameSeen.clear();
     this.completionEnforcer.reset();
     this.lastWorkingDirectory = config.workingDirectory;
-    this.hasReceivedFirstTool = false;
-    this.startTaskCalled = false;
-    this.outputBuffer = '';
-    if (this.waitingTransitionTimer) {
-      clearTimeout(this.waitingTransitionTimer);
-      this.waitingTransitionTimer = null;
-    }
+
+    // Tag the LLM-gateway proxy with this task so it can attribute outgoing
+    // requests. No-op in pure OSS builds where no gateway is wired.
+    this.options.setProxyTaskId?.(taskId);
 
     if (this.logWatcher) {
       await this.logWatcher.start();
     }
 
     if (this.options.onBeforeStart) {
-      // Always reset externalEnv so stale values from a prior run are never reused
-      // when the current call returns void/undefined.
       this.externalEnv = (await this.options.onBeforeStart()) ?? {};
     }
 
-    const cliArgs = await this.options.buildCliArgs(config);
-
-    const { command, args: baseArgs } = this.options.getCliCommand();
-    const startMsg = `Starting: ${command} ${[...baseArgs, ...cliArgs].join(' ')}`;
-    log.info(`[OpenCode CLI] ${startMsg}`);
-    this.emit('debug', { type: 'info', message: startMsg });
-
-    const env = await this.options.buildEnvironment(taskId);
-
-    const allArgs = [...baseArgs, ...cliArgs];
-    const cmdMsg = `Command: ${command}`;
-    const argsMsg = `Args: ${allArgs.join(' ')}`;
-    const safeCwd = config.workingDirectory || this.options.tempPath;
-    const cwdMsg = `Working directory: ${safeCwd}`;
-
-    if (this.options.isPackaged && this.options.platform === 'win32') {
-      const dummyPackageJson = path.join(safeCwd, 'package.json');
-      if (!fs.existsSync(dummyPackageJson)) {
-        try {
-          fs.writeFileSync(
-            dummyPackageJson,
-            JSON.stringify({ name: 'opencode-workspace', private: true }, null, 2),
-          );
-          log.info(`[OpenCode CLI] Created workspace package.json at: ${dummyPackageJson}`);
-        } catch (err) {
-          log.warn('[OpenCode CLI] Could not create workspace package.json:', {
-            error: String(err),
-          });
-        }
-      }
+    // Resolve the running opencode-serve URL. Phase 2 populates this from the
+    // daemon's server-manager; until then, startTask fails cleanly.
+    if (!this.options.getServerUrl) {
+      throw new OpenCodeRuntimeUnavailableError(
+        'AdapterOptions.getServerUrl not configured. Daemon server-manager wiring lands in Phase 2 of the SDK cutover port.',
+      );
+    }
+    const serverUrl = await this.options.getServerUrl(taskId);
+    if (!serverUrl) {
+      throw new OpenCodeRuntimeUnavailableError(
+        `No opencode-serve URL available for task ${taskId}.`,
+      );
     }
 
-    log.info(`[OpenCode CLI] ${cmdMsg}`);
-    log.info(`[OpenCode CLI] ${argsMsg}`);
-    log.info(`[OpenCode CLI] ${cwdMsg}`);
+    this.client = createOpencodeClient({ baseUrl: serverUrl });
 
-    this.emit('debug', { type: 'info', message: cmdMsg });
-    this.emit('debug', { type: 'info', message: argsMsg, data: { args: allArgs } });
-    this.emit('debug', { type: 'info', message: cwdMsg });
+    this.emit('progress', { stage: 'loading', message: 'Loading agent...' });
 
-    {
-      const { file: spawnFile, args: spawnArgs } = buildPtySpawnArgs(
-        command,
-        allArgs,
-        this.options.platform,
-        this.options.isPackaged,
-      );
+    // Open the SDK event subscription before creating the session so we don't
+    // miss early events.
+    this.eventAbortController = new AbortController();
+    this.eventStreamPromise = this.runEventSubscription(this.eventAbortController.signal);
 
-      const spawnMsg = `PTY spawn: ${spawnFile} ${spawnArgs.join(' ')}`;
-      log.info(`[OpenCode CLI] ${spawnMsg}`);
-      this.emit('debug', { type: 'info', message: spawnMsg });
-
-      const sandboxedArgs = await this.sandboxProvider.wrapSpawnArgs(
-        {
-          file: spawnFile,
-          args: spawnArgs,
-          cwd: safeCwd,
-          env: { ...env, ...this.externalEnv },
-        },
-        this.sandboxConfig,
-      );
-
-      this.ptyProcess = pty.spawn(sandboxedArgs.file, sandboxedArgs.args, {
-        name: 'xterm-256color',
-        cols: 32000,
-        rows: 30,
-        cwd: sandboxedArgs.cwd,
-        env: sandboxedArgs.env,
-      });
-      const pidMsg = `PTY Process PID: ${this.ptyProcess.pid}`;
-      log.info(`[OpenCode CLI] ${pidMsg}`);
-      this.emit('debug', { type: 'info', message: pidMsg });
-
-      this.emit('progress', { stage: 'loading', message: 'Loading agent...' });
-
-      this.ptyProcess.onData((data: string) => {
-        /* eslint-disable no-control-regex */
-        const cleanData = data
-          .replace(/\x1B\[[0-9;?]*[a-zA-Z]/g, '')
-          .replace(/\x1B\][^\x07]*\x07/g, '')
-          .replace(/\x1B\][^\x1B]*\x1B\\/g, '');
-        /* eslint-enable no-control-regex */
-        // Check for embedded browser-frame JSON lines (even for split PTY chunks).
-        // Use the returned value — browser-frame lines are stripped so they don't
-        // pollute outputBuffer or StreamParser with large base64 payloads.
-        const passthroughData = this.checkForBrowserFrame(cleanData);
-
-        if (passthroughData.trim()) {
-          const truncated =
-            passthroughData.substring(0, LOG_TRUNCATION_LIMIT) +
-            (passthroughData.length > LOG_TRUNCATION_LIMIT ? '...' : '');
-          log.info(`[OpenCode CLI stdout]: ${truncated}`);
-          this.emit('debug', { type: 'stdout', message: passthroughData });
-
-          this.appendToOutputBuffer(passthroughData);
-
-          this.streamParser.feed(passthroughData);
-        }
-      });
-
-      this.ptyProcess.onExit(({ exitCode, signal }) => {
-        const exitMsg = `PTY Process exited with code: ${exitCode}, signal: ${signal}`;
-        log.info(`[OpenCode CLI] ${exitMsg}`);
-        this.emit('debug', { type: 'exit', message: exitMsg, data: { exitCode, signal } });
-        this.handleProcessExit(exitCode);
-      });
+    // Create the session + kick off the prompt.
+    const model = this.buildModelParam(config);
+    const sessionCreateRes = await this.client.session.create(
+      { title: this.deriveTitle(config.prompt) },
+      { throwOnError: true },
+    );
+    const sessionId =
+      (sessionCreateRes as { data?: { id?: string }; id?: string }).data?.id ??
+      (sessionCreateRes as { id?: string }).id ??
+      null;
+    if (!sessionId) {
+      throw new Error('session.create did not return a session ID');
     }
+    this.currentSessionId = sessionId;
+
+    this.emit('progress', { stage: 'waiting', message: 'Waiting for response...' });
+
+    // Fire the prompt. We do NOT await — the response streams via events.
+    this.client.session
+      .prompt({
+        sessionID: sessionId,
+        parts: [{ type: 'text', text: config.prompt }],
+        ...(model ? { model } : {}),
+      })
+      .catch((err: unknown) => {
+        // Session.prompt errors surface through the event stream too, but
+        // we capture them here to avoid unhandled rejections.
+        log.warn('session.prompt rejected', { error: serializeError(err) });
+      });
 
     return {
       id: taskId,
       prompt: config.prompt,
       status: 'running',
+      sessionId,
       messages: [],
       createdAt: new Date().toISOString(),
-      startedAt: new Date().toISOString(),
     };
   }
 
   async resumeSession(sessionId: string, prompt: string): Promise<Task> {
-    return this.startTask({
-      prompt,
-      sessionId,
-    });
+    return this.startTask({ prompt, sessionId });
   }
 
+  /**
+   * Send a response to an in-flight permission or question request.
+   *
+   * Current signature accepts a string for back-compat with the pre-port
+   * TaskManager surface (the plan defers the `PermissionResponse` type
+   * change to Phase 2). Allowed string values:
+   *   - 'allow' / 'accept' → SDK reply: 'once'
+   *   - 'always'           → SDK reply: 'always'
+   *   - 'deny' / 'reject'  → SDK reply: 'reject'
+   *   - anything else      → treated as question answer text
+   */
   async sendResponse(response: string): Promise<void> {
-    if (!this.ptyProcess) {
-      throw new Error('No active process');
+    const pending = this.pendingRequest;
+    if (!pending) {
+      throw new Error('No pending permission or question request to respond to');
+    }
+    if (!this.client) {
+      throw new Error('SDK client not initialised');
     }
 
-    this.ptyProcess.write(response + '\n');
-    log.info('[OpenCode CLI] Response sent via PTY');
+    if (pending.kind === 'permission') {
+      const reply: 'once' | 'always' | 'reject' =
+        response === 'allow' || response === 'accept'
+          ? 'once'
+          : response === 'always'
+            ? 'always'
+            : 'reject';
+      await this.client.permission.reply(
+        { requestID: pending.sdkRequestId, reply },
+        { throwOnError: true },
+      );
+    } else {
+      // question.asked reply — answers is an array of answer arrays; for
+      // free-form responses we send a single answer.
+      await this.client.question.reply(
+        { requestID: pending.sdkRequestId, answers: [[response]] },
+        { throwOnError: true },
+      );
+    }
+    this.pendingRequest = null;
   }
 
   async cancelTask(): Promise<void> {
-    if (this.ptyProcess) {
-      this.ptyProcess.kill();
-      this.ptyProcess = null;
-    }
+    this.wasInterrupted = true;
+    await this.abortSession('cancel');
+    this.teardown();
   }
 
   async interruptTask(): Promise<void> {
-    if (!this.ptyProcess) {
-      log.info('[OpenCode CLI] No active process to interrupt');
-      return;
-    }
-
     this.wasInterrupted = true;
-
-    this.ptyProcess.write('\x03');
-    log.info('[OpenCode CLI] Sent Ctrl+C interrupt signal');
-
-    if (this.options.platform === 'win32') {
-      setTimeout(() => {
-        if (this.ptyProcess) {
-          this.ptyProcess.write('Y\n');
-          log.info('[OpenCode CLI] Sent Y to confirm batch termination');
-        }
-      }, 100);
-    }
+    await this.abortSession('interrupt');
   }
 
   getSessionId(): string | null {
@@ -482,7 +420,7 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   }
 
   get running(): boolean {
-    return this.ptyProcess !== null && !this.hasCompleted;
+    return this.client !== null && !this.hasCompleted && !this.isDisposed;
   }
 
   isAdapterDisposed(): boolean {
@@ -490,562 +428,527 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   }
 
   dispose(): void {
-    if (this.isDisposed) {
-      return;
-    }
-
-    log.info(`[OpenCode Adapter] Disposing adapter for task ${this.currentTaskId}`);
+    if (this.isDisposed) return;
     this.isDisposed = true;
-    this.browserFrameBuffer = '';
-
+    this.teardown();
     if (this.logWatcher) {
-      this.logWatcher.stop().catch((err) => {
-        log.warn(`[OpenCode Adapter] Error stopping log watcher: ${err}`);
-      });
+      this.logWatcher.stop();
+      this.logWatcher.removeAllListeners();
+      this.logWatcher = null;
     }
-
-    if (this.ptyProcess) {
-      try {
-        this.ptyProcess.kill();
-      } catch (error) {
-        log.error(`[OpenCode Adapter] Error killing PTY process: ${error}`);
-      }
-      this.ptyProcess = null;
-    }
-
-    this.currentSessionId = null;
-    this.currentTaskId = null;
-    this.messages = [];
-    this.hasCompleted = true;
-    this.currentModelId = null;
-    this.hasReceivedFirstTool = false;
-    this.startTaskCalled = false;
-
-    if (this.waitingTransitionTimer) {
-      clearTimeout(this.waitingTransitionTimer);
-      this.waitingTransitionTimer = null;
-    }
-
-    this.streamParser.reset();
     this.removeAllListeners();
-
-    log.info('[OpenCode Adapter] Adapter disposed');
   }
 
-  private setupStreamParsing(): void {
-    this.streamParser.on('message', (message: OpenCodeMessage) => {
-      this.handleMessage(message);
-    });
+  // ──────────────────────────── internals ──────────────────────────────────
 
-    this.streamParser.on('error', (error: Error) => {
-      log.warn(`[OpenCode Adapter] Stream parse warning: ${error.message}`);
-      this.emit('debug', { type: 'parse-warning', message: error.message });
-    });
+  private generateTaskId(): string {
+    return crypto.randomUUID();
   }
 
-  private handleMessage(message: OpenCodeMessage): void {
-    log.info(`[OpenCode Adapter] Handling message type: ${message.type}`);
+  private generateRequestId(kind: 'permission' | 'question'): string {
+    const prefix = kind === 'permission' ? FILE_PERMISSION_REQUEST_PREFIX : QUESTION_REQUEST_PREFIX;
+    return `${prefix}${crypto.randomUUID()}`;
+  }
 
-    switch (message.type) {
-      case 'step_start': {
-        this.currentSessionId = message.part.sessionID;
-        const modelDisplayName =
-          this.currentModelId && this.options.getModelDisplayName
-            ? this.options.getModelDisplayName(this.currentModelId)
-            : 'AI';
-        this.emit('progress', {
-          stage: 'connecting',
-          message: `Connecting to ${modelDisplayName}...`,
-          modelName: modelDisplayName,
-        });
-        if (this.waitingTransitionTimer) {
-          clearTimeout(this.waitingTransitionTimer);
-        }
-        this.waitingTransitionTimer = setTimeout(() => {
-          if (!this.hasReceivedFirstTool && !this.hasCompleted) {
-            this.emit('progress', { stage: 'waiting', message: 'Waiting for response...' });
-          }
-        }, 500);
-        break;
-      }
+  private deriveTitle(prompt: string): string {
+    const trimmed = prompt.trim().split('\n')[0] ?? '';
+    return trimmed.length > 80 ? `${trimmed.slice(0, 80)}...` : trimmed;
+  }
 
-      case 'text':
-        if (!this.currentSessionId && message.part.sessionID) {
-          this.currentSessionId = message.part.sessionID;
-        }
-        if (!this.completionEnforcer.isInContinuation()) {
-          this.emit('message', message);
-        }
+  private buildModelParam(config: TaskConfig): { providerID: string; modelID: string } | null {
+    if (!config.modelId || !config.provider) return null;
+    return { providerID: config.provider, modelID: config.modelId };
+  }
 
-        if (message.part.text) {
-          const taskMessage: TaskMessage = {
-            id: generateMessageId(),
-            type: 'assistant',
-            content: message.part.text,
-            timestamp: new Date().toISOString(),
-          };
-          this.messages.push(taskMessage);
-          if (!this.completionEnforcer.isInContinuation()) {
-            this.emit('reasoning', message.part.text);
-          }
-        }
-        break;
-
-      case 'tool_call':
-        this.handleToolCall(
-          message.part.tool || 'unknown',
-          message.part.input,
-          message.part.sessionID,
-        );
-        break;
-
-      case 'tool_use': {
-        const toolUseMessage =
-          message as import('../../common/types/opencode.js').OpenCodeToolUseMessage;
-        const toolUseName = toolUseMessage.part.tool || 'unknown';
-        const toolUseInput = toolUseMessage.part.state?.input;
-        const toolUseOutput = toolUseMessage.part.state?.output || '';
-
-        this.handleToolCall(toolUseName, toolUseInput, toolUseMessage.part.sessionID);
-
-        const toolDescription = (toolUseInput as { description?: string })?.description;
-        if (toolDescription) {
-          const syntheticTextMessage: OpenCodeMessage = {
-            type: 'text',
-            timestamp: message.timestamp,
-            sessionID: message.sessionID,
-            part: {
-              id: generateMessageId(),
-              sessionID: toolUseMessage.part.sessionID,
-              messageID: toolUseMessage.part.messageID,
-              type: 'text',
-              text: toolDescription,
-            },
-          } as import('../../common/types/opencode.js').OpenCodeTextMessage;
-          this.emit('message', syntheticTextMessage);
-        }
-
-        this.emit('message', message);
-        const toolUseStatus = toolUseMessage.part.state?.status;
-
-        log.info(`[OpenCode Adapter] Tool use: ${toolUseName} status: ${toolUseStatus}`);
-
-        if (toolUseStatus === 'completed' || toolUseStatus === 'error') {
-          if (
-            isRequestConnectorAuthTool(toolUseName) &&
-            toolUseOutput.includes(CONNECTOR_AUTH_REQUIRED_MARKER)
-          ) {
-            this.pauseForConnectorAuth(
-              toolUseInput as ConnectorAuthPauseInput,
-              toolUseMessage.part.sessionID,
-            );
-            break;
-          }
-
-          this.emit('tool-result', toolUseOutput);
-          this.emit('tool-call-complete', {
-            toolName: toolUseName,
-            toolInput: toolUseInput,
-            toolOutput: toolUseOutput,
-            sessionId: this.currentSessionId || undefined,
-          });
-        }
-
-        break;
-      }
-
-      case 'tool_result': {
-        const toolOutput = message.part.output || '';
-        log.info(`[OpenCode Adapter] Tool result received, length: ${toolOutput.length}`);
-        this.emit('tool-result', toolOutput);
-        break;
-      }
-
-      case 'step_finish': {
-        this.emit('step-finish', {
-          reason: message.part.reason,
-          model: this.currentModelId || undefined,
-          tokens: message.part.tokens,
-          cost: message.part.cost,
-        });
-        if (message.part.reason === 'error') {
-          if (!this.hasCompleted) {
-            this.hasCompleted = true;
-            const errorMessage = classifyProcessError(undefined, this.outputBuffer);
-            this.emit('complete', {
-              status: 'error',
-              sessionId: this.currentSessionId || undefined,
-              error: errorMessage,
+  private createCompletionEnforcer(): CompletionEnforcer {
+    const callbacks: CompletionEnforcerCallbacks = {
+      onStartContinuation: async (prompt: string) => {
+        if (this.currentSessionId && this.client) {
+          this.client.session
+            .prompt({
+              sessionID: this.currentSessionId,
+              parts: [{ type: 'text', text: prompt }],
+            })
+            .catch((err: unknown) => {
+              log.warn('continuation prompt rejected', { error: serializeError(err) });
             });
-          }
-          break;
         }
-
-        const action = this.completionEnforcer.handleStepFinish(message.part.reason);
-        log.info(`[OpenCode Adapter] step_finish action: ${action}`);
-
-        if (action === 'complete' && !this.hasCompleted) {
-          this.hasCompleted = true;
-          this.emit('complete', {
-            status: 'success',
-            sessionId: this.currentSessionId || undefined,
-          });
-        }
-        break;
-      }
-
-      case 'error':
-        this.hasCompleted = true;
-        this.emit('complete', {
-          status: 'error',
-          sessionId: this.currentSessionId || undefined,
-          error: serializeError(message.error),
-        });
-        break;
-
-      default: {
-        const unknownMessage = message as unknown as { type: string };
-        log.info(`[OpenCode Adapter] Unknown message type: ${unknownMessage.type}`);
-      }
-    }
+      },
+      onComplete: () => {
+        this.markComplete('success');
+      },
+      onDebug: (type: string, message: string, data?: unknown) => {
+        this.emit('debug', { type, message, data });
+      },
+    };
+    return new CompletionEnforcer(callbacks);
   }
 
-  private handleToolCall(toolName: string, toolInput: unknown, sessionID?: string): void {
-    // Normalize rejected tool calls from local models (e.g. Ollama).
-    // opencode returns toolName='invalid'/'unknown' with { tool: 'complete_task' } in input.
-    // Detect and re-route to the canonical tool name so all bookkeeping runs correctly.
-    if (toolName === 'invalid' || toolName === 'unknown') {
-      const rejectedInput = toolInput as { tool?: string } | undefined;
-      const rejectedTool = rejectedInput?.tool?.trim();
-      if (
-        rejectedTool &&
-        rejectedTool !== toolName &&
-        rejectedTool !== 'invalid' &&
-        rejectedTool !== 'unknown'
-      ) {
-        this.handleToolCall(rejectedTool, toolInput, sessionID);
-        return;
-      }
-      // rejectedTool is absent or resolves to an invalid name — stop here.
+  private setupLogWatcher(): void {
+    this.logWatcher = createLogWatcher();
+    this.logWatcher.on('error', (error: OpenCodeLogError) => {
+      if (this.hasCompleted || !this.client) return;
+      log.info(`Log watcher detected error: ${error.errorName}`);
+
+      const errorMessage = OpenCodeLogWatcher.getErrorMessage(error);
+
       this.emit('debug', {
-        type: 'warning',
-        message: `[OpenCode Adapter] Skipping unresolvable rejected tool call: toolName="${toolName}", rejectedTool="${rejectedTool}"`,
+        type: 'error',
+        message: `[${error.errorName}] ${errorMessage}`,
+        data: {
+          errorName: error.errorName,
+          statusCode: error.statusCode,
+          providerID: error.providerID,
+          modelID: error.modelID,
+          message: error.message,
+        },
       });
-      return;
-    }
 
-    if (isStartTaskTool(toolName)) {
-      this.startTaskCalled = true;
-      const startInput = toolInput as StartTaskInput;
-      if (startInput?.needs_planning) {
-        this.completionEnforcer.markTaskRequiresCompletion();
-        if (startInput.goal && startInput.steps) {
-          this.emit(
-            'message',
-            buildPlanMessage(startInput, sessionID || this.currentSessionId || '', () =>
-              generateMessageId(),
-            ),
-          );
-          log.info('[OpenCode Adapter] Emitted synthetic plan message');
-          const todos: TodoItem[] = startInput.steps.map((step, i) => ({
-            id: String(i + 1),
-            content: step,
-            status: i === 0 ? 'in_progress' : 'pending',
-            priority: 'medium',
-          }));
-          if (todos.length > 0) {
-            this.emit('todo:update', todos);
-            this.completionEnforcer.updateTodos(todos);
-          }
-        }
-      }
-    }
-
-    if (!this.startTaskCalled && !isExemptTool(toolName)) {
-      this.emit('debug', {
-        type: 'warning',
-        message: `Tool "${toolName}" called before start_task - plan may not be captured`,
-      });
-    }
-
-    if (!this.hasReceivedFirstTool) {
-      this.hasReceivedFirstTool = true;
-      if (this.waitingTransitionTimer) {
-        clearTimeout(this.waitingTransitionTimer);
-        this.waitingTransitionTimer = null;
-      }
-    }
-
-    this.completionEnforcer.markToolsUsed(!isNonTaskContinuationTool(toolName));
-
-    // Intercept invalid tool calls where model tried to call complete_task but opencode rejected it.
-    // This happens with local models (e.g. Ollama) that don't support function calling natively —
-    // opencode returns toolName='invalid' with { tool: 'complete_task' } in the input, causing
-    // CompletionEnforcer to never detect completion and enter a "Retrying..." loop.
-    if (toolName === 'invalid' || toolName === 'unknown') {
-      const invalidInput = toolInput as { tool?: string; status?: string; summary?: string };
-      if (
-        invalidInput?.tool === 'complete_task' ||
-        (typeof invalidInput?.tool === 'string' && invalidInput.tool.endsWith('_complete_task'))
-      ) {
-        this.completionEnforcer.handleCompleteTaskDetection({
-          status: invalidInput.status ?? 'success',
-          summary: invalidInput.summary ?? 'Task completed.',
-        });
-        return;
-      }
-    }
-
-    if (toolName === 'complete_task' || toolName.endsWith('_complete_task')) {
-      this.completionEnforcer.handleCompleteTaskDetection(toolInput);
-      const completeInput = toolInput as { summary?: string };
-      if (completeInput?.summary && this.completionEnforcer.shouldComplete()) {
-        this.emit('message', {
-          type: 'text',
-          part: {
-            type: 'text',
-            text: completeInput.summary,
-            sessionID: sessionID || this.currentSessionId || '',
-          },
-        } as OpenCodeMessage);
-        this.messages.push({
-          id: generateMessageId(),
-          type: 'assistant',
-          content: completeInput.summary,
-          timestamp: new Date().toISOString(),
+      if (error.isAuthError && error.providerID) {
+        this.emit('auth-error', {
+          providerId: error.providerID,
+          message: errorMessage,
         });
       }
-    }
 
-    if (toolName === 'todowrite' || toolName.endsWith('_todowrite')) {
-      const input = toolInput as { todos?: Array<Partial<TodoItem> & { content: string }> };
-      if (input?.todos && Array.isArray(input.todos) && input.todos.length > 0) {
-        // OpenCode's todowrite doesn't include an id field — synthesize a unique one
-        const todos: TodoItem[] = input.todos.map((todo) => ({
-          id: todo.id || crypto.randomUUID(),
-          content: todo.content,
-          status: (todo.status as TodoItem['status']) || 'pending',
-          priority: (todo.priority as TodoItem['priority']) || 'medium',
-        }));
-        this.emit('todo:update', todos);
-        this.completionEnforcer.updateTodos(todos);
-      }
-    }
-
-    this.emit('tool-use', toolName, toolInput);
-    this.emit('progress', {
-      stage: 'tool-use',
-      message: `Using ${toolName}`,
+      this.markComplete('error', errorMessage);
+      void this.abortSession('log-error');
     });
   }
 
-  private handleProcessExit(code: number | null): void {
-    this.ptyProcess = null;
-
-    if (this.wasInterrupted && isNormalExit(code, this.options.platform) && !this.hasCompleted) {
-      log.info('[OpenCode CLI] Task was interrupted by user');
-      this.hasCompleted = true;
-      this.emit('complete', {
-        status: 'interrupted',
-        sessionId: this.currentSessionId || undefined,
-      });
-      this.currentTaskId = null;
+  private async runEventSubscription(signal: AbortSignal): Promise<void> {
+    if (!this.client) return;
+    let subscription;
+    try {
+      subscription = await this.client.event.subscribe(
+        {},
+        // AbortSignal is propagated to the underlying fetch via options. The
+        // SDK forwards it without declaring it in the Options type; cast to
+        // unknown to bypass the narrow declared shape.
+        { throwOnError: true, signal } as unknown as Parameters<
+          OpencodeClient['event']['subscribe']
+        >[1],
+      );
+    } catch (err) {
+      if (!this.isDisposed && !this.wasInterrupted) {
+        this.emit('error', err instanceof Error ? err : new Error(String(err)));
+        this.markComplete('error', err instanceof Error ? err.message : String(err));
+      }
       return;
     }
 
-    if (isNormalExit(code, this.options.platform) && !this.hasCompleted) {
-      // Normalize Windows Ctrl+C exit code to 0 so the completion enforcer treats it as a clean exit
-      const normalizedCode = code === WINDOWS_CTRL_C_EXIT_CODE ? 0 : (code ?? 0);
-      this.completionEnforcer.handleProcessExit(normalizedCode).catch((error) => {
-        log.error(`[OpenCode Adapter] Completion enforcer error: ${error}`);
-        this.hasCompleted = true;
-        this.emit('complete', {
-          status: 'error',
-          sessionId: this.currentSessionId || undefined,
-          error: `Failed to complete: ${error.message}`,
-        });
-      });
-      return;
+    try {
+      // subscription.stream is an AsyncIterable<Event>
+      const stream = (subscription as { stream: AsyncIterable<OpenCodeSdkEvent> }).stream;
+      for await (const event of stream) {
+        if (signal.aborted) break;
+        try {
+          this.handleSdkEvent(event);
+        } catch (err) {
+          log.warn('event handler threw', { error: serializeError(err) });
+        }
+      }
+    } catch (err) {
+      if (!this.isDisposed && !this.wasInterrupted && !signal.aborted) {
+        this.emit('error', err instanceof Error ? err : new Error(String(err)));
+        this.markComplete('error', err instanceof Error ? err.message : String(err));
+      }
     }
-
-    if (!this.hasCompleted && !isNormalExit(code, this.options.platform)) {
-      // Treat null (abnormal PTY termination) and non-zero non-normal codes as errors
-      const errorMessage = classifyProcessError(code ?? undefined, this.outputBuffer);
-      this.emit('error', new Error(errorMessage));
-    }
-
-    this.currentTaskId = null;
   }
 
-  private async spawnSessionResumption(prompt: string): Promise<void> {
-    const sessionId = this.currentSessionId;
-    if (!sessionId) {
-      throw new Error('No session ID available for session resumption');
+  private handleSdkEvent(event: OpenCodeSdkEvent): void {
+    switch (event.type) {
+      case 'message.updated': {
+        const info = (event.properties as { info: OpenCodeSdkMessage }).info;
+        this.handleMessageUpdated(info);
+        return;
+      }
+      case 'message.part.updated': {
+        const part = (event.properties as { part: OpenCodeSdkPart }).part;
+        this.handlePartUpdated(part);
+        return;
+      }
+      case 'message.part.delta': {
+        // Delta updates stream text incrementally; the renderer already
+        // coalesces by stable ID when the completed text arrives via
+        // message.part.updated. We don't emit per-delta messages to avoid
+        // flooding the IPC bus.
+        return;
+      }
+      case 'permission.asked': {
+        const sdkReq = event.properties as OpenCodeSdkPermissionRequest;
+        this.handlePermissionAsked(sdkReq);
+        return;
+      }
+      case 'question.asked': {
+        const sdkReq = event.properties as OpenCodeSdkQuestionRequest;
+        this.handleQuestionAsked(sdkReq);
+        return;
+      }
+      case 'session.error': {
+        const err = (event.properties as { error?: { message?: string; name?: string } }).error;
+        if (err) {
+          const msg = err.message ?? 'Session error';
+          this.emit('error', new Error(msg));
+          this.markComplete('error', msg);
+        }
+        return;
+      }
+      case 'session.idle': {
+        // Session finished its active work. If completion enforcer considers
+        // us done, mark success. Otherwise we wait — a follow-up prompt may
+        // re-activate.
+        if (!this.hasCompleted && this.completionEnforcer.shouldComplete()) {
+          this.markComplete('success');
+        }
+        return;
+      }
+      case 'todo.updated': {
+        const sdkTodos = (event.properties as { todos: Array<Record<string, unknown>> }).todos;
+        // SDK Todo shape: { content, status, priority?, ... } — no `id`. Map
+        // into OSS `TodoItem` by synthesising a stable id from index + content.
+        const todos: TodoItem[] = (sdkTodos ?? []).map((t, idx) => {
+          const rawStatus = t.status;
+          const status: TodoItem['status'] =
+            rawStatus === 'completed' || rawStatus === 'in_progress' || rawStatus === 'cancelled'
+              ? rawStatus
+              : 'pending';
+          const rawPriority = t.priority;
+          const priority: TodoItem['priority'] =
+            rawPriority === 'high' || rawPriority === 'low' ? rawPriority : 'medium';
+          return {
+            id: `todo_${idx}_${String(t.content ?? '').slice(0, 32)}`,
+            content: String(t.content ?? ''),
+            status,
+            priority,
+          };
+        });
+        this.emit('todo:update', todos);
+        return;
+      }
+      default:
+        return;
+    }
+  }
+
+  private handleMessageUpdated(info: OpenCodeSdkMessage): void {
+    if (info.role === 'assistant') {
+      const assistant = info as AssistantMessage;
+      if (assistant.modelID && !this.currentModelId) {
+        this.currentModelId = assistant.modelID;
+      }
+      if (assistant.providerID && !this.currentProviderId) {
+        this.currentProviderId = assistant.providerID;
+      }
+    }
+  }
+
+  private handlePartUpdated(part: OpenCodeSdkPart): void {
+    // Reasoning parts → OSS `reasoning` event
+    if (part.type === 'reasoning') {
+      const text = (part as { text?: string }).text;
+      if (text) this.emit('reasoning', text);
+      return;
     }
 
-    log.info(`[OpenCode Adapter] Starting session resumption with session ${sessionId}`);
+    // Text parts — convert via message-processor (handles sanitization, stable IDs,
+    // and the new modelContext stamping from Phase 1a).
+    if (part.type === 'text') {
+      const synthetic = this.partToOpenCodeMessage(part);
+      if (synthetic) {
+        this.emit('message', synthetic);
+      }
+      this.checkForConnectorAuthMarker((part as { text?: string }).text ?? '');
+      return;
+    }
 
-    this.streamParser.reset();
-    this.outputBuffer = '';
+    // Tool parts — convert state transitions (running/completed/error) into
+    // `message` events so the renderer can coalesce tool rows.
+    if (part.type === 'tool') {
+      const toolPart = part as ToolPart;
+      const toolName = toolPart.tool ?? 'unknown';
+      const state = (toolPart as { state?: { status?: string; input?: unknown; output?: string } })
+        .state;
+      const status = state?.status;
 
-    const config: TaskConfig = {
-      prompt,
-      sessionId: sessionId,
-      workingDirectory: this.lastWorkingDirectory,
+      if (status === 'running') {
+        this.emit('tool-use', toolName, state?.input);
+      } else if (status === 'completed' || status === 'error') {
+        const output = state?.output ?? '';
+        this.emit('tool-result', output);
+        this.emit('tool-call-complete', {
+          toolName,
+          toolInput: state?.input,
+          toolOutput: output,
+          sessionId: this.currentSessionId ?? undefined,
+        });
+
+        // Browser-frame detection: dev-browser-mcp emits JSON frames in its tool
+        // output. Parse opportunistically; the renderer relies on this to display
+        // live page previews (ENG-695 / PR #414).
+        if (toolName === 'dev-browser-mcp' || toolName.endsWith('_dev-browser-mcp')) {
+          this.detectBrowserFrames(output);
+        }
+      }
+
+      const synthetic = this.partToOpenCodeMessage(part);
+      if (synthetic) {
+        this.emit('message', synthetic);
+      }
+      return;
+    }
+
+    // Step-finish parts carry token usage stats.
+    if (part.type === 'step-finish') {
+      const sp = part as {
+        reason?: string;
+        tokens?: {
+          input?: number;
+          output?: number;
+          reasoning?: number;
+          cache?: { read?: number; write?: number };
+        };
+        cost?: number;
+      };
+      this.emit('step-finish', {
+        reason: sp.reason ?? 'unknown',
+        model: this.currentModelId ?? undefined,
+        tokens: sp.tokens
+          ? {
+              input: sp.tokens.input ?? 0,
+              output: sp.tokens.output ?? 0,
+              reasoning: sp.tokens.reasoning ?? 0,
+              ...(sp.tokens.cache
+                ? { cache: { read: sp.tokens.cache.read ?? 0, write: sp.tokens.cache.write ?? 0 } }
+                : {}),
+            }
+          : undefined,
+        cost: sp.cost,
+      });
+    }
+  }
+
+  private handlePermissionAsked(sdkReq: OpenCodeSdkPermissionRequest): void {
+    const requestId = this.generateRequestId('permission');
+    this.pendingRequest = {
+      kind: 'permission',
+      requestId,
+      sdkRequestId: sdkReq.id,
+      sessionId: sdkReq.sessionID,
+    };
+    const fileOp = this.inferFileOperation(sdkReq);
+    const filePath = this.inferFilePath(sdkReq);
+    // Note: SDK v2 permission requests reference the originating tool via
+    // `tool: { messageID, callID }` — not by name. Resolving to a human-
+    // readable tool name would require looking up the tool part separately;
+    // the renderer can do that via its existing tool registry. Leave
+    // toolName undefined for now.
+    const req: PermissionRequest = {
+      id: requestId,
+      taskId: this.currentTaskId ?? '',
+      type: fileOp ? 'file' : 'tool',
+      toolInput: sdkReq.metadata,
+      ...(fileOp ? { fileOperation: fileOp } : {}),
+      ...(filePath ? { filePath } : {}),
+      createdAt: new Date().toISOString(),
+    };
+    this.emit('permission-request', req);
+  }
+
+  private handleQuestionAsked(sdkReq: OpenCodeSdkQuestionRequest): void {
+    const requestId = this.generateRequestId('question');
+    this.pendingRequest = {
+      kind: 'question',
+      requestId,
+      sdkRequestId: sdkReq.id,
+      sessionId: sdkReq.sessionID,
+    };
+    const first = sdkReq.questions?.[0];
+    const req: PermissionRequest = {
+      id: requestId,
+      taskId: this.currentTaskId ?? '',
+      type: 'question',
+      question: first?.question,
+      header: first?.header,
+      options: first?.options?.map((o) => ({
+        label: o.label,
+        description: o.description,
+      })),
+      multiSelect: first?.multiple,
+      createdAt: new Date().toISOString(),
+    };
+    this.emit('permission-request', req);
+  }
+
+  private inferFileOperation(
+    req: OpenCodeSdkPermissionRequest,
+  ): PermissionRequest['fileOperation'] | undefined {
+    const perm = req.permission;
+    if (perm === 'edit' || perm === 'modify') return 'modify';
+    if (perm === 'write') return 'create';
+    if (perm === 'delete') return 'delete';
+    return undefined;
+  }
+
+  private inferFilePath(req: OpenCodeSdkPermissionRequest): string | undefined {
+    const patterns = req.patterns;
+    if (Array.isArray(patterns) && patterns.length > 0) return patterns[0];
+    return undefined;
+  }
+
+  private partToOpenCodeMessage(part: OpenCodeSdkPart): OpenCodeMessage | null {
+    // Synthesise an OSS OpenCodeMessage from the SDK part so existing
+    // consumers of the `message` event (TaskManager → task-callbacks)
+    // continue to work. Phase 1c renderer updates will switch to TaskMessage-
+    // shaped events eventually.
+    const asAny = part as unknown as {
+      id?: string;
+      sessionID?: string;
+      messageID?: string;
+      type?: string;
+      text?: string;
+      tool?: string;
+      state?: { status?: string; input?: unknown; output?: string };
     };
 
-    const cliArgs = await this.options.buildCliArgs(config);
-
-    const { command, args: baseArgs } = this.options.getCliCommand();
-    log.info(
-      `[OpenCode Adapter] Session resumption command: ${command} ${[...baseArgs, ...cliArgs].join(' ')}`,
-    );
-
-    const env = await this.options.buildEnvironment(this.currentTaskId || 'default');
-
-    const allArgs = [...baseArgs, ...cliArgs];
-    const safeCwd = config.workingDirectory || this.options.tempPath;
-
-    const { file: spawnFile, args: spawnArgs } = buildPtySpawnArgs(
-      command,
-      allArgs,
-      this.options.platform,
-      this.options.isPackaged,
-    );
-
-    const sandboxedArgs = await this.sandboxProvider.wrapSpawnArgs(
-      {
-        file: spawnFile,
-        args: spawnArgs,
-        cwd: safeCwd,
-        env: { ...env, ...this.externalEnv },
-      },
-      this.sandboxConfig,
-    );
-
-    this.ptyProcess = pty.spawn(sandboxedArgs.file, sandboxedArgs.args, {
-      name: 'xterm-256color',
-      cols: 32000,
-      rows: 30,
-      cwd: sandboxedArgs.cwd,
-      env: sandboxedArgs.env,
-    });
-
-    this.ptyProcess.onData((data: string) => {
-      /* eslint-disable no-control-regex */
-      const cleanData = data
-        .replace(/\x1B\[[0-9;?]*[a-zA-Z]/g, '')
-        .replace(/\x1B\][^\x07]*\x07/g, '')
-        .replace(/\x1B\][^\x1B]*\x1B\\/g, '');
-      /* eslint-enable no-control-regex */
-      // Route through checkForBrowserFrame so continuation PTY frames are not dropped
-      const passthroughData = this.checkForBrowserFrame(cleanData);
-      if (passthroughData.trim()) {
-        const truncated =
-          passthroughData.substring(0, LOG_TRUNCATION_LIMIT) +
-          (passthroughData.length > LOG_TRUNCATION_LIMIT ? '...' : '');
-        log.info(`[OpenCode CLI stdout]: ${truncated}`);
-        this.emit('debug', { type: 'stdout', message: passthroughData });
-
-        this.appendToOutputBuffer(passthroughData);
-
-        this.streamParser.feed(passthroughData);
-      }
-    });
-
-    this.ptyProcess.onExit(({ exitCode }) => {
-      this.handleProcessExit(exitCode);
-    });
-  }
-
-  private pauseForConnectorAuth(input: ConnectorAuthPauseInput, sessionId?: string): void {
-    if (this.hasCompleted) {
-      return;
-    }
-
-    if (!this.currentSessionId && sessionId) {
-      this.currentSessionId = sessionId;
-    }
-
-    if (!input.providerId) {
-      this.hasCompleted = true;
-      this.emit('complete', {
-        status: 'error',
-        sessionId: this.currentSessionId || undefined,
-        error:
-          'The agent requested connector authentication without specifying which connector to authenticate.',
-      });
-      return;
-    }
-
-    if (!isOAuthProviderId(input.providerId)) {
-      this.hasCompleted = true;
-      this.emit('complete', {
-        status: 'error',
-        sessionId: this.currentSessionId || undefined,
-        error: `The agent requested connector authentication for an unsupported connector provider: ${input.providerId}.`,
-      });
-      return;
-    }
-
-    const providerId = input.providerId;
-    const providerName = getOAuthProviderDisplayName(providerId);
-    const pauseMessage =
-      input.message?.trim() ||
-      `I need ${providerName} connected to continue. Click Authenticate ${providerName}.`;
-
-    log.info('[OpenCode Adapter] Pausing for connector auth', {
-      providerId,
-      hasCustomMessage: Boolean(input.message?.trim()),
-    });
-
-    if (this.waitingTransitionTimer) {
-      clearTimeout(this.waitingTransitionTimer);
-      this.waitingTransitionTimer = null;
-    }
-
-    const effectiveSessionId = this.currentSessionId || sessionId || '';
-
-    // Emit a synthetic text message so the user sees the pause reason
-    const syntheticMessage: OpenCodeMessage = {
-      type: 'text',
-      timestamp: Date.now(),
-      sessionID: effectiveSessionId,
-      part: {
-        id: generateMessageId(),
-        sessionID: effectiveSessionId,
-        messageID: generateMessageId(),
+    if (part.type === 'text') {
+      const text = asAny.text ?? '';
+      return {
         type: 'text',
-        text: pauseMessage,
-      },
-    } as import('../../common/types/opencode.js').OpenCodeTextMessage;
-    this.emit('message', syntheticMessage);
+        part: {
+          id: asAny.id ?? '',
+          sessionID: asAny.sessionID ?? '',
+          messageID: asAny.messageID ?? '',
+          type: 'text',
+          text,
+        },
+      } as OpenCodeMessage;
+    }
 
-    this.hasCompleted = true;
-    this.emit('complete', {
-      status: 'success',
-      sessionId: this.currentSessionId || undefined,
-      pauseReason: 'auth',
-      pauseAction: {
-        type: 'oauth-connect',
-        providerId,
-        label: input.label?.trim() || `Authenticate ${providerName}`,
-        pendingLabel: input.pendingLabel?.trim() || `Authenticating ${providerName}...`,
-        successText: input.successText?.trim() || `${providerName} is connected.`,
-      },
-    });
+    if (part.type === 'tool') {
+      const rawStatus = asAny.state?.status;
+      const status: 'pending' | 'running' | 'completed' | 'error' =
+        rawStatus === 'running' ||
+        rawStatus === 'completed' ||
+        rawStatus === 'error' ||
+        rawStatus === 'pending'
+          ? rawStatus
+          : 'pending';
+      return {
+        type: 'tool_use',
+        part: {
+          id: asAny.id ?? '',
+          sessionID: asAny.sessionID ?? '',
+          messageID: asAny.messageID ?? '',
+          type: 'tool',
+          tool: asAny.tool ?? 'unknown',
+          state: {
+            status,
+            input: asAny.state?.input,
+            output: asAny.state?.output,
+          },
+        },
+      };
+    }
 
-    if (this.ptyProcess) {
-      try {
-        this.ptyProcess.kill();
-      } catch (error) {
-        log.warn(`[OpenCode Adapter] Error killing PTY during connector auth pause: ${error}`);
-      }
-      this.ptyProcess = null;
+    return null;
+  }
+
+  private checkForConnectorAuthMarker(text: string): void {
+    if (!text.includes(CONNECTOR_AUTH_REQUIRED_MARKER)) return;
+    const payload = this.parseConnectorAuthPayload(text);
+    if (payload?.providerId && isOAuthProviderId(payload.providerId)) {
+      this.emit('auth-error', {
+        providerId: payload.providerId,
+        message:
+          payload.message ??
+          `${getOAuthProviderDisplayName(payload.providerId)} authentication required`,
+      });
     }
   }
-}
 
-export function createAdapter(options: AdapterOptions, taskId?: string): OpenCodeAdapter {
-  return new OpenCodeAdapter(options, taskId);
+  private parseConnectorAuthPayload(text: string): ConnectorAuthPauseInput | null {
+    const start = text.indexOf(CONNECTOR_AUTH_REQUIRED_MARKER);
+    if (start < 0) return null;
+    const after = text.slice(start + CONNECTOR_AUTH_REQUIRED_MARKER.length).trim();
+    const braceStart = after.indexOf('{');
+    if (braceStart < 0) return null;
+    try {
+      // Best-effort: find matching closing brace.
+      let depth = 0;
+      for (let i = braceStart; i < after.length; i++) {
+        if (after[i] === '{') depth++;
+        else if (after[i] === '}') {
+          depth--;
+          if (depth === 0) {
+            return JSON.parse(after.slice(braceStart, i + 1));
+          }
+        }
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
+  /**
+   * Parse dev-browser-mcp tool output for JSON-encoded browser frames
+   * (ENG-695 / PR #414). The PTY path scanned raw stdout; the SDK path
+   * inspects the tool's output field once it reaches `completed` state.
+   *
+   * Payload shape: `{"type":"browser-frame","taskId":...,"pageName":...,"frame":...,"timestamp":...}`.
+   */
+  private detectBrowserFrames(output: string): void {
+    if (!output) return;
+    const lines = output.split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('{') || !trimmed.includes('"type":"browser-frame"')) continue;
+      // Dedup: frame payloads can be replayed across state transitions.
+      const fingerprint = trimmed.slice(0, 64);
+      if (this.browserFrameSeen.has(fingerprint)) continue;
+      this.browserFrameSeen.add(fingerprint);
+      try {
+        const payload = JSON.parse(trimmed) as BrowserFramePayload & { type?: string };
+        if (payload.type === 'browser-frame') {
+          this.emit('browser-frame', payload);
+        }
+      } catch {
+        // Malformed line — skip.
+      }
+    }
+  }
+
+  private async abortSession(reason: 'cancel' | 'interrupt' | 'log-error'): Promise<void> {
+    this.eventAbortController?.abort();
+    if (this.client && this.currentSessionId) {
+      try {
+        await this.client.session.abort(
+          { sessionID: this.currentSessionId },
+          { throwOnError: false },
+        );
+      } catch (err) {
+        log.debug?.(`session.abort (${reason}) threw`, { error: serializeError(err) });
+      }
+    }
+  }
+
+  private markComplete(status: TaskResult['status'], error?: string): void {
+    if (this.hasCompleted) return;
+    this.hasCompleted = true;
+    const result: TaskResult = { status, sessionId: this.currentSessionId || undefined };
+    if (error) result.error = error;
+    this.emit('complete', result);
+  }
+
+  private teardown(): void {
+    this.eventAbortController?.abort();
+    this.eventAbortController = null;
+    this.eventStreamPromise = null;
+    this.pendingRequest = null;
+    this.client = null;
+    // Clear LLM-gateway task tag so subsequent non-task LLM calls aren't
+    // misattributed. No-op if the callback wasn't wired.
+    this.options.setProxyTaskId?.(undefined);
+  }
 }

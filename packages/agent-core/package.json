@@ -69,7 +69,6 @@
     "@opencode-ai/sdk": "1.2.24",
     "better-sqlite3": "catalog:",
     "gray-matter": "^4.0.3",
-    "node-pty": "catalog:",
     "proxy-from-env": "^2.1.0",
     "undici": "^8.0.3",
     "zod": "catalog:"

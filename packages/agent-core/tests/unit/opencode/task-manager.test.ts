@@ -85,10 +85,12 @@ describe('TaskManager', () => {
   });
 
   describe('OpenCodeCliNotFoundError', () => {
-    it('should be thrown when CLI is not available', async () => {
+    it('should be thrown when runtime is not available', async () => {
       const error = new OpenCodeCliNotFoundError();
       expect(error.name).toBe('OpenCodeCliNotFoundError');
-      expect(error.message).toContain('OpenCode CLI is not available');
+      // Message updated in Phase 1b of the SDK cutover port ('CLI' → 'runtime');
+      // the error name is retained so existing error-classification paths still work.
+      expect(error.message).toContain('OpenCode runtime is not available');
     });
   });
 
