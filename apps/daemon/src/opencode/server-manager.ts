@@ -31,9 +31,12 @@
  */
 
 import { spawn, spawnSync, type ChildProcess } from 'child_process';
-import { createRequire } from 'node:module';
-import path from 'node:path';
-import type { StorageAPI, AccomplishRuntime } from '@accomplish_ai/agent-core';
+import {
+  resolveCliPath,
+  type StorageAPI,
+  type AccomplishRuntime,
+  type CliResolverConfig,
+} from '@accomplish_ai/agent-core';
 import { createOpencodeClient, type OpencodeClient } from '@opencode-ai/sdk/v2';
 
 import { log } from '../logger.js';
@@ -127,19 +130,37 @@ function trackRuntimePid(proc: ChildProcess): number {
 let cachedOpencodeBinPath: string | null = null;
 
 /**
- * Resolve the `opencode` CLI binary shipped by the `opencode-ai` npm package.
- * Matches the resolution pattern validated by the Phase 0 SDK spike.
+ * Resolve the `opencode` CLI binary using the SAME resolver agent-core's
+ * `isCliAvailable` uses. Earlier drafts of this function called
+ * `require.resolve('opencode-ai/package.json')` directly, but in the
+ * tsup-bundled CJS daemon the search root is `apps/daemon/dist/`, which has
+ * no `node_modules/opencode-ai/`. The bundled-app form is
+ * `${resourcesPath}/app.asar.unpacked/node_modules/opencode-ai/bin/opencode`;
+ * the dev form is `${appPath}/node_modules/.bin/opencode`. Both are handled
+ * by `resolveCliPath` so the daemon doesn't need to re-implement the
+ * lookup. Cached after the first successful resolution.
+ *
+ * Throws when the CLI cannot be located — the per-task runtime can't spawn
+ * `opencode serve` without it. The error message matches what the daemon
+ * reports through the RPC layer for consistency.
  */
-function getOpencodeBinPath(): string {
+function getOpencodeBinPath(deps: TaskConfigBuilderOptions): string {
   if (cachedOpencodeBinPath) return cachedOpencodeBinPath;
 
-  const require = createRequire(import.meta.url);
-  const pkgJsonPath = require.resolve('opencode-ai/package.json');
-  const pkgDir = path.dirname(pkgJsonPath);
-  const binName = process.platform === 'win32' ? 'opencode.exe' : 'opencode';
-  const binPath = path.join(pkgDir, 'bin', binName);
-  cachedOpencodeBinPath = binPath;
-  return binPath;
+  const cliConfig: CliResolverConfig = {
+    isPackaged: deps.isPackaged,
+    resourcesPath: deps.resourcesPath,
+    appPath: deps.appPath,
+  };
+  const resolved = resolveCliPath(cliConfig);
+  if (!resolved) {
+    throw new Error(
+      `Cannot locate opencode-ai CLI. resolveCliPath returned null for ` +
+        `(isPackaged=${deps.isPackaged}, resourcesPath=${deps.resourcesPath}, appPath=${deps.appPath}).`,
+    );
+  }
+  cachedOpencodeBinPath = resolved.cliPath;
+  return resolved.cliPath;
 }
 
 // ──────────────────────────── low-level spawn ──────────────────────────────
@@ -152,14 +173,21 @@ function parseServerUrlFromOutput(line: string): string | null {
 
 function spawnOpenCodeServer(
   runtimeEnv: NodeJS.ProcessEnv,
+  deps: TaskConfigBuilderOptions,
   signal?: AbortSignal,
   onClosed?: () => void,
 ): Promise<TrackedOpencodeServerHandle> {
-  const command = getOpencodeBinPath();
+  const command = getOpencodeBinPath(deps);
   const args = ['serve', '--hostname=127.0.0.1', '--port=0'];
+  // Merge runtimeEnv (per-task config: OPENCODE_CONFIG, OPENCODE_CONFIG_DIR,
+  // and PATH if onBeforeStart prepended bundled Node) ON TOP of process.env
+  // so the spawned `opencode` shim inherits PATH, HOME, XDG_*, locale, etc.
+  // Without this merge the shim runs in a near-empty env and the wrapper
+  // shell script can't `exec node`. The runtime overrides win on conflict.
+  const mergedEnv: NodeJS.ProcessEnv = { ...process.env, ...runtimeEnv };
   const proc = spawn(command, args, {
     detached: process.platform !== 'win32',
-    env: runtimeEnv,
+    env: mergedEnv,
     signal,
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
@@ -326,7 +354,7 @@ class OpenCodeTaskRuntime {
       const { env: runtimeEnv } = await onBeforeStart(this.deps.storage, this.deps);
       throwIfStartAborted(signal);
 
-      const spawnedServer = await spawnOpenCodeServer(runtimeEnv, signal, () => {
+      const spawnedServer = await spawnOpenCodeServer(runtimeEnv, this.deps, signal, () => {
         // Runtime-side `onClosed`: the child exited independently. Flip state
         // so `isReady()` reflects reality; the adapter consumes its own
         // `session.error` SDK event stream to report task-level failures.
@@ -501,7 +529,7 @@ export async function createTransientOpencodeClient(
   throwIfStartAborted(signal);
   const { env: runtimeEnv } = await onBeforeStart(deps.storage, deps);
   throwIfStartAborted(signal);
-  const server = await spawnOpenCodeServer(runtimeEnv, signal);
+  const server = await spawnOpenCodeServer(runtimeEnv, deps, signal);
   return {
     client: createOpencodeClient({ baseUrl: server.url }),
     close: () => server.close(),

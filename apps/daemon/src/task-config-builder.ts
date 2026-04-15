@@ -106,12 +106,29 @@ export async function onBeforeStart(
     skills,
   });
 
+  // Prepend the bundled Node.js bin dir to the env's PATH so the
+  // `apps/desktop/node_modules/.bin/opencode` shell wrapper (and the
+  // packaged equivalent) can find `node` even when the daemon runs as a
+  // login item with a minimal PATH (e.g. `/usr/bin:/bin:/usr/sbin:/sbin`
+  // with no user-installed Node.js). The deleted PTY-era `buildEnvironment`
+  // helper used to do this; the SDK adapter still needs it because
+  // `opencode serve` is launched by `OpenCodeServerManager.spawnOpenCodeServer`
+  // through the same shell shim.
+  const env: NodeJS.ProcessEnv = {
+    OPENCODE_CONFIG: result.configPath,
+    OPENCODE_CONFIG_DIR: path.dirname(result.configPath),
+  };
+  const bundledNodeBinPath = getBundledNodeBinPath(opts);
+  if (bundledNodeBinPath) {
+    env.PATH = `${bundledNodeBinPath}${path.delimiter}${process.env.PATH ?? ''}`;
+    if (process.platform === 'win32') {
+      env.Path = env.PATH;
+    }
+  }
+
   return {
     configPath: result.configPath,
-    env: {
-      OPENCODE_CONFIG: result.configPath,
-      OPENCODE_CONFIG_DIR: path.dirname(result.configPath),
-    },
+    env,
   };
 }
 export * from './task-service-helpers.js';
