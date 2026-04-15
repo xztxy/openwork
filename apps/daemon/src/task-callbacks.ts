@@ -65,19 +65,12 @@ export function createTaskCallbacks(
       // to replace the `PermissionService`-era "no UI connected → auto-deny"
       // safeguard (previously implemented inside the permission HTTP handlers).
       //
-      //   'whatsapp': always emit; `wireTaskBridge` will auto-deny via
-      //               `sendPermissionResponse({decision:'deny'})`.
-      //   !UI + !whatsapp: immediately auto-deny — no caller will respond,
-      //               so the adapter must not hang waiting.
-      //   otherwise: emit the request to the UI via RPC.
+      //   'whatsapp' + bridge attached: emit; wireTaskBridge auto-denies.
+      //   'whatsapp' + no bridge: auto-deny HERE (plan decision #10 guard).
+      //   !UI + !whatsapp: auto-deny — no caller will respond.
+      //   otherwise (UI source): emit the request to the UI via RPC.
       const source = extras.getTaskSource(taskId);
-
-      if (source === 'whatsapp') {
-        emitter.emit('permission', request);
-        return;
-      }
-
-      if (!extras.rpc.hasConnectedClients()) {
+      const autoDeny = (): void => {
         extras
           .sendPermissionResponse(taskId, {
             taskId,
@@ -87,6 +80,27 @@ export function createTaskCallbacks(
           .catch(() => {
             // Swallow — auto-deny failures are logged at the sendResponse layer.
           });
+      };
+
+      if (source === 'whatsapp') {
+        // Plan decision #10: if `source === 'whatsapp'` but no WhatsApp
+        // bridge is actually subscribed to the 'permission' event (e.g.,
+        // WhatsApp integration disabled at runtime), emitting into the
+        // void leaves the adapter's `pendingRequest` unresolved and the
+        // task hangs forever. Probe listener count — if nothing beyond
+        // the daemon's own RPC-notify forwarder is listening, treat as
+        // no-UI and auto-deny.
+        const listenerCount = emitter.listenerCount('permission');
+        if (listenerCount <= 1) {
+          autoDeny();
+          return;
+        }
+        emitter.emit('permission', request);
+        return;
+      }
+
+      if (!extras.rpc.hasConnectedClients()) {
+        autoDeny();
         return;
       }
 
