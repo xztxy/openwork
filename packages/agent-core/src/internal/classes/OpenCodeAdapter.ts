@@ -668,12 +668,29 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
         return;
       }
       case 'session.idle': {
-        // Session finished its active work. If completion enforcer considers
-        // us done, mark success. Otherwise we wait — a follow-up prompt may
-        // re-activate.
-        if (!this.hasCompleted && this.completionEnforcer.shouldComplete()) {
-          this.markComplete('success');
-        }
+        // Session finished its active work. Drive the completion enforcer
+        // through the same lifecycle it used in the PTY era:
+        //   1. `handleStepFinish('stop')` runs the conversational-turn
+        //      detection and the continuation scheduler. For a simple
+        //      "what is 8+5" the agent never calls `complete_task`;
+        //      without this hook `shouldComplete()` stays false and the
+        //      task HANGS FOREVER. (The pre-port adapter called this on
+        //      every step_finish event; the SDK port missed it — real
+        //      user-visible bug surfaced in manual testing.)
+        //   2. `handleProcessExit(0)` fires onComplete OR onStartContinuation
+        //      based on state. For conversational turns → onComplete →
+        //      markComplete('success'). For tool-using turns that didn't
+        //      call complete_task → onStartContinuation sends a nudge
+        //      prompt via the SDK to keep the agent working.
+        // Swallow handleStepFinish's return — the state it leaves behind
+        // drives handleProcessExit's branching.
+        if (this.hasCompleted) return;
+        this.completionEnforcer.handleStepFinish('stop');
+        void this.completionEnforcer.handleProcessExit(0).catch((err: unknown) => {
+          log.warn('completionEnforcer.handleProcessExit threw', {
+            error: serializeError(err),
+          });
+        });
         return;
       }
       case 'todo.updated': {
@@ -697,6 +714,9 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
           };
         });
         this.emit('todo:update', todos);
+        // Sync todos into the completion enforcer — its "claim success
+        // with incomplete todos → downgrade to partial" logic reads this.
+        this.completionEnforcer.updateTodos(todos);
         return;
       }
       default:
@@ -761,6 +781,36 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
         // live page previews (ENG-695 / PR #414).
         if (toolName === 'dev-browser-mcp' || toolName.endsWith('_dev-browser-mcp')) {
           this.detectBrowserFrames(output);
+        }
+      }
+
+      // Completion-enforcer wiring. Before this was hooked up, tasks
+      // running the full workflow (start_task → tools → complete_task)
+      // did nothing when the agent called `complete_task` — the enforcer
+      // stayed in IDLE state and `session.idle` never resolved into a
+      // success marker.
+      //
+      //   start_task: marks the task as requiring completion (full
+      //               workflow, not conversational).
+      //   complete_task: records the arguments so `shouldComplete()` /
+      //                  `handleProcessExit()` see state.isDone().
+      //   any other tool: counts for continuation — prevents the
+      //                   enforcer from labelling this as conversational
+      //                   when the agent actually did work.
+      // Only fire once per tool, at the first state transition we see
+      // (running if we saw it, else completed/error).
+      if (status === 'running' || status === 'completed' || status === 'error') {
+        if (toolName === 'complete_task' && state?.input !== undefined) {
+          this.completionEnforcer.handleCompleteTaskDetection(state.input);
+        } else if (toolName === 'start_task') {
+          this.completionEnforcer.markTaskRequiresCompletion();
+        } else {
+          // Regular tool — counts for continuation. Use the running-only
+          // branch to avoid double-counting a tool that transitions
+          // running → completed.
+          if (status === 'running') {
+            this.completionEnforcer.markToolsUsed(true);
+          }
         }
       }
 
