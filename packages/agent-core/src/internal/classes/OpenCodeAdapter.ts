@@ -241,6 +241,32 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   private browserFrameSeen = new Set<string>();
 
   /**
+   * Per-session map of SDK message ID → role. Populated from `message.updated`
+   * events; consulted in `handlePartUpdated` so we only forward parts of
+   * ASSISTANT messages up to the renderer. Without this filter, OpenCode's
+   * SDK emits `message.part.updated` for the USER prompt's own text part —
+   * `partToOpenCodeMessage` + `toTaskMessage` would then store it as
+   * `type: 'assistant'`, producing a duplicated user message bubble ahead
+   * of the real reply (user: "how much is 7+4" → bogus assistant bubble
+   * echoing "how much is 7+4" → real assistant bubble "7+4 = 11"). The
+   * map is cleared on task-start alongside the other per-task state so
+   * IDs from a prior task can't bleed in.
+   */
+  private messageRoles = new Map<string, 'user' | 'assistant' | string>();
+
+  /**
+   * Per-task set of tool-call IDs that have already been counted by the
+   * completion enforcer (`markToolsUsed`, `markTaskRequiresCompletion`, or
+   * `handleCompleteTaskDetection`). Used to dedupe across the
+   * running → completed/error transitions the SDK re-emits for the same
+   * `part.id`. Without this, fast tools that the SDK only surfaces as
+   * `completed` (never `running`) were dropped — Codex R3 P2 flagged the
+   * "markToolsUsed only fires on running" bug; this set lets the first
+   * observed transition (whichever it is) count while keeping dedupe.
+   */
+  private countedToolCallIds = new Set<string>();
+
+  /**
    * Monotonic counter bumped in `handleSdkEvent` on every SDK event. Feeds
    * the `TaskInactivityWatchdog` fingerprint — each real SDK event advances
    * it, so a stuck task (LLM generation hung, server silent) produces a
@@ -294,6 +320,8 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.wasInterrupted = false;
     this.pendingRequest = null;
     this.browserFrameSeen.clear();
+    this.messageRoles.clear();
+    this.countedToolCallIds.clear();
     this.completionEnforcer.reset();
     this.lastWorkingDirectory = config.workingDirectory;
 
@@ -725,6 +753,15 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   }
 
   private handleMessageUpdated(info: OpenCodeSdkMessage): void {
+    // Track the role for every message ID we observe so `handlePartUpdated`
+    // can drop non-assistant text parts (the SDK re-broadcasts the user's
+    // own prompt as a `message.part.updated` event; without filtering it
+    // appears as a duplicate assistant bubble).
+    const id = (info as { id?: string }).id;
+    const role = (info as { role?: string }).role;
+    if (id && role) {
+      this.messageRoles.set(id, role);
+    }
     if (info.role === 'assistant') {
       const assistant = info as AssistantMessage;
       if (assistant.modelID && !this.currentModelId) {
@@ -747,6 +784,21 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     // Text parts — convert via message-processor (handles sanitization, stable IDs,
     // and the new modelContext stamping from Phase 1a).
     if (part.type === 'text') {
+      // Guard against the SDK re-broadcasting the user's own prompt as a
+      // text part. `toTaskMessage` unconditionally stamps text parts as
+      // `type: 'assistant'`; without the role filter the renderer shows a
+      // bogus assistant bubble echoing the user's prompt immediately
+      // before the real reply. Default-deny policy: if we don't yet know
+      // the parent message's role (rare — `message.updated` typically
+      // arrives before its first `message.part.updated`), drop the text
+      // rather than risk duplicating the user prompt. A stale message ID
+      // will retry on the next update after the role is recorded.
+      const messageId = (part as { messageID?: string }).messageID;
+      const role = messageId ? this.messageRoles.get(messageId) : undefined;
+      if (role !== 'assistant') {
+        this.checkForConnectorAuthMarker((part as { text?: string }).text ?? '');
+        return;
+      }
       const synthetic = this.partToOpenCodeMessage(part);
       if (synthetic) {
         this.emit('message', synthetic);
@@ -797,20 +849,35 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
       //   any other tool: counts for continuation — prevents the
       //                   enforcer from labelling this as conversational
       //                   when the agent actually did work.
-      // Only fire once per tool, at the first state transition we see
-      // (running if we saw it, else completed/error).
+      //
+      // Dedupe by the tool call's `part.id` (stable across the
+      // running → completed/error transitions the SDK re-emits for the
+      // same call). Count at the FIRST transition we observe, whether
+      // that's running or completed/error — fast tools may never surface
+      // a `running` update at all (Codex R3 P2). `countedToolCallIds`
+      // ensures we only notify the enforcer once per call.
       if (status === 'running' || status === 'completed' || status === 'error') {
-        if (toolName === 'complete_task' && state?.input !== undefined) {
-          this.completionEnforcer.handleCompleteTaskDetection(state.input);
-        } else if (toolName === 'start_task') {
-          this.completionEnforcer.markTaskRequiresCompletion();
-        } else {
-          // Regular tool — counts for continuation. Use the running-only
-          // branch to avoid double-counting a tool that transitions
-          // running → completed.
-          if (status === 'running') {
+        const callId = (toolPart as { id?: string }).id;
+        const alreadyCounted = callId ? this.countedToolCallIds.has(callId) : false;
+        if (!alreadyCounted) {
+          if (callId) this.countedToolCallIds.add(callId);
+          if (toolName === 'complete_task' && state?.input !== undefined) {
+            this.completionEnforcer.handleCompleteTaskDetection(state.input);
+          } else if (toolName === 'start_task') {
+            this.completionEnforcer.markTaskRequiresCompletion();
+          } else {
             this.completionEnforcer.markToolsUsed(true);
           }
+        } else if (
+          toolName === 'complete_task' &&
+          status === 'completed' &&
+          state?.input !== undefined
+        ) {
+          // complete_task is special: its input carries the success payload
+          // and may only be fully populated on the 'completed' update.
+          // Re-invoke detection on completion in case the 'running' snapshot
+          // had an incomplete input (e.g., streaming args).
+          this.completionEnforcer.handleCompleteTaskDetection(state.input);
         }
       }
 
