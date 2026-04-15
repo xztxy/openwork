@@ -196,6 +196,11 @@ export class OpenAiOauthManager {
         }
       }
     })();
+    // Attach a no-op rejection handler so a rejection here (abort after
+    // dispose, timeout with no waiting caller) never surfaces as an
+    // unhandled rejection on the process. The real rejection still
+    // propagates to whoever is awaiting via `awaitCompletion`.
+    completion.catch(() => {});
 
     this.active = {
       sessionId,
