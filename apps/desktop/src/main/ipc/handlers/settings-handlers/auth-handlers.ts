@@ -64,21 +64,10 @@ export function registerAuthHandlers(handle: IpcHandler): void {
     // Keeping this on the desktop side is deliberate per plan decision #6 —
     // the daemon does not have access to Electron's `shell` API.
     await shell.openExternal(authorizeUrl);
-    // The daemon-side `awaitCompletion` blocks for up to 2 minutes while the
-    // user finishes the browser OAuth flow. The default `DaemonClient.call`
-    // timeout is 30s, so we MUST override here — otherwise the IPC handler
-    // throws `RPC timeout: auth.openai.awaitCompletion (30000ms)` even when
-    // the daemon-side flow eventually succeeds. Use slightly more than the
-    // daemon's internal deadline so the daemon's own timeout error wins.
-    const AWAIT_COMPLETION_RPC_TIMEOUT_MS = 2 * 60_000 + 5_000;
-    const completion = (await client.call(
-      'auth.openai.awaitCompletion',
-      {
-        sessionId,
-        timeoutMs: 2 * 60_000,
-      },
-      { timeoutMs: AWAIT_COMPLETION_RPC_TIMEOUT_MS },
-    )) as { ok: boolean; plan?: unknown; error?: string };
+    const completion = (await client.call('auth.openai.awaitCompletion', {
+      sessionId,
+      timeoutMs: 2 * 60_000,
+    })) as { ok: boolean; plan?: unknown; error?: string };
     if (!completion.ok) {
       throw new Error(completion.error ?? 'OpenAI authentication failed.');
     }
