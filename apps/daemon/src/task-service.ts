@@ -15,6 +15,7 @@ import {
   type StorageAPI,
   type PermissionResponse,
   type TaskSource,
+  type FileAttachmentInfo,
 } from '@accomplish_ai/agent-core';
 import {
   type TaskConfigBuilderOptions,
@@ -131,6 +132,14 @@ export class TaskService extends EventEmitter {
     workspaceId?: string;
     systemPromptAppend?: string;
     /**
+     * User-attached files forwarded from the desktop IPC layer. Must flow
+     * into `TaskConfig.files` so OpenCode picks them up — the RPC schema
+     * at `daemon.ts:86` + `validation.ts:22` already accepts this field,
+     * and `validateTaskConfig` passes it through. Dropping it here means
+     * every drag-and-drop / attachment a user submits is silently lost.
+     */
+    attachments?: FileAttachmentInfo[];
+    /**
      * Originating surface. Drives the no-UI auto-deny safeguard for
      * permission/question prompts when the task runs headlessly. Defaults
      * to `'ui'` when not provided. WhatsApp bridge and scheduler callers
@@ -146,6 +155,7 @@ export class TaskService extends EventEmitter {
       sessionId: params.sessionId,
       workingDirectory: params.workingDirectory,
       systemPromptAppend: params.systemPromptAppend,
+      files: params.attachments,
       source: params.source,
     };
     const validatedConfig = validateTaskConfig(config);
@@ -200,8 +210,11 @@ export class TaskService extends EventEmitter {
     sessionId: string;
     prompt: string;
     existingTaskId?: string;
+    /** Same rationale as `startTask.attachments` — follow-up turns also
+     * carry user-attached files and must forward them into TaskConfig.files. */
+    attachments?: FileAttachmentInfo[];
   }): Promise<Task> {
-    const { sessionId, prompt, existingTaskId } = params;
+    const { sessionId, prompt, existingTaskId, attachments } = params;
     const taskId = existingTaskId || createTaskId();
 
     if (existingTaskId) {
@@ -221,6 +234,7 @@ export class TaskService extends EventEmitter {
       sessionId,
       taskId,
       modelId: selectedModel?.model,
+      files: attachments,
     });
 
     if (existingTaskId) {

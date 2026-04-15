@@ -185,6 +185,9 @@ describe('TaskService parity', () => {
     });
 
     service.listTasks('ws-filter');
-    expect(storage.getTasks).toHaveBeenCalledWith('ws-filter');
+    // `TaskService.listTasks` forwards both the workspace filter and the
+    // `includeUnassigned` flag (default `false`). `toHaveBeenCalledWith`
+    // checks the full argument list, so the assertion must include the flag.
+    expect(storage.getTasks).toHaveBeenCalledWith('ws-filter', false);
   });
 });
