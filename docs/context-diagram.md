@@ -147,4 +147,4 @@ graph TB
 
 4. **MCP for extensibility**: For direct API-level integrations, users can connect any MCP-compatible remote server with OAuth 2.0. This is the structured alternative to browser automation.
 
-5. **Permission-gated file access**: Every file operation requires explicit user approval via a dialog. The gate is prompt-instructed (not hard-enforced) — see `task-flow-phases.md` Phase 5.
+5. **Permission-gated file access**: Every file operation requires explicit user approval via a dialog. The gate is prompt-instructed (not hard-enforced) — see `functional-viewpoint.md` §8 (Permission & Question Request Flow).

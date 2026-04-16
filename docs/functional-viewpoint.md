@@ -1,17 +1,33 @@
-# Functional Viewpoint — Accomplish Architecture (PTY era — HISTORICAL)
+# Functional Viewpoint — Accomplish Architecture
 
-> [!WARNING]
-> **This document describes the pre-SDK-cutover PTY architecture. It is retained for historical reference only.**
->
-> **→ For the current architecture, read [`functional-viewpoint-sdk.md`](functional-viewpoint-sdk.md).**
->
-> The OpenCode SDK cutover port (commercial PR #720, landed in OSS as PR #938) replaced `node-pty` + `StreamParser` with `@opencode-ai/sdk` + `opencode serve`. In the current runtime, `apps/daemon/src/opencode/server-manager.ts` spawns `opencode serve` per task; `packages/agent-core/src/internal/classes/OpenCodeAdapter.ts` subscribes to the SDK SSE event stream; permissions/questions go through `client.permission.reply` / `client.question.reply` (not HTTP+MCP bridges on `:9226` / `:9227`).
->
-> The diagrams below still have some structural value — the participants and data they exchange (adapter, TaskManager, daemon, UI) are roughly correct, as is the ordering and causality of events. But the `PTY Process` / `StreamParser` participants and the byte-stream fan-out are stale. Use them only as a baseline for understanding how the system evolved.
+> **Status:** Current — reflects the post-SDK-cutover architecture (commercial PR #720, landed in OSS as PR #938, commit `3620532d`). This is the single functional-domain document: prior per-flow files (`task-flow-phases.md`, `task-flow-slides.md`, `completion-enforcer-flows.md`) and the PTY-era structural doc have been collapsed into this one. Git history has the removed files if you need the old versions.
 
-> Rozanski & Woods Functional Viewpoint: identifies the system's functional elements, their responsibilities, interfaces, and primary interactions.
+> Rozanski & Woods Functional Viewpoint: identifies the system's functional elements, their responsibilities, interfaces, and primary interactions. Scenario-level sequence flows (§8 permission/question, §10 completion enforcement) are included as "interaction scenarios" at the short-and-useful scope; detailed per-phase task-flow sequences have been retired along with the PTY-era implementation they described.
 
-These diagrams are **prerequisite reading** before diving into the sequence-level flow diagrams (`task-flow-phases.md`, `completion-enforcer-flows.md`). They show _what the building blocks are_ without prescribing _when things happen_.
+## What changed vs. the PTY era
+
+The cutover replaced three things that used to span process / protocol boundaries:
+
+| Concern                  | PTY era (gone)                                                       | SDK era (current)                                                                                     |
+| ------------------------ | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **OpenCode transport**   | `node-pty` spawning `opencode run` + `StreamParser` over byte-stream | `@opencode-ai/sdk/v2` talking HTTP to one `opencode serve` per task; SSE for events                   |
+| **Permission gating**    | HTTP shims on `:9226` / `:9227` invoked by MCP tools inside OpenCode | Native SDK events (`permission.asked`, `question.asked`) + `client.permission.reply` / `.reply`       |
+| **Tool completion hook** | `complete-task` / `start-task` MCP servers over HTTP                 | Tool-part events on the SDK event stream, intercepted by `OpenCodeAdapter` for the CompletionEnforcer |
+
+Net result: **two HTTP bridges and a byte-stream parser are gone.** They are replaced by one per-task HTTP server (`opencode serve`) and an SSE subscription. The daemon still owns everything; the Electron shell is still thin.
+
+## Cast of characters (process view)
+
+Four distinct OS processes cooperate at runtime. This is the biggest shift from the PTY era, where task execution lived inside Electron; now it is fully extracted into the daemon.
+
+| Process                              | Lifetime                                                                                        | Speaks                                                          | Owns                                                                                            |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| **Electron Main**                    | User-session scoped; exits on Cmd+Q                                                             | IPC (renderer), JSON-RPC (daemon), native OS APIs               | Tray, native dialogs, OAuth browser popups, notification forwarding                             |
+| **React Renderer** (inside Electron) | Same as Electron Main                                                                           | `contextBridge` only                                            | UI state (Zustand)                                                                              |
+| **Daemon**                           | **Standalone** — started by Electron or login-item; **survives Electron exit**; one per dataDir | JSON-RPC over Unix socket / named pipe; SSE to `opencode serve` | TaskService, OpenCodeServerManager, Scheduler, WhatsApp, Thought-stream HTTP, all persistence   |
+| **`opencode serve`** (per task)      | Lazily spawned on `task.start`; 60s idle TTL after terminal; killed on daemon shutdown          | HTTP + SSE (loopback, random ephemeral port)                    | One session, its conversation, tool execution, registered MCP servers, permission/question flow |
+
+Every diagram in this document shows all four. The Daemon — the newest and most load-bearing participant — is always rendered as a dedicated green subgraph. The per-task `opencode serve` children hang off its `OpenCodeServerManager`.
 
 ---
 
@@ -23,20 +39,27 @@ Start here. This diagram shows the four major building blocks, their single-sent
 graph TB
   USER(["👤 User"])
 
-  subgraph ELECTRON["Accomplish Desktop App"]
+  subgraph ELECTRON["Accomplish Desktop App (apps/desktop)"]
     direction TB
 
-    subgraph UI["React UI"]
+    subgraph UI["React UI (apps/web)"]
       UI_DESC["Task input · Chat view · Settings<br/>Permissions · Todos · History"]
     end
 
-    subgraph MAIN_PROC["Electron Main Process"]
+    subgraph MAIN_PROC["Electron Main Process<br/><i>Thin UI/integration shell</i>"]
       direction LR
       IPC["IPC Bridge<br/><i>~50 channels</i>"]
-      CORE["Agent Core<br/><i>TaskManager · CompletionEnforcer<br/>ConfigGenerator</i>"]
-      GATES["Permission Gates<br/><i>HTTP :9226 · :9227 · :9228</i>"]
+      DC["DaemonClient<br/><i>socket transport</i>"]
+      AUTH["Auth Browser · Tray ·<br/>Native Dialogs"]
     end
+  end
 
+  subgraph DAEMON["Background Daemon  (apps/daemon)<br/><i>Standalone, survives Electron exit</i>"]
+    direction TB
+    RPC["DaemonRpcServer<br/><i>JSON-RPC over Unix socket / named pipe</i>"]
+    CORE["Agent Core<br/><i>TaskManager · OpenCodeAdapter<br/>CompletionEnforcer · Watchdog</i>"]
+    SM["OpenCodeServerManager<br/><i>spawns one opencode serve per task</i>"]
+    HTTP_AUX["Auxiliary HTTP<br/><i>:9228 thought stream<br/>:9229 WhatsApp send</i>"]
     subgraph STORAGE["Storage"]
       direction LR
       DB["🗄️ SQLite DB<br/><i>Tasks · messages · todos<br/>providers · skills · connectors</i>"]
@@ -44,9 +67,12 @@ graph TB
     end
   end
 
-  subgraph OC["OpenCode CLI  (PTY subprocess)"]
-    OC_DESC["AI agent runtime<br/><i>LLM conversations · tool execution<br/>Bash · Read · Write · Edit · Glob · Grep</i>"]
-    OC_DB["🗄️ OpenCode DB<br/><i>~/.local/share/opencode/<br/>Sessions · conversation history</i>"]
+  subgraph OC_POOL["OpenCode Runtimes  (one per task)"]
+    direction TB
+    OC1["opencode serve #1<br/><i>127.0.0.1:random</i>"]
+    OC2["opencode serve #2<br/><i>127.0.0.1:random</i>"]
+    OCN["opencode serve #N<br/><i>(idle, 60s TTL)</i>"]
+    OC_DB["🗄️ OpenCode State<br/><i>~/.local/share/opencode/<br/>Sessions · conversation history</i>"]
   end
 
   subgraph EXTERNAL["External Systems"]
@@ -59,37 +85,49 @@ graph TB
 
   USER -->|"natural language task"| UI
   UI -->|"IPC invoke / events"| IPC
-  IPC --> CORE
-  CORE -->|"spawn + stdin/stdout"| OC
-  GATES <-->|"MCP tool calls (HTTP)"| OC
+  IPC --> DC
+  DC <-->|"JSON-RPC 2.0<br/>(daemon.sock)"| RPC
+  RPC --> CORE
+  CORE -->|"spawn + keep warm"| SM
+  SM -->|"child_process.spawn<br/>opencode serve --port=0"| OC1
+  SM --> OC2
+  SM --> OCN
+  CORE <-->|"HTTP + SSE<br/>@opencode-ai/sdk/v2"| OC1
+  CORE <-->|"HTTP + SSE"| OC2
 
-  OC -->|"HTTPS API calls"| AI
-  OC -->|"file operations"| FS
-  OC -->|"browser automation"| BROWSER
-  OC -->|"remote tools"| MCP_EXT
+  OC1 -->|"HTTPS API calls"| AI
+  OC1 -->|"file operations"| FS
+  OC1 -->|"browser automation"| BROWSER
+  OC1 -->|"remote tools"| MCP_EXT
 
   CORE -->|"read/write"| DB
   CORE -->|"encrypt/decrypt"| KEYS
 
-  UI -.->|"permission dialogs"| GATES
+  OC1 -->|"report-thought<br/>report-checkpoint MCP"| HTTP_AUX
 
   classDef userClass fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
   classDef electronClass fill:#f5f5f5,stroke:#424242,stroke-width:2px
   classDef uiClass fill:#fce4ec,stroke:#e53935
   classDef mainClass fill:#e8f4fd,stroke:#1e88e5
+  classDef daemonClass fill:#e8f5e9,stroke:#43a047,stroke-width:2px
   classDef ocClass fill:#fff3e0,stroke:#fb8c00,stroke-width:2px
   classDef extClass fill:#f3e5f5,stroke:#8e24aa
   classDef storageClass fill:#f0f4c3,stroke:#827717
 
   class USER userClass
   class UI,UI_DESC uiClass
-  class IPC,CORE,GATES mainClass
-  class OC,OC_DESC,OC_DB ocClass
+  class IPC,DC,AUTH mainClass
+  class RPC,CORE,SM,HTTP_AUX daemonClass
+  class OC1,OC2,OCN,OC_DB ocClass
   class AI,FS,BROWSER,MCP_EXT extClass
   class DB,KEYS storageClass
 ```
 
-**Key takeaway:** Accomplish never calls LLMs directly. It orchestrates OpenCode (a PTY subprocess) which does all AI interaction and file operations. Accomplish's role is configuration, gating, completion enforcement, and UI.
+**Key takeaways:**
+
+1. **Electron is a thin shell.** All task execution happens in the daemon. Electron forwards IPC to/from the daemon via a socket-backed `DaemonClient` and adds native capabilities (tray, dialogs, OAuth popups) the daemon can't perform.
+2. **One `opencode serve` per task.** `OpenCodeServerManager` lazily spawns a child process when a task starts, keeps it alive for 60s after the task completes for possible follow-up / resume reuse, and tears down the whole process tree on daemon shutdown.
+3. **Accomplish never calls LLMs directly.** Each per-task `opencode serve` orchestrates the LLM conversation and tool execution. Accomplish's role is configuration, gating, completion enforcement, persistence, and UI.
 
 ---
 
@@ -99,215 +137,302 @@ The same system exploded — every internal component, its responsibility, and d
 
 ```mermaid
 graph TB
-  subgraph DESKTOP["<b>apps/desktop</b> — Electron Shell"]
+  subgraph DESKTOP["<b>apps/desktop</b> — Electron Shell (thin)"]
     direction TB
     MAIN["Electron Main Process"]
     PRELOAD["Preload Bridge<br/><i>(contextBridge)</i>"]
-    HANDLERS["IPC Handlers<br/><i>(handlers.ts)</i>"]
-    CALLBACKS["Task Callbacks<br/><i>(task-callbacks.ts)</i>"]
-    PERM_API["Permission API Server<br/><i>:9226 file · :9227 question</i>"]
-    THOUGHT_API["Thought Stream Server<br/><i>:9228</i>"]
-    STORAGE_DESKTOP["Storage Wiring<br/><i>(storage.ts)</i>"]
-    SECURE_STORE["Secure Storage<br/><i>(AES-256-GCM)</i>"]
-    AUTH_BROWSER["Auth Browser<br/><i>(OAuth flows)</i>"]
-    SKILLS_DESKTOP["Skills Manager Wiring"]
-    LOG_DESKTOP["Log Collector + Writer"]
-    SUMMARIZER_DESKTOP["Summarizer Wiring"]
+    HANDLERS["IPC Handlers<br/><i>thin proxies to daemon</i>"]
+    DAEMON_CLIENT["DaemonClient<br/><i>socket transport</i>"]
+    DAEMON_BOOT["Daemon Bootstrap<br/><i>spawn + reconnect</i>"]
+    NOTIF_FWD["Notification Forwarder<br/><i>daemon RPC → webContents.send</i>"]
+    AUTH_BROWSER["Auth Browser<br/><i>OAuth popups · shell.openExternal</i>"]
+    TRAY["System Tray · Native Dialogs"]
   end
 
   subgraph WEB["<b>apps/web</b> — React UI"]
     direction TB
     ROUTER["Router<br/><i>Home · Execution</i>"]
     TASK_STORE["Task Store<br/><i>(Zustand)</i>"]
-    SETTINGS_UI["Settings Dialog<br/><i>Provider · Skills · Connectors</i>"]
+    SETTINGS_UI["Settings Dialog<br/><i>Provider · Skills · Connectors · Integrations</i>"]
     EXEC_PAGE["Execution Page<br/><i>Messages · Todos · Permissions</i>"]
     LAUNCHER["Task Launcher<br/><i>(Cmd+K)</i>"]
   end
 
-  subgraph CORE["<b>packages/agent-core</b> — Core Logic (ESM)"]
+  subgraph DAEMON["<b>apps/daemon</b> — Standalone Node.js process"]
     direction TB
-    TASK_MGR["TaskManager"]
-    OC_ADAPTER["OpenCodeAdapter"]
-    CE["CompletionEnforcer"]
-    CONFIG_GEN["Config Generator"]
-    STREAM_PARSER["Stream Parser"]
-    MSG_PROC["Message Processor"]
-    PERM_HANDLER["Permission Request Handler"]
-    THOUGHT_HANDLER["Thought Stream Handler"]
-    SKILLS_MGR["Skills Manager"]
-    SPEECH_SVC["Speech Service"]
-    SUMMARIZER["Summarizer"]
-    PROVIDERS["Provider Registry<br/><i>15 providers</i>"]
-    MCP_OAUTH["MCP OAuth Client"]
-    BROWSER_SVC["Browser Service<br/><i>Playwright/Chromium</i>"]
-    PROXIES["API Proxies<br/><i>Azure Foundry · Moonshot</i>"]
-    ENV_BUILDER["Environment Builder"]
-    LOG_WATCHER["OpenCode Log Watcher"]
-    DB["SQLite Database<br/><i>WAL mode · 8 migrations</i>"]
+    RPC_SRV["DaemonRpcServer<br/><i>JSON-RPC over Unix socket / named pipe</i>"]
+    ROUTES["daemon-routes.ts<br/><i>~25 RPC methods</i>"]
+    TASK_SVC["TaskService<br/><i>orchestrates task lifecycle</i>"]
+    TASK_CB["TaskCallbacks<br/><i>adapter events → RPC notify</i>"]
+    SVR_MGR["OpenCodeServerManager<br/><i>per-task opencode serve pool</i>"]
+    THOUGHT_API["ThoughtStreamService<br/><i>HTTP :9228 · MCP hook</i>"]
+    WA_SVC["WhatsAppDaemonService<br/><i>Baileys socket, inbound messages</i>"]
+    WA_API["WhatsAppSendApi<br/><i>HTTP :9229 · MCP hook</i>"]
+    SCHED["SchedulerService<br/><i>cron-driven task.start</i>"]
+    OPENAI_OAUTH["OpenAiOauthManager<br/><i>transient opencode serve<br/>for ChatGPT OAuth</i>"]
+    HEALTH["HealthService"]
+    STORAGE_SVC["StorageService"]
   end
 
-  subgraph OPENCODE["<b>OpenCode CLI</b> — External Process"]
+  subgraph CORE["<b>packages/agent-core</b> — Core Logic (ESM, shared)"]
     direction TB
+    TASK_MGR["TaskManager<br/><i>queue + lifecycle</i>"]
+    OC_ADAPTER["OpenCodeAdapter<br/><i>SDK v2 bridge · event loop</i>"]
+    CE["CompletionEnforcer<br/><i>state machine + continuation</i>"]
+    WATCHDOG["TaskInactivityWatchdog<br/><i>soft + hard timeouts</i>"]
+    MSG_PROC["MessageProcessor<br/><i>SDK part → TaskMessage</i>"]
+    SKILLS_MGR["Skills Manager"]
+    SUMMARIZER["Summarizer"]
+    CFG_GEN["Config Generator<br/><i>opencode.json per task</i>"]
+    CFG_BUILD["Provider Config Builder"]
+    AUTH_SYNC["API Key → auth.json sync"]
+    MCP_OAUTH["MCP OAuth Client<br/><i>discovery · PKCE · refresh</i>"]
+    BROWSER_SVC["Browser Service<br/><i>dev-browser-mcp spawn</i>"]
+    PROXIES["API Proxies<br/><i>Azure Foundry · Moonshot</i>"]
+    SPEECH["Speech Service<br/><i>ElevenLabs STT</i>"]
+    LOG_WATCHER["OpenCode Log Watcher<br/><i>auth-error signal tail</i>"]
+    SECURE["SecureStorage<br/><i>AES-256-GCM</i>"]
+    DB["SQLite Database<br/><i>WAL mode · migrations</i>"]
+    RPC_TRANSPORT["RPC Transport<br/><i>socket + protocol</i>"]
+  end
+
+  subgraph OPENCODE["<b>opencode serve</b>  (one subprocess per task)"]
+    direction TB
+    OC_HTTP["HTTP + SSE server<br/><i>127.0.0.1:random</i>"]
     OC_SESSION["Session + Conversation"]
     OC_LLM["LLM Interaction"]
     OC_TOOLS["Built-in Tools<br/><i>Bash · Read · Write · Edit · Glob · Grep</i>"]
-    OC_MCP["MCP Client"]
+    OC_MCP["Registered MCP Servers<br/><i>thought · checkpoint · whatsapp-send<br/>connectors · dev-browser</i>"]
+    OC_PERMS["Native Permission Gate<br/><i>emits permission.asked event</i>"]
+    OC_QS["Native Question Flow<br/><i>emits question.asked event</i>"]
   end
 
-  %% UI → Desktop IPC
+  %% UI ↔ Desktop
   ROUTER --> PRELOAD
   TASK_STORE --> PRELOAD
   SETTINGS_UI --> PRELOAD
   LAUNCHER --> PRELOAD
+  EXEC_PAGE --> PRELOAD
   PRELOAD -->|"ipcRenderer.invoke"| HANDLERS
+  NOTIF_FWD -->|"webContents.send"| PRELOAD
 
-  %% Desktop → Core
-  HANDLERS -->|"startTask / cancelTask"| TASK_MGR
-  HANDLERS --> STORAGE_DESKTOP
-  HANDLERS --> SECURE_STORE
-  HANDLERS --> SKILLS_DESKTOP
-  CALLBACKS -->|"onMessage / onComplete"| TASK_STORE
+  %% Desktop ↔ Daemon
+  HANDLERS -->|"client.call(method, params)"| DAEMON_CLIENT
+  DAEMON_CLIENT <-->|"JSON-RPC 2.0<br/>daemon.sock"| RPC_SRV
+  DAEMON_BOOT -->|"spawn detached"| DAEMON
+  RPC_SRV -->|"rpc.notify(channel, data)"| DAEMON_CLIENT
+  DAEMON_CLIENT --> NOTIF_FWD
 
-  %% Core internal
+  %% Daemon internal
+  RPC_SRV --> ROUTES
+  ROUTES --> TASK_SVC
+  ROUTES --> SCHED
+  ROUTES --> OPENAI_OAUTH
+  ROUTES --> WA_SVC
+  ROUTES --> HEALTH
+  ROUTES --> STORAGE_SVC
+  TASK_SVC --> TASK_CB
+  TASK_SVC --> SVR_MGR
+  TASK_SVC --> TASK_MGR
+  SCHED -->|"startTask(source=scheduler)"| TASK_SVC
+  WA_SVC -->|"startTask(source=whatsapp)"| TASK_SVC
+  TASK_CB -->|"emit → rpc.notify"| RPC_SRV
+
+  %% Agent-core relationships
   TASK_MGR -->|"creates per task"| OC_ADAPTER
-  OC_ADAPTER -->|"spawns PTY"| OPENCODE
   OC_ADAPTER --> CE
-  OC_ADAPTER --> STREAM_PARSER
+  OC_ADAPTER --> WATCHDOG
   OC_ADAPTER --> MSG_PROC
-  OC_ADAPTER --> CONFIG_GEN
-  OC_ADAPTER --> ENV_BUILDER
-  CONFIG_GEN --> SKILLS_MGR
-  CONFIG_GEN --> MCP_OAUTH
+  OC_ADAPTER --> LOG_WATCHER
   CE -->|"onStartContinuation"| OC_ADAPTER
-  PERM_HANDLER <-->|"HTTP"| PERM_API
-  THOUGHT_HANDLER <-->|"HTTP"| THOUGHT_API
 
-  %% OpenCode ↔ MCP servers
-  OC_MCP -->|"complete_task"| PERM_API
-  OC_MCP -->|"start_task"| PERM_API
-  OC_MCP -->|"ask_user_question"| PERM_API
-  OC_MCP -->|"request_file_permission"| PERM_API
-  OC_MCP -->|"report_thought"| THOUGHT_API
-  OC_MCP -->|"dev-browser"| BROWSER_SVC
+  %% Daemon → agent-core config
+  SVR_MGR --> CFG_GEN
+  TASK_SVC --> CFG_GEN
+  CFG_GEN --> CFG_BUILD
+  CFG_GEN --> SKILLS_MGR
+  CFG_GEN --> MCP_OAUTH
+  CFG_GEN --> AUTH_SYNC
+  AUTH_SYNC --> SECURE
+  SKILLS_MGR --> DB
 
-  %% OpenCode → External
-  OC_LLM -->|"API calls"| PROVIDERS
-  OC_TOOLS -->|"reads/writes"| FS["Local File System"]
+  %% Per-task opencode serve
+  SVR_MGR -->|"child_process.spawn<br/>env: OPENCODE_CONFIG"| OC_HTTP
+  OC_ADAPTER -.->|"getServerUrl(taskId)"| SVR_MGR
+  OC_ADAPTER <-->|"createOpencodeClient(baseUrl)<br/>session.create · session.prompt<br/>event.subscribe (SSE)<br/>permission.reply · question.reply"| OC_HTTP
+
+  %% opencode internals
+  OC_HTTP --> OC_SESSION
+  OC_SESSION --> OC_LLM
+  OC_SESSION --> OC_TOOLS
+  OC_SESSION --> OC_MCP
+  OC_SESSION --> OC_PERMS
+  OC_SESSION --> OC_QS
+  OC_LLM -->|"HTTPS"| EXTERNAL["AI Provider APIs"]
+  OC_TOOLS --> FS["Local File System"]
+
+  %% MCP tools reach back into the daemon HTTP surface
+  OC_MCP -->|"POST /thought · /checkpoint"| THOUGHT_API
+  OC_MCP -->|"POST /send"| WA_API
+
+  %% RPC surface for permission + OAuth
+  ROUTES -->|"permission.respond"| TASK_SVC
+  TASK_SVC -->|"sendResponse"| OC_ADAPTER
+  OPENAI_OAUTH -.->|"createTransientOpencodeClient"| SVR_MGR
 
   %% Styling
   classDef desktop fill:#e8f4fd,stroke:#1e88e5,stroke-width:2px
   classDef web fill:#fce4ec,stroke:#e53935,stroke-width:2px
-  classDef core fill:#e8f5e9,stroke:#43a047,stroke-width:2px
+  classDef daemon fill:#e8f5e9,stroke:#43a047,stroke-width:2px
+  classDef core fill:#fff9c4,stroke:#f9a825,stroke-width:2px
   classDef opencode fill:#fff3e0,stroke:#fb8c00,stroke-width:2px
   classDef external fill:#f3e5f5,stroke:#8e24aa,stroke-width:1px
 
-  class MAIN,PRELOAD,HANDLERS,CALLBACKS,PERM_API,THOUGHT_API,STORAGE_DESKTOP,SECURE_STORE,AUTH_BROWSER,SKILLS_DESKTOP,LOG_DESKTOP,SUMMARIZER_DESKTOP desktop
+  class MAIN,PRELOAD,HANDLERS,DAEMON_CLIENT,DAEMON_BOOT,NOTIF_FWD,AUTH_BROWSER,TRAY desktop
   class ROUTER,TASK_STORE,SETTINGS_UI,EXEC_PAGE,LAUNCHER web
-  class TASK_MGR,OC_ADAPTER,CE,CONFIG_GEN,STREAM_PARSER,MSG_PROC,PERM_HANDLER,THOUGHT_HANDLER,SKILLS_MGR,SPEECH_SVC,SUMMARIZER,PROVIDERS,MCP_OAUTH,BROWSER_SVC,PROXIES,ENV_BUILDER,LOG_WATCHER,DB core
-  class OC_SESSION,OC_LLM,OC_TOOLS,OC_MCP opencode
-  class FS external
+  class RPC_SRV,ROUTES,TASK_SVC,TASK_CB,SVR_MGR,THOUGHT_API,WA_SVC,WA_API,SCHED,OPENAI_OAUTH,HEALTH,STORAGE_SVC daemon
+  class TASK_MGR,OC_ADAPTER,CE,WATCHDOG,MSG_PROC,SKILLS_MGR,SUMMARIZER,CFG_GEN,CFG_BUILD,AUTH_SYNC,MCP_OAUTH,BROWSER_SVC,PROXIES,SPEECH,LOG_WATCHER,SECURE,DB,RPC_TRANSPORT core
+  class OC_HTTP,OC_SESSION,OC_LLM,OC_TOOLS,OC_MCP,OC_PERMS,OC_QS opencode
+  class EXTERNAL,FS external
 ```
+
+**Notes on the ownership boundary:**
+
+- The daemon (`apps/daemon`) is the only place task execution happens. It spawns `opencode serve` directly (via `child_process.spawn`) — no Electron, no PTY.
+- `apps/desktop` is purely Electron-specific concerns (tray, native dialogs, OAuth popups, IPC forwarding). It neither holds task state nor talks to `opencode serve` directly.
+- `packages/agent-core` is the shared substrate. Both the daemon (runtime) and the desktop (daemon client + config building during startup) import from it, but only the daemon instantiates `TaskManager` / `OpenCodeAdapter`.
 
 ---
 
 ## 3. Agent-Core Functional Decomposition
 
-A focused view of `packages/agent-core` — the heart of the system — showing every class, its single responsibility, and the dependency arrows.
+A focused view of `packages/agent-core` — the shared substrate the daemon runs on — showing every class, its single responsibility, and the dependency arrows.
 
 ```mermaid
 graph LR
   subgraph ORCHESTRATION["Orchestration Layer"]
-    TM["<b>TaskManager</b><br/>Task lifecycle<br/>Queue management<br/>Event wiring"]
-    OCA["<b>OpenCodeAdapter</b><br/>PTY lifecycle<br/>Tool call interception<br/>Message routing"]
+    TM["<b>TaskManager</b><br/>Task queue<br/>Adapter lifecycle<br/>Event wiring"]
+    OCA["<b>OpenCodeAdapter</b><br/>SDK client<br/>Event-subscription loop<br/>Permission/question routing<br/>Tool-part interception"]
   end
 
-  subgraph COMPLETION["Completion Control"]
-    CE["<b>CompletionEnforcer</b><br/>State machine<br/>Continuation logic<br/>Todo validation"]
-    CS["<b>CompletionState</b><br/>State enum + transitions<br/>Attempt counting"]
-    PR["<b>Prompts</b><br/>Continuation prompt text<br/>Partial continuation text"]
+  subgraph RESILIENCE["Resilience"]
+    CE["<b>CompletionEnforcer</b><br/>State machine<br/>Continuation nudges<br/>Todo validation"]
+    WDG["<b>TaskInactivityWatchdog</b><br/>Event fingerprint sampling<br/>Soft timeout (90s stall)<br/>Hard timeout (+60s)"]
+    CS["<b>CompletionState</b><br/>State enum + transitions"]
+    LW["<b>OpenCodeLogWatcher</b><br/>Tail on-disk opencode log<br/>Auth-error detection"]
   end
 
-  subgraph CONFIG["Configuration"]
+  subgraph CONFIG["Per-Task Configuration"]
     CG["<b>ConfigGenerator</b><br/>opencode.json generation<br/>System prompt assembly<br/>MCP server registration"]
-    CB["<b>ConfigBuilder</b><br/>Provider-specific config<br/>Model mapping"]
-    ENV["<b>Environment</b><br/>API key → env vars<br/>Credential mapping"]
-    TC["<b>ToolClassification</b><br/>NON_TASK_CONTINUATION_TOOLS<br/>Tool categorization"]
+    CB["<b>ProviderConfigBuilder</b><br/>Provider-specific config<br/>Model mapping"]
+    AUTH_SYNC["<b>syncApiKeysToOpenCodeAuth</b><br/>Decrypt → auth.json"]
+    ENV["<b>Environment Builder</b><br/>OPENCODE_CONFIG[_DIR]<br/>Bundled Node on PATH"]
+    TC["<b>Tool Classification</b>"]
+    CLI_RES["<b>resolveCliPath</b><br/>Locate opencode binary<br/>(packaged vs dev)"]
   end
 
-  subgraph PARSING["Stream Processing"]
-    SP["<b>StreamParser</b><br/>PTY output parsing<br/>JSON event extraction"]
-    MP["<b>MessageProcessor</b><br/>Raw → TaskMessage<br/>Content formatting"]
-    LW["<b>LogWatcher</b><br/>OpenCode log file tailing<br/>Event extraction"]
+  subgraph STREAM["Event Processing"]
+    MP["<b>MessageProcessor</b><br/>SDK Part → TaskMessage<br/>Batching · stable IDs<br/>Model-context stamping"]
   end
 
-  subgraph GATING["Human-in-the-Loop Gating"]
-    PRH["<b>PermissionRequestHandler</b><br/>Deferred promise pattern<br/>Timeout management<br/>Request validation"]
-    TSH["<b>ThoughtStreamHandler</b><br/>Active task tracking<br/>Event validation"]
+  subgraph GATING["Human-in-the-Loop"]
+    PR_TYPES["<b>PermissionRequest types</b><br/>file · tool · question<br/>PermissionResponse schema"]
+    PEND_REQ["<b>PendingRequest<br/>(in adapter)</b><br/>Track SDK request ID<br/>Route reply back"]
+  end
+
+  subgraph DAEMON_RPC["Daemon RPC Substrate"]
+    RPC_SRV_C["<b>DaemonRpcServer</b><br/>JSON-RPC 2.0 over socket"]
+    RPC_CLI_C["<b>DaemonClient</b><br/>method call + notify listeners"]
+    RPC_TPT["<b>createSocketTransport</b>"]
+    PID["<b>PidLock</b><br/>Single-daemon enforcement"]
+    CRASH["<b>installCrashHandlers</b>"]
   end
 
   subgraph SERVICES["Services"]
     SKM["<b>SkillsManager</b><br/>Scan · sync · CRUD<br/>Official + custom + community"]
-    SPE["<b>SpeechService</b><br/>ElevenLabs STT API<br/>Audio transcription"]
-    SUM["<b>Summarizer</b><br/>LLM-powered task titles<br/>Multi-provider fallback"]
-    MCO["<b>MCP OAuth</b><br/>Discovery · PKCE · token refresh<br/>Dynamic client registration"]
-    BRO["<b>BrowserService</b><br/>Playwright Chromium management<br/>Dev-browser MCP server"]
+    SPE["<b>SpeechService</b><br/>ElevenLabs STT API"]
+    SUM["<b>Summarizer</b><br/>LLM-powered task titles"]
+    MCO["<b>MCP OAuth</b><br/>Discovery · PKCE · token refresh"]
+    BRO["<b>BrowserService</b><br/>Playwright Chromium<br/>dev-browser MCP spawn"]
     PXY["<b>API Proxies</b><br/>Azure Foundry proxy<br/>Moonshot proxy"]
+    OAI_HELP["<b>OpenAI OAuth helpers</b><br/>status · access-token · plan"]
   end
 
   subgraph STORAGE["Storage Layer"]
     DB["<b>Database</b><br/>SQLite + WAL<br/>Migration runner"]
-    SS["<b>SecureStorage</b><br/>AES-256-GCM encryption<br/>API key vault"]
+    SS["<b>SecureStorage</b><br/>AES-256-GCM encryption<br/>API key + OAuth vault"]
     R1["Repo: taskHistory"]
     R2["Repo: providerSettings"]
     R3["Repo: appSettings"]
     R4["Repo: skills"]
     R5["Repo: connectors"]
+    R6["Repo: workspaces"]
+    R7["Repo: scheduledTasks"]
   end
 
   %% Dependencies
   TM --> OCA
   OCA --> CE
-  OCA --> SP
+  OCA --> WDG
   OCA --> MP
-  OCA --> CG
-  OCA --> ENV
+  OCA --> LW
+  OCA --> PEND_REQ
   CE --> CS
-  CE --> PR
   CG --> CB
+  CG --> AUTH_SYNC
   CG --> TC
   CG --> SKM
   CG --> MCO
+  AUTH_SYNC --> SS
   SKM --> R4
   DB --> R1
   DB --> R2
   DB --> R3
   DB --> R4
   DB --> R5
+  DB --> R6
+  DB --> R7
   SPE --> SS
   SUM -.->|"direct LLM calls"| EXTERNAL["AI Provider APIs"]
+  RPC_SRV_C --> RPC_TPT
+  RPC_CLI_C --> RPC_TPT
 
   classDef orch fill:#bbdefb,stroke:#1565c0
-  classDef comp fill:#c8e6c9,stroke:#2e7d32
+  classDef resil fill:#c8e6c9,stroke:#2e7d32
   classDef conf fill:#fff9c4,stroke:#f9a825
   classDef parse fill:#d1c4e9,stroke:#5e35b1
   classDef gate fill:#ffccbc,stroke:#e64a19
+  classDef rpc fill:#b3e5fc,stroke:#0277bd
   classDef svc fill:#b2dfdb,stroke:#00695c
   classDef store fill:#f0f4c3,stroke:#827717
 
   class TM,OCA orch
-  class CE,CS,PR comp
-  class CG,CB,ENV,TC conf
-  class SP,MP,LW parse
-  class PRH,TSH gate
-  class SKM,SPE,SUM,MCO,BRO,PXY svc
-  class DB,SS,R1,R2,R3,R4,R5 store
+  class CE,WDG,CS,LW resil
+  class CG,CB,AUTH_SYNC,ENV,TC,CLI_RES conf
+  class MP parse
+  class PR_TYPES,PEND_REQ gate
+  class RPC_SRV_C,RPC_CLI_C,RPC_TPT,PID,CRASH rpc
+  class SKM,SPE,SUM,MCO,BRO,PXY,OAI_HELP svc
+  class DB,SS,R1,R2,R3,R4,R5,R6,R7 store
 ```
+
+**What's gone vs. the PTY-era `agent-core`:**
+
+- `StreamParser` — no byte-stream to parse; the SDK delivers structured events.
+- `PermissionRequestHandler` / `ThoughtStreamHandler` in the deferred-promise shape — `PendingRequest` inside the adapter replaces the former; the latter still exists at the RPC layer but doesn't gate task progression.
+- PTY spawn helpers (`buildCliArgs`, `buildEnvironment` per-task) — `ConfigGenerator` still builds the environment, but the spawn happens in `OpenCodeServerManager`, not `OpenCodeAdapter`.
+
+**What's new:**
+
+- `TaskInactivityWatchdog` — a dedicated stall detector. With no PTY back-pressure to observe, the SDK model needs an explicit "no events for 90s + 60s → fail" safety net.
+- `OpenCodeAdapter.PendingRequest` — tracks the SDK's native `permission.asked` / `question.asked` request IDs so the `sendResponse` reply can round-trip to the correct SDK call (`client.permission.reply` or `client.question.reply`).
+- `AUTH_SYNC` — `syncApiKeysToOpenCodeAuth` writes decrypted provider credentials into `~/.local/share/opencode/auth.json` just before `opencode serve` starts, since the SDK server reads provider credentials from disk rather than env vars.
 
 ---
 
-## 4. IPC & Communication Channel Map
+## 4. Communication Channel Map
 
-Shows every communication mechanism in the system — IPC channels, HTTP ports, PTY streams, and event buses.
+Shows every communication mechanism in the system — IPC channels, socket RPC, SSE streams, and the handful of HTTP endpoints that remain.
 
 ```mermaid
 graph TB
@@ -322,196 +447,320 @@ graph TB
 
   subgraph MAIN["Electron Main Process"]
     IPC_H["IPC Handlers<br/><i>~50 handle() calls</i>"]
-    TASK_CB["Task Callbacks<br/><i>12 event listeners</i>"]
-    HTTP_PERM["HTTP :9226<br/><i>File permissions</i>"]
-    HTTP_Q["HTTP :9227<br/><i>User questions</i>"]
-    HTTP_T["HTTP :9228<br/><i>Thought stream</i>"]
+    DAEMON_CLIENT["DaemonClient<br/><i>socket JSON-RPC</i>"]
+    NOTIF_FWD["Notification Forwarder"]
   end
 
-  subgraph AGENT_CORE["Agent Core"]
-    TM["TaskManager"]
+  subgraph DAEMON_P["Daemon Process"]
+    RPC_SRV["DaemonRpcServer<br/><i>daemon.sock / named pipe</i>"]
+    TASK_SVC["TaskService"]
     ADAPTER["OpenCodeAdapter"]
-    PRH["PermissionRequestHandler"]
+    THOUGHT_HTTP["HTTP :9228<br/><i>thought stream</i>"]
+    WA_HTTP["HTTP :9229<br/><i>WhatsApp send</i>"]
   end
 
-  subgraph PTY_PROC["PTY Subprocess"]
-    OC["OpenCode CLI"]
-    MCP_C["MCP Client"]
+  subgraph OC_SVR["opencode serve (per task)"]
+    OC["HTTP API<br/><i>127.0.0.1:random</i>"]
+    OC_SSE["SSE event stream<br/><i>event.subscribe</i>"]
+    OC_MCP["MCP clients<br/><i>thought · whatsapp · connectors</i>"]
   end
 
-  %% Invoke (request/response)
+  %% Invoke (renderer → main)
   UI -->|"ipcRenderer.invoke(channel, ...args)"| CB
   CB -->|"ipcMain.handle(channel)"| IPC_H
   IPC_H -->|"return value"| CB
   CB -->|"Promise resolve"| UI
 
-  %% Push events (main → renderer)
-  TASK_CB -->|"webContents.send('task:update')"| CB
-  TASK_CB -->|"webContents.send('task:update:batch')"| CB
-  TASK_CB -->|"webContents.send('permission:request')"| CB
-  TASK_CB -->|"webContents.send('task:progress')"| CB
-  TASK_CB -->|"webContents.send('todo:update')"| CB
-  TASK_CB -->|"webContents.send('task:summary')"| CB
-  TASK_CB -->|"webContents.send('task:status-change')"| CB
+  %% Main → Daemon (task lifecycle, permission.respond, etc.)
+  IPC_H -->|"client.call('task.start' | 'permission.respond' | ...)"| DAEMON_CLIENT
+  DAEMON_CLIENT -->|"JSON-RPC request<br/>Unix socket / named pipe"| RPC_SRV
+  RPC_SRV -->|"response"| DAEMON_CLIENT
+
+  %% Daemon → Main (notifications)
+  RPC_SRV -->|"rpc.notify('task.message' | 'permission.request' |<br/>'task.progress' | 'task.statusChange' |<br/>'todo.update' | 'auth.error' | 'browser.frame' |<br/>'task.thought' | 'task.checkpoint' | ...)"| DAEMON_CLIENT
+  DAEMON_CLIENT --> NOTIF_FWD
+  NOTIF_FWD -->|"webContents.send(channel, data)"| CB
   CB -->|"ipcRenderer.on()"| STORE
 
-  %% Main ↔ Core
-  IPC_H -->|"JS function calls"| TM
-  TM -->|"EventEmitter callbacks"| TASK_CB
+  %% Daemon internal
+  RPC_SRV -->|"JS function calls"| TASK_SVC
+  TASK_SVC -->|"EventEmitter callbacks"| RPC_SRV
+  TASK_SVC -->|"task-manager → adapter"| ADAPTER
 
-  %% Core ↔ PTY
-  ADAPTER -->|"pty.write()"| OC
-  OC -->|"pty.onData()"| ADAPTER
+  %% Adapter ↔ opencode serve (HTTP + SSE)
+  ADAPTER -->|"session.create · session.prompt<br/>permission.reply · question.reply<br/>session.abort"| OC
+  OC_SSE -->|"message.updated<br/>message.part.updated<br/>message.part.delta<br/>permission.asked<br/>question.asked<br/>session.idle · session.error<br/>todo.updated"| ADAPTER
 
-  %% MCP HTTP
-  MCP_C -->|"HTTP POST /request"| HTTP_PERM
-  MCP_C -->|"HTTP POST /request"| HTTP_Q
-  MCP_C -->|"HTTP POST /thought"| HTTP_T
-  HTTP_PERM -->|"deferred Promise"| PRH
-  HTTP_Q -->|"deferred Promise"| PRH
+  %% MCP hooks (opencode → daemon HTTP)
+  OC_MCP -->|"POST /thought (auth token)"| THOUGHT_HTTP
+  OC_MCP -->|"POST /checkpoint (auth token)"| THOUGHT_HTTP
+  OC_MCP -->|"POST /send (auth token)"| WA_HTTP
+  THOUGHT_HTTP -->|"rpc.notify('task.thought')"| RPC_SRV
 
   %% Styling
   classDef renderer fill:#fce4ec,stroke:#e53935
   classDef bridge fill:#e0e0e0,stroke:#616161
   classDef main fill:#e8f4fd,stroke:#1e88e5
-  classDef core fill:#e8f5e9,stroke:#43a047
-  classDef pty fill:#fff3e0,stroke:#fb8c00
+  classDef daemon fill:#e8f5e9,stroke:#43a047
+  classDef oc fill:#fff3e0,stroke:#fb8c00
 
   class UI,STORE renderer
   class CB bridge
-  class IPC_H,TASK_CB,HTTP_PERM,HTTP_Q,HTTP_T main
-  class TM,ADAPTER,PRH core
-  class OC,MCP_C pty
+  class IPC_H,DAEMON_CLIENT,NOTIF_FWD main
+  class RPC_SRV,TASK_SVC,ADAPTER,THOUGHT_HTTP,WA_HTTP daemon
+  class OC,OC_SSE,OC_MCP oc
 ```
+
+**Channels inventory:**
+
+| Channel                    | Transport                          | Direction      | Purpose                                                                               |
+| -------------------------- | ---------------------------------- | -------------- | ------------------------------------------------------------------------------------- |
+| Renderer ↔ Main            | `ipcRenderer.invoke` / `on`        | Bidirectional  | UI → task commands; main → streaming updates                                          |
+| Main ↔ Daemon              | Unix socket / Windows named pipe   | Bidirectional  | JSON-RPC 2.0; task lifecycle, permission.respond, session.resume, etc.                |
+| Daemon notify → Main       | same socket                        | Daemon → Main  | `rpc.notify` for messages, permission prompts, progress, todos, auth errors, frames   |
+| Adapter ↔ `opencode serve` | HTTP + SSE (loopback, random port) | Bidirectional  | SDK v2 method calls (request/reply) + event stream (SSE) for session state            |
+| MCP tool → Daemon          | HTTP `:9228` / `:9229` + token     | MCP → Daemon   | `report-thought`, `report-checkpoint`, `whatsapp-send` (still MCP-callback for those) |
+| Daemon → External          | HTTPS                              | Daemon → Cloud | AI provider APIs (only during the Summarizer path); OpenCode does its own LLM calls   |
+
+**Ports that are gone:**
+
+`:9226` (file permission HTTP) and `:9227` (user question HTTP) are **removed**. Their MCP shims (`file-permission`, `ask-user-question`, `complete-task`, `start-task`) were replaced by native SDK events and tool-part observation on the SSE stream.
 
 ---
 
-## 5. MCP Tool Registration & Routing
+## 5. OpenCode Server Manager — per-task runtime pool
 
-Shows which MCP tools are registered, what they do, and how calls route from OpenCode through HTTP servers back into the application.
+The component most readers will find new. This diagram focuses on **why** and **how** `opencode serve` instances are managed.
 
 ```mermaid
-graph LR
-  OC["OpenCode CLI<br/><i>MCP Client</i>"]
+graph TB
+  subgraph TASK_SVC["TaskService"]
+    START["startTask(params)"]
+    STOP["stopTask(params)"]
+    RESUME["resumeSession(params)"]
+  end
 
-  subgraph MCP_SERVERS["MCP Servers (registered in opencode.json)"]
+  subgraph SM["OpenCodeServerManager  (singleton per daemon)"]
     direction TB
-    CT["<b>complete-task</b><br/><i>:9226/complete-task</i><br/>Signal task completion<br/>with status + summary"]
-    ST["<b>start-task</b><br/><i>:9226/start-task</i><br/>Create todo plan<br/>Mark requires-completion"]
-    FP["<b>file-permission</b><br/><i>:9226/request</i><br/>Request file access<br/>from user"]
-    AQ["<b>ask-user-question</b><br/><i>:9227/request</i><br/>Ask user for input<br/>with options"]
-    DB["<b>dev-browser-mcp</b><br/><i>:9222</i><br/>Playwright browser<br/>control"]
+    ENSURE["ensureTaskRuntime(taskId)<br/><i>lazy spawn</i>"]
+    WAIT["waitForServerUrl(taskId)<br/><i>poll until ready or 10s timeout</i>"]
+    SCHED_CLEANUP["scheduleTaskRuntimeCleanup(taskId, 60s)<br/><i>idle grace window</i>"]
+    DESTROY["destroyTaskRuntime(taskId)"]
+    GET_URL["getServerUrlResolver()<br/><i>closure handed to adapter</i>"]
   end
 
-  subgraph INTERCEPT["OpenCodeAdapter Interception<br/><i>(handleToolCall)</i>"]
+  subgraph RT["OpenCodeTaskRuntime  (one per active taskId)"]
     direction TB
-    I_CT["complete_task → CompletionEnforcer"]
-    I_ST["start_task → create todos, mark requires-completion"]
-    I_TW["todowrite → update CE todos"]
+    RT_START["start()<br/><i>1. onBeforeStart — write opencode.json,<br/>sync auth.json, build env<br/>2. spawn opencode serve --port=0<br/>3. parse stdout for ready URL</i>"]
+    RT_STOP["stop() · abortStart()"]
+    PID_TRACK["trackRuntimePid()<br/><i>process-group (POSIX) or taskkill /T /F (Win)</i>"]
   end
 
-  subgraph GATING["Human-in-the-Loop"]
-    PERM_DIALOG["Permission Dialog<br/><i>(React UI)</i>"]
-    Q_DIALOG["Question Dialog<br/><i>(React UI)</i>"]
+  subgraph OC_PROC["opencode serve child process"]
+    direction TB
+    OC["HTTP server<br/><i>127.0.0.1:random</i>"]
+    OC_LISTEN["stdout:<br/>'opencode server listening on http://127.0.0.1:49281'"]
+    OC_LOGS["stdout/stderr<br/><i>forwarded to daemon pino log</i>"]
   end
 
-  OC -->|"tool_use"| CT
-  OC -->|"tool_use"| ST
-  OC -->|"tool_use"| FP
-  OC -->|"tool_use"| AQ
-  OC -->|"tool_use"| DB
+  subgraph GLOBAL["Global state"]
+    ACTIVE_PIDS["activeRuntimePids Set<br/><i>exit-hook cleanup on daemon shutdown</i>"]
+  end
 
-  %% Adapter intercepts via PTY stream
-  OC -.->|"PTY stream<br/>tool call events"| INTERCEPT
+  subgraph ADAPTER["OpenCodeAdapter"]
+    ADAPTER_START["startTask(config)"]
+    ADAPTER_CLIENT["createOpencodeClient({ baseUrl })"]
+  end
 
-  FP -->|"HTTP stays open"| PERM_DIALOG
-  AQ -->|"HTTP stays open"| Q_DIALOG
-  PERM_DIALOG -->|"allow/deny"| FP
-  Q_DIALOG -->|"response"| AQ
+  subgraph TRANSIENT["Transient OAuth client"]
+    TR["createTransientOpencodeClient()<br/><i>not pooled — one-shot for<br/>ChatGPT OAuth flow</i>"]
+  end
 
-  classDef mcp fill:#fff3e0,stroke:#fb8c00
-  classDef intercept fill:#e8f5e9,stroke:#43a047
-  classDef gate fill:#fce4ec,stroke:#e53935
+  START -->|"wire getServerUrl"| GET_URL
+  START -->|"taskManager.startTask"| ADAPTER_START
+  ADAPTER_START -->|"getServerUrl(taskId)"| GET_URL
+  GET_URL --> ENSURE
+  ENSURE --> RT
+  ENSURE -->|"first call"| RT_START
+  WAIT -.->|"polls until ready"| RT
+  ADAPTER_START -->|"await serverUrl"| ADAPTER_CLIENT
+  ADAPTER_CLIENT -->|"HTTP + SSE"| OC
 
-  class CT,ST,FP,AQ,DB mcp
-  class I_CT,I_ST,I_TW intercept
-  class PERM_DIALOG,Q_DIALOG gate
+  RT_START --> OC_PROC
+  OC --> OC_LISTEN
+  OC_LISTEN -.->|"regex match<br/>resolves start()"| RT_START
+  OC -.->|"stdout/stderr"| OC_LOGS
+  RT_START --> PID_TRACK
+  PID_TRACK --> ACTIVE_PIDS
+
+  STOP -->|"on complete/error/cancel"| SCHED_CLEANUP
+  SCHED_CLEANUP -->|"60s timer"| DESTROY
+  RESUME -.->|"reuses runtime if still alive"| ENSURE
+  DESTROY --> RT_STOP
+  RT_STOP --> PID_TRACK
+
+  OPENAI_OAUTH["OpenAiOauthManager"] -->|"short-lived auth flow"| TR
+  TR --> OC_PROC
+
+  classDef tsvc fill:#e8f5e9,stroke:#43a047
+  classDef sm fill:#fff9c4,stroke:#f9a825,stroke-width:2px
+  classDef rt fill:#c8e6c9,stroke:#2e7d32
+  classDef oc fill:#fff3e0,stroke:#fb8c00
+  classDef adapter fill:#bbdefb,stroke:#1565c0
+  classDef global fill:#ffccbc,stroke:#e64a19
+
+  class START,STOP,RESUME tsvc
+  class ENSURE,WAIT,SCHED_CLEANUP,DESTROY,GET_URL sm
+  class RT_START,RT_STOP,PID_TRACK rt
+  class OC,OC_LISTEN,OC_LOGS oc
+  class ADAPTER_START,ADAPTER_CLIENT adapter
+  class ACTIVE_PIDS global
+  class OPENAI_OAUTH,TR tsvc
 ```
+
+### 5.1 Whose HTTP server is this, anyway?
+
+**It is OpenCode's own HTTP server, not one Accomplish wrote.**
+
+`opencode` (the [opencode-ai npm package](https://www.npmjs.com/package/opencode-ai)) ships a `serve` subcommand that boots a local HTTP + Server-Sent-Events server inside the opencode runtime. That server exposes the v2 API — sessions, prompts, events, permissions, questions, tool-part streams — which is exactly what [`@opencode-ai/sdk/v2`](https://www.npmjs.com/package/@opencode-ai/sdk) is built to talk to. Accomplish's daemon does not implement any of this protocol; it only:
+
+1. Spawns `opencode serve --hostname=127.0.0.1 --port=0` as a child process (random ephemeral port).
+2. Greps its stdout for the ready line (`opencode server listening on http://127.0.0.1:NNNN`).
+3. Hands that URL to `createOpencodeClient({ baseUrl })` inside `OpenCodeAdapter`.
+
+So the HTTP server exists because the supported programmatic contract with OpenCode **is** HTTP + SSE. In the PTY era, Accomplish drove opencode through the `opencode run` CLI and parsed its stdout. That form offered no structured event model, no permission primitives, and was sensitive to terminal control codes. `opencode serve` + SDK is the opencode team's recommended integration path; moving to it was the whole point of the cutover.
+
+The two remaining auxiliary HTTP endpoints on the daemon (`:9228` thought stream, `:9229` WhatsApp send) are **orthogonal** — they are plain MCP tool callback servers that OpenCode's MCP-tool clients POST to. They are not part of the SDK transport.
+
+### 5.2 Why one server per task — even for follow-ups?
+
+Short answer: **runtime isolation wins against a small startup cost that is already mostly amortized for follow-ups by a 60-second warm-reuse window.**
+
+Long answer, per design pressure:
+
+| Pressure                           | What a single shared `opencode serve` would force                                                                                                                                                                       | What per-task buys                                                                        |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| **Per-task configuration**         | Every task would run with the same `opencode.json` — provider, enabled skills, enabled connectors, system-prompt suffix. Reconfiguring requires a restart, which means a shared server can't adapt to the current task. | Each task picks its own provider, skill set, MCP list. Config lives in the spawned child. |
+| **Event-stream scoping**           | `event.subscribe()` is **server-wide**, not session-scoped. Sharing means the adapter must demux every event (`permission.asked`, `message.part.updated`) by `sessionID` and risks cross-task leakage on a bug.         | Every adapter has its own dedicated SSE stream. Zero demux, zero leakage.                 |
+| **Crash blast radius**             | A provider / plugin / OOM bug inside `opencode serve` takes down every concurrent task.                                                                                                                                 | One task crashes; the others keep their own runtimes and finish.                          |
+| **Port hygiene and multi-profile** | Static port collides with co-running Accomplish profiles, other apps, or a crashed daemon.                                                                                                                              | `--port=0` gets a fresh ephemeral port per child.                                         |
+| **Graceful shutdown & reclaim**    | Killing a shared server to reclaim memory or reset state affects every active task.                                                                                                                                     | One runtime's teardown is a private event.                                                |
+
+**Does a follow-up spawn a fresh server?** Not if it arrives quickly. `OpenCodeServerManager` holds the runtime in its map keyed by `taskId` and sets a 60-second cleanup timer on terminal events (`complete` / `error` / `cancelled`). Three cases:
+
+1. **UI follow-up via the same taskId, within 60s** (e.g., user typing the next prompt into an existing chat). `resumeSession({ existingTaskId })` → `_runTask(taskId, …)` → `getServerUrl(taskId)` → `ensureTaskRuntime(taskId)` sees the cached runtime, cancels the cleanup timer, and the adapter reconnects to the already-running `opencode serve` on the same port. **No spawn, no handshake.**
+2. **UI follow-up after 60s.** The runtime has already been torn down. A fresh one is spawned, and the adapter calls `session.create` / `session.prompt` with the prior `sessionID`. OpenCode persists sessions on disk (`~/.local/share/opencode/`) so the new runtime sees the full prior conversation — only the process is new.
+3. **A completely new task (new taskId).** Always gets its own runtime. Prior and new tasks each have dedicated servers and can run in parallel.
+
+**Is this design "right"?** It is right for a few concrete reasons:
+
+- **The isolation wins are real.** We are orchestrating an AI runtime that loads user plugins (MCP servers), hits the network, and sometimes enters unbounded loops. Per-task isolation makes both bugs and cancellation local.
+- **The common cost is hidden.** Interactive follow-ups (the hot path) hit the 60-second warm window and spawn nothing. Only cold starts and first-in-session runs pay the ~1–2s spawn cost, and the user already expects latency on those.
+- **It mirrors the SDK's intended deployment shape.** OpenCode's own documentation treats `opencode serve` as session-local. Pooling it across unrelated sessions would be going against the grain.
+
+The downside is memory. Ten concurrent tasks mean ten `opencode serve` processes and ten plugin-subprocess groups. For Accomplish's current `maxConcurrentTasks=10` and typical usage (1–2 tasks at a time) this has not been a problem, but if the workload ever shifts toward very high concurrency, a session-multiplexed variant would be the right refactor to revisit. For today, per-task is the correct call.
+
+### 5.3 Lifecycle invariants
+
+- **Lazy spawn.** No `opencode serve` runs until `task.start` fires. Daemon idle cost is zero opencode processes.
+- **60-second idle reuse.** On a task's terminal transition (success / error / cancelled), `scheduleTaskRuntimeCleanup(taskId, 60_000)` defers teardown. Any follow-up that reaches `ensureTaskRuntime(taskId)` within that window cancels the timer via `clearCleanupTimer` and reuses the warm child.
+- **Process-tree kill.** Runtime shutdown uses POSIX `process.kill(-pid, 'SIGKILL')` (process group) or Windows `taskkill /PID pid /T /F` to make sure opencode's MCP plugin subprocesses go too.
+- **Daemon-exit sweep.** `activeRuntimePids` is a module-level set; a `process.on('exit')` handler iterates it and kills every tracked pid. Prevents port leaks from daemon crashes. Registered lazily on first `spawnOpenCodeServer` via `ensureRuntimeCleanupRegistered`.
+- **Transient clients.** `OpenAiOauthManager` uses `createTransientOpencodeClient()` for the ChatGPT OAuth flow — a one-shot `opencode serve` that is spawned, used to drive `auth.provider`, and then closed. Never pooled or keyed by taskId.
 
 ---
 
 ## 6. Provider & Configuration Pipeline
 
-How provider settings flow from the UI through configuration generation to OpenCode spawning.
+How provider settings flow from the UI through daemon-side configuration generation into a spawned `opencode serve`.
 
 ```mermaid
 graph TB
-  subgraph UI["Settings UI"]
+  subgraph UI["Settings UI (React)"]
     PROVIDER_GRID["Provider Grid<br/><i>15 provider cards</i>"]
     API_KEY_INPUT["API Key Input"]
     MODEL_SELECT["Model Selector"]
   end
 
-  subgraph STORAGE["Storage Layer"]
+  subgraph IPC["Desktop IPC + Daemon RPC"]
+    IPC_SETTINGS["ipcMain.handle('settings:add-api-key')"]
+    RPC_KEYS["RPC: storage.setApiKey"]
+  end
+
+  subgraph STORAGE["Daemon Storage"]
     PROVIDER_SETTINGS["provider_settings table<br/><i>active provider · connected providers · selected models</i>"]
     SECURE["SecureStorage<br/><i>AES-256-GCM encrypted keys</i>"]
   end
 
-  subgraph CONFIG_PIPELINE["Config Generation Pipeline<br/><i>(per task spawn)</i>"]
-    ENV_BUILD["Environment Builder<br/><i>API keys → env vars</i>"]
-    CONFIG_GEN["Config Generator<br/><i>→ opencode.json</i>"]
-    CONFIG_BUILD["Config Builder<br/><i>Provider-specific model config</i>"]
-    SKILL_INJECT["Skill Injection<br/><i>Enabled skills → system prompt</i>"]
-    CONN_INJECT["Connector Injection<br/><i>Enabled connectors → MCP servers</i>"]
+  subgraph START["Per-task startup (onBeforeStart)"]
+    direction TB
+    SYNC_AUTH["syncApiKeysToOpenCodeAuth<br/><i>decrypt → ~/.local/share/opencode/auth.json</i>"]
+    BUILD_PROV["buildProviderConfigs<br/><i>Provider-specific model config</i>"]
+    GET_SKILLS["getEnabledSkills<br/><i>Bundled + user skills</i>"]
+    GEN_CFG["generateConfig<br/><i>Writes opencode.json</i>"]
+    ENV_BUILD["Environment Builder<br/><i>OPENCODE_CONFIG[_DIR]<br/>PATH += bundled node</i>"]
   end
 
-  subgraph SPAWN["PTY Spawn"]
-    PTY["node-pty<br/><i>OPENCODE_CONFIG=opencode.json</i>"]
-    ENV_VARS["Process Environment<br/><i>ANTHROPIC_API_KEY, etc.</i>"]
-  end
-
-  subgraph PROXIES["Optional Proxies"]
+  subgraph PROXIES["Optional Local Proxies"]
     AZ_PROXY["Azure Foundry Proxy<br/><i>localhost:random</i>"]
     MOON_PROXY["Moonshot Proxy<br/><i>localhost:random</i>"]
   end
 
+  subgraph SPAWN["Per-task opencode serve"]
+    PROC["child_process.spawn<br/><i>opencode serve --hostname=127.0.0.1 --port=0</i>"]
+    ENV_VARS["Child env<br/><i>{...process.env, OPENCODE_CONFIG, OPENCODE_CONFIG_DIR, PATH}</i>"]
+    OC_HTTP["HTTP API on random port"]
+  end
+
   %% Flow
   PROVIDER_GRID --> API_KEY_INPUT
-  API_KEY_INPUT -->|"IPC: settings:add-api-key"| SECURE
-  MODEL_SELECT -->|"IPC: model:set"| PROVIDER_SETTINGS
+  API_KEY_INPUT -->|"IPC"| IPC_SETTINGS
+  IPC_SETTINGS --> RPC_KEYS
+  RPC_KEYS --> SECURE
+  MODEL_SELECT -->|"IPC"| IPC_SETTINGS
+  IPC_SETTINGS -->|"RPC"| PROVIDER_SETTINGS
 
-  PROVIDER_SETTINGS --> CONFIG_BUILD
-  SECURE --> ENV_BUILD
-  CONFIG_BUILD --> CONFIG_GEN
-  SKILL_INJECT --> CONFIG_GEN
-  CONN_INJECT --> CONFIG_GEN
+  PROVIDER_SETTINGS --> BUILD_PROV
+  SECURE --> SYNC_AUTH
+  SYNC_AUTH -->|"writes auth.json"| OC_HTTP
+  BUILD_PROV --> GEN_CFG
+  GET_SKILLS --> GEN_CFG
+  GEN_CFG -->|"writes opencode.json"| ENV_BUILD
   ENV_BUILD --> ENV_VARS
-  CONFIG_GEN -->|"writes file"| PTY
-  ENV_VARS --> PTY
+  ENV_VARS --> PROC
+  PROC --> OC_HTTP
 
-  CONFIG_BUILD -.->|"if Azure Foundry"| AZ_PROXY
-  CONFIG_BUILD -.->|"if Moonshot"| MOON_PROXY
-  AZ_PROXY -.-> PTY
-  MOON_PROXY -.-> PTY
+  BUILD_PROV -.->|"if Azure Foundry"| AZ_PROXY
+  BUILD_PROV -.->|"if Moonshot"| MOON_PROXY
+  AZ_PROXY -.-> PROC
+  MOON_PROXY -.-> PROC
 
   classDef ui fill:#fce4ec,stroke:#e53935
+  classDef ipc fill:#e8f4fd,stroke:#1e88e5
   classDef storage fill:#f0f4c3,stroke:#827717
   classDef config fill:#fff9c4,stroke:#f9a825
   classDef spawn fill:#fff3e0,stroke:#fb8c00
   classDef proxy fill:#e0e0e0,stroke:#616161
 
   class PROVIDER_GRID,API_KEY_INPUT,MODEL_SELECT ui
+  class IPC_SETTINGS,RPC_KEYS ipc
   class PROVIDER_SETTINGS,SECURE storage
-  class ENV_BUILD,CONFIG_GEN,CONFIG_BUILD,SKILL_INJECT,CONN_INJECT config
-  class PTY,ENV_VARS spawn
+  class SYNC_AUTH,BUILD_PROV,GET_SKILLS,GEN_CFG,ENV_BUILD config
+  class PROC,ENV_VARS,OC_HTTP spawn
   class AZ_PROXY,MOON_PROXY proxy
 ```
+
+**Notable pipeline changes from the PTY era:**
+
+- Credentials are written to `auth.json` (a file `opencode serve` reads at startup) rather than injected as process env vars, because the SDK server has its own config-loading conventions and the file format covers credentials the env-var approach can't (OAuth tokens, per-provider endpoints).
+- `opencode.json` no longer registers `complete-task` / `start-task` / `file-permission` / `ask-user-question` as MCP servers. Those MCP shims were the bridge layer that the SDK events replaced.
+- `onBeforeStart` is invoked by the daemon's `OpenCodeServerManager` (before `opencode serve` spawns) **and** forwarded to the adapter via `AdapterOptions.onBeforeStart` (so `externalEnv` stays in sync for consumers that still inspect it). The two calls produce equivalent env.
 
 ---
 
 ## 7. Skills & Connectors Functional Model
 
-How skills and MCP connectors are managed, stored, and injected into the agent's system prompt.
+How skills and MCP connectors are managed, stored, and injected into the per-task agent configuration. (Structurally unchanged from the PTY era — included for completeness.)
 
 ```mermaid
 graph TB
@@ -533,18 +782,18 @@ graph TB
     DISC["discoverOAuthMetadata()<br/><i>.well-known/oauth-authorization-server</i>"]
     REG["registerOAuthClient()<br/><i>Dynamic client registration</i>"]
     PKCE["generatePkceChallenge()<br/><i>S256 code challenge</i>"]
-    TOKEN["exchangeCodeForTokens()<br/><i>Authorization code → tokens</i>"]
-    REFRESH["refreshAccessToken()<br/><i>Token renewal</i>"]
+    TOKEN["exchangeCodeForTokens()"]
+    REFRESH["refreshAccessToken()"]
   end
 
   subgraph DB["SQLite Storage"]
-    SKILLS_TBL["skills table<br/><i>id · name · command · source · enabled · filePath</i>"]
-    CONN_TBL["connectors table<br/><i>id · name · url · enabled · auth status · tokens</i>"]
+    SKILLS_TBL["skills table"]
+    CONN_TBL["connectors table"]
   end
 
-  subgraph INJECTION["Injection into Agent"]
-    SYS_PROMPT["System Prompt<br/><i>Enabled skill content appended</i>"]
-    MCP_CONF["MCP Server Config<br/><i>Enabled connectors → opencode.json</i>"]
+  subgraph INJECTION["Injection into the per-task opencode serve"]
+    SYS_PROMPT["opencode.json: systemPrompt<br/><i>Enabled skill content appended</i>"]
+    MCP_CONF["opencode.json: mcp-servers<br/><i>Enabled connectors</i>"]
   end
 
   BUNDLED --> SCAN
@@ -580,32 +829,312 @@ graph TB
 
 ---
 
+## 8. Permission & Question Request Flow
+
+A focused view of the single most-changed path in the cutover — human-in-the-loop gating. Same goal as before (user approves file writes, answers clarification questions), entirely different transport.
+
+```mermaid
+graph LR
+  subgraph OC["opencode serve (per task)"]
+    TOOL["Tool invocation<br/><i>Write/Edit/Bash/…</i>"]
+    Q_ASK["ask-user-question tool"]
+    PERM_EV["emits permission.asked<br/><i>(SSE event)</i>"]
+    Q_EV["emits question.asked<br/><i>(SSE event)</i>"]
+  end
+
+  subgraph ADAPTER["OpenCodeAdapter (daemon)"]
+    SUB["event.subscribe loop<br/><i>handleSdkEvent</i>"]
+    PEND["PendingRequest map<br/><i>sdk request id ↔ oss request id</i>"]
+    EMIT["emit('permission-request')"]
+    SEND["sendResponse(response)"]
+    REPLY["client.permission.reply / question.reply"]
+  end
+
+  subgraph DAEMON_RPC["Daemon RPC surface"]
+    NOTIFY["rpc.notify('permission.request', req)"]
+    RESPOND["RPC method: permission.respond"]
+  end
+
+  subgraph DESKTOP["Electron Main"]
+    FWD["Notification Forwarder"]
+    IPC["ipcMain.handle('permission:respond')"]
+  end
+
+  subgraph UI_R["React UI"]
+    DIALOG["Permission / Question Dialog"]
+    USER_CLICK["User clicks Allow / Deny /<br/>picks answer option"]
+  end
+
+  TOOL -->|"requires permission"| PERM_EV
+  Q_ASK --> Q_EV
+  PERM_EV --> SUB
+  Q_EV --> SUB
+  SUB --> PEND
+  PEND --> EMIT
+  EMIT --> NOTIFY
+  NOTIFY -->|"socket"| FWD
+  FWD -->|"webContents.send"| DIALOG
+  DIALOG --> USER_CLICK
+  USER_CLICK -->|"ipcRenderer.invoke"| IPC
+  IPC -->|"client.call"| RESPOND
+  RESPOND --> SEND
+  SEND -->|"looks up PendingRequest"| PEND
+  SEND --> REPLY
+  REPLY -->|"HTTP"| OC
+
+  classDef oc fill:#fff3e0,stroke:#fb8c00
+  classDef adapter fill:#bbdefb,stroke:#1565c0
+  classDef rpc fill:#e8f5e9,stroke:#43a047
+  classDef desktop fill:#e8f4fd,stroke:#1e88e5
+  classDef ui fill:#fce4ec,stroke:#e53935
+
+  class TOOL,Q_ASK,PERM_EV,Q_EV oc
+  class SUB,PEND,EMIT,SEND,REPLY adapter
+  class NOTIFY,RESPOND rpc
+  class FWD,IPC desktop
+  class DIALOG,USER_CLICK ui
+```
+
+**Source-based auto-deny safeguard:** When a permission prompt reaches `task-callbacks.onPermissionRequest` for a task whose source is not `'ui'` (WhatsApp, scheduler) and there is no live RPC client connected, the callback auto-denies via the same reply path. This replaces the PTY-era "HTTP callback times out after 5 minutes" safeguard the deleted `PermissionService` provided.
+
+---
+
+## 9. Free-tier Gateway Integration (`@accomplish/llm-gateway-client`)
+
+Accomplish ships in two flavours: the **OSS build** (open-source, bring-your-own provider keys) and the **Free build** (adds an Accomplish-operated LLM gateway with metered credits). The Free build is produced by a separate CI repo that fuses this repo with a private sibling package, `@accomplish/llm-gateway-client`. The OSS codebase — this repo — treats that private package as an **optional runtime dependency**: absent in OSS builds, present in Free builds, and wired in via a single interface with a null-object fallback.
+
+```mermaid
+graph TB
+  subgraph BUILD["Build-time boundary"]
+    direction TB
+    CI_OSS["OSS build<br/><i>only this repo</i>"]
+    CI_FREE["Free build (private CI)<br/><i>this repo + llm-gateway-client<br/>+ accomplish-release</i>"]
+    BUILD_ENV["build.env<br/><i>ACCOMPLISH_GATEWAY_URL=...</i>"]
+  end
+
+  subgraph RUNTIME["Runtime boundary (daemon process)"]
+    direction TB
+    BOOT["daemon/index.ts bootstrap"]
+    DYN["Dynamic import<br/><i>await import('@accomplish/llm-gateway-client')</i>"]
+    NOOP["noopRuntime<br/><i>fail-closed fallback<br/>isAvailable()=false</i>"]
+    REAL["createRuntime()<br/><i>real AccomplishRuntime impl</i>"]
+    TAG["setProxyTaskId(taskId &#124; undefined)<br/><i>hot-path callback</i>"]
+  end
+
+  subgraph USE["Consumers of AccomplishRuntime"]
+    direction TB
+    CG["ConfigGenerator<br/><i>buildAccomplishAiConfig(ctx)</i>"]
+    RPC["Daemon RPC methods<br/><i>accomplish-ai.connect<br/>.get-usage · .disconnect<br/>.usage-update notify</i>"]
+    ADAPT["OpenCodeAdapter.setProxyTaskId<br/><i>start → tag · teardown → clear</i>"]
+  end
+
+  subgraph EXT["External"]
+    GW["Accomplish LLM Gateway<br/><i>HTTPS proxy to AI providers<br/>per-task credit accounting</i>"]
+    AI["AI Provider APIs<br/><i>Anthropic · OpenAI · Google · …</i>"]
+  end
+
+  CI_OSS -.->|"package absent"| BOOT
+  CI_FREE -->|"package present"| BOOT
+  CI_FREE --> BUILD_ENV
+  BUILD_ENV -->|"Electron build-config → daemon env"| BOOT
+
+  BOOT --> DYN
+  DYN -->|"ERR_MODULE_NOT_FOUND (OSS)"| NOOP
+  DYN -->|"resolved (Free)"| REAL
+  DYN -->|"also pulls"| TAG
+
+  NOOP -.->|"isAvailable()=false"| CG
+  REAL --> CG
+  REAL --> RPC
+  TAG --> ADAPT
+
+  CG -->|"provider config<br/>(only if isAvailable)"| GW
+  RPC -->|"HTTPS (DPoP-signed)"| GW
+  ADAPT -->|"per-task tag on<br/>outgoing LLM req"| GW
+  GW -->|"upstream"| AI
+
+  classDef build fill:#e0e0e0,stroke:#616161
+  classDef runtime fill:#e8f5e9,stroke:#43a047
+  classDef consumer fill:#bbdefb,stroke:#1565c0
+  classDef ext fill:#f3e5f5,stroke:#8e24aa
+
+  class CI_OSS,CI_FREE,BUILD_ENV build
+  class BOOT,DYN,NOOP,REAL,TAG runtime
+  class CG,RPC,ADAPT consumer
+  class GW,AI ext
+```
+
+### 9.1 Package boundary — named in exactly four places
+
+The private package's name appears on **only four lines** of OSS source. Everything else depends on the `AccomplishRuntime` _interface_ owned by agent-core.
+
+| Location                                                                               | What it does                                                                                                                                                                                                     |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [apps/daemon/tsup.config.ts](apps/daemon/tsup.config.ts)                               | Marks the package `external` so the bundler doesn't attempt resolution at build time.                                                                                                                            |
+| [apps/daemon/src/types/gateway-client.d.ts](apps/daemon/src/types/gateway-client.d.ts) | Ambient `declare module` so TypeScript can type `import('@accomplish/llm-gateway-client')` when the package is absent.                                                                                           |
+| [apps/daemon/src/index.ts](apps/daemon/src/index.ts)                                   | Two dynamic loads inside `main()`: `await import(...)` → `createRuntime()`, then a separate `require(...)` → `setProxyTaskId`. Both fail-closed to OSS behaviour on `ERR_MODULE_NOT_FOUND` / `MODULE_NOT_FOUND`. |
+
+### 9.2 The interface — `AccomplishRuntime` + `noopRuntime`
+
+Defined in [`packages/agent-core/src/opencode/accomplish-runtime.ts`](packages/agent-core/src/opencode/accomplish-runtime.ts) and re-exported from [`agent-core`](packages/agent-core/src/index.ts):
+
+| Method                             | When called                                                                                                               |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `connect(storageDeps)`             | `accomplish-ai.connect` RPC — user clicks "Use Accomplish AI" in Settings                                                 |
+| `disconnect()`                     | `accomplish-ai.disconnect` RPC — user logs out                                                                            |
+| `getUsage()`                       | `accomplish-ai.get-usage` RPC — Settings reads live credit balance                                                        |
+| `onUsageUpdate(listener)`          | Daemon startup — subscribes to push updates from response headers                                                         |
+| `buildProviderConfig(storageDeps)` | Per-task startup — `buildAccomplishAiConfig` asks for the opencode provider config to route LLM calls through the gateway |
+| `isAvailable()`                    | Everywhere — null-object predicate, `false` in OSS, `true` in Free                                                        |
+
+`noopRuntime` is a fail-closed implementation shipped with agent-core. `isAvailable()` returns `false`, the async methods throw `accomplish_runtime_unavailable`, `buildProviderConfig()` returns empty. Call sites never need `if (runtime) { ... }` branches — they rely on `isAvailable()` or let the null-object's empty return silently drop the integration.
+
+### 9.3 The hot-path callback — `setProxyTaskId` in the adapter
+
+[`OpenCodeAdapter.options.setProxyTaskId`](packages/agent-core/src/internal/classes/OpenCodeAdapter.ts) is an optional callback with two call sites:
+
+- [OpenCodeAdapter.ts:374](packages/agent-core/src/internal/classes/OpenCodeAdapter.ts#L374) — `this.options.setProxyTaskId?.(taskId)` on `startTask`
+- [OpenCodeAdapter.ts:1332](packages/agent-core/src/internal/classes/OpenCodeAdapter.ts#L1332) — `this.options.setProxyTaskId?.(undefined)` on `teardown`
+
+**Why in the adapter?** The gateway receives the actual LLM request bodies (via an env-injected HTTPS proxy that `opencode serve` uses for provider calls). It needs to attribute each request to a task ID for credit accounting, per-task rate limiting, and abuse detection. The adapter is the smallest scope with a 1:1 correspondence to a task lifecycle: it gets the taskId at session creation and knows the exact moment the session tears down. Any higher layer (TaskManager, TaskService) would force propagating the ID through more hops or through `AsyncLocalStorage`; any lower layer (inside opencode) doesn't know Accomplish's task concept.
+
+In OSS, `setProxyTaskId` is `undefined` and the optional-chain `?.` short-circuits — zero cost.
+
+### 9.4 Env-var propagation — `ACCOMPLISH_GATEWAY_URL`
+
+The daemon doesn't read this variable itself; the private runtime does, when it wakes up. The OSS code only has to propagate it correctly:
+
+```
+build.env (Free CI) or build.env.template (local Free dev)
+    ↓
+getBuildConfig().accomplishGatewayUrl         [apps/desktop/.../build-config.ts:95]
+    ↓
+daemonEnv.ACCOMPLISH_GATEWAY_URL = bc.accomplishGatewayUrl
+    ↓ (spawned daemon inherits env)          [apps/desktop/.../daemon-connector.ts:201]
+process.env.ACCOMPLISH_GATEWAY_URL            (read by llm-gateway-client at createRuntime())
+```
+
+### 9.5 "Free dev" local workflow
+
+For contributors who have access to the private package and want to run the Free variant under `pnpm dev`:
+
+1. Clone `llm-gateway-client` as a sibling folder to `accomplish/`.
+2. `pnpm -F @accomplish/daemon add @accomplish/llm-gateway-client@file:/Users/…/dev/accomplish/llm-gateway-client`
+3. Set `ACCOMPLISH_GATEWAY_URL=<dev-gateway>` in `build.env` (or inline on the `pnpm dev` command).
+4. `pnpm dev` — the daemon's dynamic `import()` now resolves the local package; all four consumer paths light up.
+
+Reverting to OSS mode is `pnpm -F @accomplish/daemon remove @accomplish/llm-gateway-client` + restart. No other code changes required — that's the whole point of the null-object pattern.
+
+---
+
+## 10. Completion Enforcement
+
+The `CompletionEnforcer` guards against two failure modes common with agent workflows:
+
+1. The LLM silently stops mid-workflow without declaring it's done (or not done).
+2. The LLM claims "success" while the todo plan still has incomplete items — pretending to finish to escape the loop.
+
+Both are handled in agent-core at [`packages/agent-core/src/opencode/completion/`](packages/agent-core/src/opencode/completion/).
+
+### 10.1 State machine (SDK-era reachable subset)
+
+```mermaid
+stateDiagram-v2
+    [*] --> IDLE
+
+    IDLE --> DONE : complete_task(success)<br/>and all todos complete
+    IDLE --> BLOCKED : complete_task(blocked)
+    IDLE --> PARTIAL_CONTINUATION_PENDING : complete_task(partial)<br/>OR<br/>complete_task(success) downgraded<br/>because todos are incomplete
+
+    DONE --> [*] : session.idle → markComplete('success')
+    BLOCKED --> [*] : session.idle → markComplete('error')
+    PARTIAL_CONTINUATION_PENDING --> [*] : session.idle → markComplete('error')<br/>(see §10.3 — continuation loop<br/>is intentionally disabled)
+```
+
+State names are the `CompletionFlowState` enum ([completion-state.ts](packages/agent-core/src/opencode/completion/completion-state.ts)). The PTY-era state machine also had `CONTINUATION_PENDING` and `MAX_RETRIES_REACHED` plus a retry loop that re-prompted the agent to finish — see §10.3 for why that path is dormant in SDK-era.
+
+### 10.2 Trigger flow — how the adapter drives the enforcer
+
+```mermaid
+sequenceDiagram
+    participant SDK as opencode serve<br/>(SSE stream)
+    participant A as OpenCodeAdapter
+    participant E as CompletionEnforcer
+    participant TC as TaskService / task-callbacks
+
+    Note over SDK,A: Every SDK event flows into handleSdkEvent()
+
+    SDK->>A: tool.part event — start_task (running|completed)
+    A->>E: markTaskRequiresCompletion()
+
+    SDK->>A: tool.part event — any other tool
+    A->>E: markToolsUsed(true)
+
+    SDK->>A: tool.part event — todo.updated
+    A->>E: updateTodos([...])
+
+    SDK->>A: tool.part event — complete_task(status, summary, ...)
+    A->>E: handleCompleteTaskDetection(toolInput)
+    Note over E: state.recordCompleteTaskCall(args)<br/>if status='success' && hasIncompleteTodos → downgrade to 'partial'<br/>→ state = DONE | BLOCKED | PARTIAL_CONTINUATION_PENDING
+
+    SDK->>A: session.idle
+    A->>E: getState()
+    alt enforcerState === BLOCKED
+      A->>TC: markComplete('error', 'Task blocked')
+    else
+      A->>TC: markComplete('success')
+    end
+```
+
+The crucial design contract: **the enforcer is a recorder, not a driver.** The adapter observes `session.idle` from the SDK, reads `enforcer.getState()`, and decides the final disposition. The enforcer's job is to get the state right by the time `session.idle` fires — nothing more.
+
+### 10.3 Why the continuation-nudge loop is dormant in SDK-era
+
+The PTY-era enforcer had a second responsibility: when the agent stopped without calling `complete_task` but had been doing real work, the enforcer would schedule a _continuation nudge_ — a follow-up prompt reminding the agent to finish or declare blocked. That loop is implemented (see [`handleStepFinish`](packages/agent-core/src/opencode/completion/completion-enforcer.ts) and [`handleProcessExit`](packages/agent-core/src/opencode/completion/completion-enforcer.ts)) but **neither method is called from the SDK-era adapter**. The adapter explicitly opts out in a large comment at [OpenCodeAdapter.ts:818–836](packages/agent-core/src/internal/classes/OpenCodeAdapter.ts#L818):
+
+> DO NOT invoke `completionEnforcer.handleProcessExit(0)` here. That path was designed for the PTY era where the `opencode run` child exited when the turn ended — firing exactly once. In SDK mode, `session.idle` repeats, and each invocation would re-enter the nudge path … until `MAX_RETRIES_REACHED` stops the storm (~10 attempts). Symptom: the user sees 5–10 successive defensive assistant bubbles after a simple "add 6" request before the task finally ends.
+
+Consequence: in SDK-era, `PARTIAL_CONTINUATION_PENDING` is entered (recorded) but never _consumed_ as a prompt trigger — on the next `session.idle` it becomes `markComplete('error')` just like `BLOCKED`. The `onStartContinuation` callback wired into the adapter is effectively dead; the prompts in [`prompts.ts`](packages/agent-core/src/opencode/completion/prompts.ts) still exist but aren't fired from the live path. Re-enabling continuation under the SDK model would need a different trigger (e.g., a one-shot boolean guarding `handleStepFinish` to the first `stop` per prompt) rather than the PTY pattern.
+
+### 10.4 Auto-downgrade — the one enforcement bite that remains
+
+The live safeguard is in `handleCompleteTaskDetection`: if the agent calls `complete_task(status='success')` while any todo is still `pending` or `in_progress`, the enforcer silently rewrites the status to `'partial'` and populates `remaining_work` with the incomplete-todo summary. The state machine lands in `PARTIAL_CONTINUATION_PENDING` (recorded as an error on idle, per §10.3). Rationale: agents have been known to call `complete_task(success)` as an escape hatch when they're stuck; requiring _both_ an explicit success claim _and_ a complete todo plan catches that specific pattern.
+
+---
+
 ## Component Responsibility Matrix
 
-| Component                    | Package    | Responsibility                                                      | Key Interfaces                                                               |
-| ---------------------------- | ---------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| **TaskManager**              | agent-core | Task queue, lifecycle, event wiring (12 listeners)                  | `startTask()`, `cancelTask()`, EventEmitter callbacks                        |
-| **OpenCodeAdapter**          | agent-core | PTY spawn/kill, tool call interception, message routing             | `spawn()`, `handleToolCall()`, `spawnSessionResumption()`                    |
-| **CompletionEnforcer**       | agent-core | State machine ensuring task completion via retries                  | `handleCompleteTaskDetection()`, `handleStepFinish()`, `handleProcessExit()` |
-| **ConfigGenerator**          | agent-core | Generates `opencode.json` with prompt, MCP servers, provider config | `generateConfig()` → JSON file                                               |
-| **StreamParser**             | agent-core | Parses raw PTY bytes into structured events                         | `parse(data)` → events                                                       |
-| **MessageProcessor**         | agent-core | Converts raw events into `TaskMessage` objects                      | `process(event)` → `TaskMessage`                                             |
-| **PermissionRequestHandler** | agent-core | Deferred promise pattern for human-in-the-loop gating               | `createPermissionRequest()` → `{ requestId, promise }`                       |
-| **ThoughtStreamHandler**     | agent-core | Validates thought/checkpoint events from MCP tools                  | `validateThoughtEvent()`, `validateCheckpointEvent()`                        |
-| **SkillsManager**            | agent-core | Skill CRUD, filesystem scan, GitHub import                          | `resync()`, `addSkill()`, `getEnabledSkills()`                               |
-| **SpeechService**            | agent-core | ElevenLabs STT transcription                                        | `transcribeAudio()` → text                                                   |
-| **Summarizer**               | agent-core | LLM-powered task title generation (multi-provider fallback)         | `generateTaskSummary()` → 3-5 word title                                     |
-| **MCP OAuth**                | agent-core | OAuth 2.0 discovery, PKCE, token lifecycle for connectors           | `discoverOAuthMetadata()`, `exchangeCodeForTokens()`                         |
-| **BrowserService**           | agent-core | Playwright Chromium install, dev-browser MCP server spawn           | `ensureDevBrowserServer()`                                                   |
-| **API Proxies**              | agent-core | Protocol translation for Azure Foundry and Moonshot                 | `ensureAzureFoundryProxy()`, `ensureMoonshotProxy()`                         |
-| **Database**                 | agent-core | SQLite with WAL mode, 8 migrations, 5 repositories                  | `better-sqlite3` via repositories                                            |
-| **SecureStorage**            | agent-core | AES-256-GCM encrypted key/value store                               | `getApiKey()`, `setApiKey()`                                                 |
-| **IPC Handlers**             | desktop    | ~50 `ipcMain.handle()` calls bridging UI to core                    | `task:start`, `session:resume`, `permission:respond`, etc.                   |
-| **Task Callbacks**           | desktop    | 12 event listeners translating core events to IPC pushes            | `onMessage`, `onComplete`, `onToolCallComplete`, etc.                        |
-| **Permission API**           | desktop    | HTTP servers on :9226/:9227 bridging MCP to Electron UI             | `startPermissionApiServer()`, `startQuestionApiServer()`                     |
-| **Preload Bridge**           | desktop    | `contextBridge.exposeInMainWorld('accomplish', ...)`                | ~70 API methods exposed to renderer                                          |
-| **Task Store**               | web        | Zustand store: single source of truth for UI state                  | `useTaskStore()` with ~25 actions                                            |
-| **Router**                   | web        | Hash router: `/` (Home) and `/execution/:id`                        | `createHashRouter()`                                                         |
+| Component                          | Package      | Responsibility                                                                                                      | Key Interfaces                                                                                                    |
+| ---------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------- | --- |
+| **TaskManager**                    | agent-core   | Task queue, lifecycle, adapter event wiring                                                                         | `startTask()`, `cancelTask()`, `sendResponse()`                                                                   |
+| **OpenCodeAdapter**                | agent-core   | SDK v2 client, SSE event loop, permission/question routing, tool-part interception                                  | `startTask()`, `resumeSession()`, `sendResponse()`, `cancelTask()`                                                |
+| **CompletionEnforcer**             | agent-core   | Records agent's completion intent, auto-downgrades claimed-`success` with incomplete todos (see §10)                | `handleCompleteTaskDetection()`, `markToolsUsed()`, `markTaskRequiresCompletion()`, `updateTodos()`, `getState()` |
+| **TaskInactivityWatchdog**         | agent-core   | Stall detection (90s soft / +60s hard) via fingerprint sampling                                                     | `sample()` callback; `onSoftTimeout` / `onHardTimeout`                                                            |
+| **MessageProcessor**               | agent-core   | SDK Part → TaskMessage conversion, message batching, model-context stamping                                         | `toTaskMessage()`, `queueMessage()`, `flushAndCleanupBatcher()`                                                   |
+| **ConfigGenerator**                | agent-core   | Generates per-task `opencode.json` (prompt, MCP servers, providers, skills)                                         | `generateConfig()` → JSON file path                                                                               |
+| **syncApiKeysToOpenCodeAuth**      | agent-core   | Decrypts SecureStorage keys into `~/.local/share/opencode/auth.json` before `opencode serve` spawn                  | one call per task startup                                                                                         |
+| **OpenCodeServerManager**          | apps/daemon  | Per-task `opencode serve` pool: spawn, readiness wait, idle reuse, process-tree cleanup, transient OAuth clients    | `ensureTaskRuntime()`, `waitForServerUrl()`, `scheduleTaskRuntimeCleanup()`, `createTransientOpencodeClient()`    |
+| **TaskService**                    | apps/daemon  | Daemon-side task orchestrator, source-based routing, server-manager owner                                           | `startTask()`, `stopTask()`, `resumeSession()`, `sendResponse()`                                                  |
+| **DaemonRpcServer / DaemonClient** | agent-core   | JSON-RPC 2.0 over Unix socket / Windows named pipe, notify fan-out                                                  | `registerMethod()`, `notify()`, `call()`, `onNotification()`                                                      |
+| **ThoughtStreamService**           | apps/daemon  | HTTP `:9228` endpoint for MCP `report-thought` / `report-checkpoint` tools                                          | `POST /thought`, `POST /checkpoint`                                                                               |
+| **WhatsAppSendApi**                | apps/daemon  | HTTP `:9229` endpoint for MCP `whatsapp-send` tool                                                                  | `POST /send`                                                                                                      |
+| **WhatsAppDaemonService**          | apps/daemon  | Baileys socket, inbound message → `taskService.startTask(source='whatsapp')`                                        | `connect()`, `disconnect()`                                                                                       |
+| **SchedulerService**               | apps/daemon  | Cron-driven `startTask(source='scheduler')`                                                                         | `createSchedule()`, `listSchedules()`, `deleteSchedule()`, `setEnabled()`                                         |
+| **OpenAiOauthManager**             | apps/daemon  | ChatGPT OAuth flow driven through a transient `opencode serve`                                                      | `startLogin()`, `awaitCompletion()`, `status()`, `getAccessToken()`                                               |
+| **AccomplishRuntime (interface)**  | agent-core   | Null-object (`noopRuntime`) in OSS; real impl loaded from private `@accomplish/llm-gateway-client` in Free (see §9) | `connect()`, `disconnect()`, `getUsage()`, `onUsageUpdate()`, `buildProviderConfig()`, `isAvailable()`            |
+| **SkillsManager**                  | agent-core   | Skill CRUD, filesystem scan, GitHub import                                                                          | `resync()`, `addSkill()`, `getEnabledSkills()`                                                                    |
+| **MCP OAuth**                      | agent-core   | OAuth 2.0 discovery, PKCE, token lifecycle for connectors                                                           | `discoverOAuthMetadata()`, `exchangeCodeForTokens()`                                                              |
+| **BrowserService**                 | agent-core   | Playwright Chromium install, dev-browser MCP server spawn                                                           | `ensureDevBrowserServer()`                                                                                        |
+| **API Proxies**                    | agent-core   | Protocol translation for Azure Foundry and Moonshot                                                                 | `ensureAzureFoundryProxy()`, `ensureMoonshotProxy()`                                                              |
+| **Summarizer**                     | agent-core   | LLM-powered task title generation (multi-provider fallback)                                                         | `generateTaskSummary()`                                                                                           |
+| **SpeechService**                  | agent-core   | ElevenLabs STT transcription                                                                                        | `transcribeAudio()`                                                                                               |
+| **Database**                       | agent-core   | SQLite WAL + migrations + repositories                                                                              | `better-sqlite3` via repositories                                                                                 |
+| **SecureStorage**                  | agent-core   | AES-256-GCM encrypted key/value store                                                                               | `getApiKey()`, `setApiKey()`                                                                                      |
+| **IPC Handlers**                   | apps/desktop | Thin proxies between renderer and daemon-client                                                                     | `ipcMain.handle('task:start'                                                                                      | 'permission:respond' | …)` |
+| **DaemonClient**                   | apps/desktop | Socket transport + retry + crash-recovery respawn                                                                   | `call()`, `onNotification()`, `close()`                                                                           |
+| **Notification Forwarder**         | apps/desktop | Subscribes to every daemon notification channel → `webContents.send()`                                              | internal                                                                                                          |
+| **Preload Bridge**                 | apps/desktop | `contextBridge.exposeInMainWorld('accomplish', ...)`                                                                | ~70 API methods exposed to renderer                                                                               |
+| **Task Store**                     | apps/web     | Zustand store: single source of truth for UI state                                                                  | `useTaskStore()` with ~25 actions                                                                                 |
 
 ---
 
@@ -613,41 +1142,44 @@ graph TB
 
 ```mermaid
 graph LR
-  subgraph TRUST_BOUNDARY["Security Trust Boundary"]
+  subgraph TRUST["Security Trust Boundary"]
     direction TB
     A["React Renderer<br/><i>(sandboxed)</i>"]
     B["Preload<br/><i>(contextBridge)</i>"]
     C["Electron Main<br/><i>(full Node.js)</i>"]
   end
 
-  subgraph PROCESS_BOUNDARY["Process Boundary"]
+  subgraph INSTALL["Install-Boundary (single host)"]
     direction TB
-    D["Electron Main<br/><i>(Node.js)</i>"]
-    E["OpenCode PTY<br/><i>(child process)</i>"]
+    D["Electron Main<br/><i>child process group</i>"]
+    E["Daemon Process<br/><i>(standalone Node.js;<br/>survives Electron exit)</i>"]
+    F["opencode serve<br/><i>per-task child process</i>"]
   end
 
-  subgraph NETWORK_BOUNDARY["Network Boundary"]
+  subgraph NETWORK["Network Boundary"]
     direction TB
-    F["OpenCode CLI"]
-    G["AI Provider APIs<br/><i>(HTTPS)</i>"]
+    G["opencode serve"]
+    H["AI Provider APIs<br/><i>(HTTPS)</i>"]
   end
 
   A -->|"structured IPC only<br/>no node access"| B
   B -->|"ipcMain bridge"| C
-  D -->|"PTY stdin/stdout"| E
-  F -->|"HTTPS + API keys<br/>in env vars"| G
+  D -->|"Unix socket / named pipe<br/>JSON-RPC 2.0"| E
+  E -->|"loopback HTTP + SSE<br/>127.0.0.1:random"| F
+  G -->|"HTTPS + API keys<br/>(auth.json on disk)"| H
 
   classDef trust fill:#ffcdd2,stroke:#c62828
-  classDef process fill:#fff9c4,stroke:#f57f17
+  classDef install fill:#fff9c4,stroke:#f57f17
   classDef network fill:#c8e6c9,stroke:#2e7d32
 
   class A,B,C trust
-  class D,E process
-  class F,G network
+  class D,E,F install
+  class G,H network
 ```
 
-**Three distinct boundaries:**
+**Four distinct boundaries (one more than before):**
 
-1. **Security boundary** — Renderer is sandboxed; can only call methods explicitly exposed via `contextBridge`. No `require()`, no `fs`, no direct IPC.
-2. **Process boundary** — OpenCode runs as a separate PTY subprocess. Communication is limited to stdin/stdout text streams + HTTP (MCP).
-3. **Network boundary** — Only OpenCode makes outbound HTTPS calls to AI providers. API keys are injected as environment variables, never sent via IPC or stored in the renderer.
+1. **Security boundary** — Renderer is sandboxed; can only call methods explicitly exposed via `contextBridge`. No `require()`, no `fs`, no direct IPC. Same as before.
+2. **Electron ↔ Daemon process boundary** — The daemon is a separate OS process that survives Electron quit. Communication is exclusively Unix socket / Windows named pipe, JSON-RPC 2.0. Socket path is derived from the shared `dataDir` so both processes pick the same profile.
+3. **Daemon ↔ `opencode serve` process boundary** — Each task spawns its own `opencode serve` child with a random ephemeral port on loopback. The SDK client is the sole consumer. The daemon kills the process tree on shutdown via POSIX process group or Windows `taskkill /T /F`.
+4. **Network boundary** — Only `opencode serve` makes outbound HTTPS calls to AI providers. API keys are written to `auth.json` on disk (in the user-scoped OpenCode data dir) before the server starts; keys never leave the user's machine in plaintext except through the TLS connection to the provider.
