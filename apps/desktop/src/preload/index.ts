@@ -19,7 +19,12 @@ import type {
   KnowledgeNoteCreateInput,
   KnowledgeNoteUpdateInput,
 } from '@accomplish_ai/agent-core';
-import type { CloudBrowserConfig, GoogleAccount } from '@accomplish_ai/agent-core/common';
+import type {
+  CloudBrowserConfig,
+  GoogleAccount,
+  OAuthProviderId,
+  ConnectorAuthStatus,
+} from '@accomplish_ai/agent-core/common';
 
 // Safe analytics IPC invoke — silently catches "No handler" errors for OSS builds
 // where analytics IPC handlers are not registered.
@@ -689,6 +694,21 @@ const accomplishAPI = {
       ipcRenderer.removeListener('auth:mcp-callback', listener);
     };
   },
+
+  // Built-in connector OAuth (Jira, GitHub, Notion, monday.com, Lightdash, Datadog + Slack parity)
+  getBuiltInConnectorAuthStatus: (): Promise<ConnectorAuthStatus[]> =>
+    ipcRenderer.invoke('connectors:get-built-in-auth-status'),
+  loginBuiltInConnector: (providerId: OAuthProviderId): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('connectors:built-in-login', providerId),
+  logoutBuiltInConnector: (providerId: OAuthProviderId): Promise<void> =>
+    ipcRenderer.invoke('connectors:built-in-logout', providerId),
+  lightdashGetServerUrl: (): Promise<string | null> =>
+    ipcRenderer.invoke('lightdash:get-server-url'),
+  lightdashSetServerUrl: (url: string): Promise<void> =>
+    ipcRenderer.invoke('lightdash:set-server-url', url),
+  datadogGetServerUrl: (): Promise<string | null> => ipcRenderer.invoke('datadog:get-server-url'),
+  datadogSetServerUrl: (url: string): Promise<void> =>
+    ipcRenderer.invoke('datadog:set-server-url', url),
 
   // HuggingFace Local configuration (ENG-687)
   startHuggingFaceServer: (

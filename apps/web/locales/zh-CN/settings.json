@@ -270,7 +270,13 @@
       "scanQr": "使用您的 WhatsApp 应用扫描下方二维码以连接此设备。前往 WhatsApp > 设置 > 已关联的设备 > 关联设备。",
       "qrPlaceholder": "WhatsApp 服务启动后，二维码将显示在此处",
       "securityNotice": "连接 WhatsApp 后，您将授予 Accomplish 访问您的 WhatsApp 消息的权限。所有数据保留在您的设备上，不会对外共享。"
-    }
+    },
+    "tabs": {
+      "messaging": "消息",
+      "connectors": "连接器",
+      "custom": "自定义"
+    },
+    "errorDismiss": "关闭"
   },
   "notifications": {
     "toggle": {
@@ -358,6 +364,7 @@
     "status": {
       "connected": "已连接",
       "disconnected": "未连接",
+      "pending": "待定",
       "connecting": "连接中...",
       "error": "错误"
     },
@@ -365,6 +372,19 @@
     "disable": "禁用",
     "confirmDelete": "再次点击确认",
     "delete": "删除",
+    "cta": {
+      "connect": "Connect",
+      "reconnect": "Reconnect",
+      "connecting": "Connecting...",
+      "disconnect": "Disconnect",
+      "disconnecting": "Disconnecting...",
+      "authHint": "Accomplish will open your browser to authorize access.",
+      "pendingHint": "Authorization was started but not finished. Reconnect to try again.",
+      "connectedHint": "Connected and ready for the agent to use.",
+      "waitingForBrowser": "等待浏览器…"
+    },
+    "marketplaceHint": "This connector requires the app to be installed from the marketplace.",
+    "marketplaceLink": "Open marketplace",
     "slack": {
       "title": "Slack",
       "description": "验证 Slack 后，智能体就可以通过内置 Slack MCP 发送消息并使用 Slack 上下文。",
@@ -382,6 +402,67 @@
         "connected": "已连接",
         "disconnected": "未连接",
         "pending": "已开始授权"
+      }
+    },
+    "jira": {
+      "title": "Jira",
+      "description": "Let the agent create, update, and search Jira issues in your Atlassian workspace."
+    },
+    "github": {
+      "title": "GitHub",
+      "description": "Let the agent read and manage GitHub repositories, issues, and pull requests via the gh CLI."
+    },
+    "notion": {
+      "title": "Notion",
+      "description": "Let the agent read and update Notion pages and databases in your workspace."
+    },
+    "monday": {
+      "title": "monday.com",
+      "description": "Let the agent manage boards, items, and updates in your monday.com workspace.",
+      "marketplaceHint": "Install the Accomplish app from the monday.com marketplace first.",
+      "marketplaceLink": "Open marketplace"
+    },
+    "lightdash": {
+      "title": "Lightdash",
+      "description": "Let the agent query your Lightdash dashboards and metrics.",
+      "instanceUrlHint": "Enter your Lightdash instance URL (e.g. https://app.lightdash.cloud).",
+      "instanceUrlPlaceholder": "https://app.lightdash.cloud",
+      "instanceUrlRequired": "Please enter a valid Lightdash instance URL.",
+      "saveFailed": "Failed to save Lightdash URL",
+      "save": "Save",
+      "update": "Update",
+      "cancel": "Cancel",
+      "edit": "Edit",
+      "authHint": "Once the URL is saved, connect to authorize Lightdash access.",
+      "pendingHint": "Authorization was started but not finished. Reconnect to try again.",
+      "connectedHint": "Connected and ready for the agent to use.",
+      "status": {
+        "connected": "Connected",
+        "disconnected": "Not connected",
+        "pending": "Authorization started",
+        "noInstance": "No instance URL set"
+      }
+    },
+    "datadog": {
+      "title": "Datadog",
+      "description": "Let the agent query Datadog metrics, logs, and monitors.",
+      "regionHint": "Select your Datadog site region.",
+      "regionPlaceholder": "Select region...",
+      "regionRequired": "Please select a Datadog region.",
+      "saveFailed": "Failed to save Datadog region",
+      "save": "Save",
+      "update": "Update",
+      "cancel": "Cancel",
+      "edit": "Edit",
+      "authHint": "Once the region is saved, connect to authorize Datadog access.",
+      "pendingHint": "Authorization was started but not finished. Reconnect to try again.",
+      "connectedHint": "Connected and ready for the agent to use.",
+      "reconnectRequired": "Reconnect required after changing region.",
+      "status": {
+        "connected": "Connected",
+        "disconnected": "Not connected",
+        "pending": "Authorization started",
+        "noSite": "No site selected"
       }
     }
   },

@@ -352,7 +352,13 @@
       "scanQr": "Отсканируйте QR-код ниже в приложении WhatsApp для подключения этого устройства. Перейдите в WhatsApp > Настройки > Связанные устройства > Привязать устройство.",
       "qrPlaceholder": "QR-код появится здесь после запуска сервиса WhatsApp",
       "securityNotice": "Подключая WhatsApp, вы предоставляете Accomplish доступ к своим сообщениям. Все данные остаются на вашем устройстве и не передаются третьим лицам."
-    }
+    },
+    "tabs": {
+      "messaging": "Сообщения",
+      "connectors": "Коннекторы",
+      "custom": "Пользовательские"
+    },
+    "errorDismiss": "Закрыть"
   },
   "appearance": {
     "title": "Тема",
@@ -384,6 +390,7 @@
     "status": {
       "connected": "Подключено",
       "disconnected": "Отключено",
+      "pending": "Ожидание",
       "connecting": "Подключение...",
       "error": "Ошибка"
     },
@@ -393,6 +400,19 @@
     "delete": "Удалить",
     "customTitle": "Пользовательские MCP-серверы",
     "customDescription": "Добавьте собственный URL удалённого MCP-сервера. OAuth поддерживается для серверов со стандартным потоком авторизации.",
+    "cta": {
+      "connect": "Connect",
+      "reconnect": "Reconnect",
+      "connecting": "Connecting...",
+      "disconnect": "Disconnect",
+      "disconnecting": "Disconnecting...",
+      "authHint": "Accomplish will open your browser to authorize access.",
+      "pendingHint": "Authorization was started but not finished. Reconnect to try again.",
+      "connectedHint": "Connected and ready for the agent to use.",
+      "waitingForBrowser": "Ожидание браузера…"
+    },
+    "marketplaceHint": "This connector requires the app to be installed from the marketplace.",
+    "marketplaceLink": "Open marketplace",
     "slack": {
       "title": "Slack",
       "description": "Подключите Slack, чтобы агент мог отправлять сообщения и использовать контекст Slack через встроенный Slack MCP.",
@@ -410,6 +430,67 @@
         "connected": "Подключено",
         "disconnected": "Не подключено",
         "pending": "Авторизация начата"
+      }
+    },
+    "jira": {
+      "title": "Jira",
+      "description": "Let the agent create, update, and search Jira issues in your Atlassian workspace."
+    },
+    "github": {
+      "title": "GitHub",
+      "description": "Let the agent read and manage GitHub repositories, issues, and pull requests via the gh CLI."
+    },
+    "notion": {
+      "title": "Notion",
+      "description": "Let the agent read and update Notion pages and databases in your workspace."
+    },
+    "monday": {
+      "title": "monday.com",
+      "description": "Let the agent manage boards, items, and updates in your monday.com workspace.",
+      "marketplaceHint": "Install the Accomplish app from the monday.com marketplace first.",
+      "marketplaceLink": "Open marketplace"
+    },
+    "lightdash": {
+      "title": "Lightdash",
+      "description": "Let the agent query your Lightdash dashboards and metrics.",
+      "instanceUrlHint": "Enter your Lightdash instance URL (e.g. https://app.lightdash.cloud).",
+      "instanceUrlPlaceholder": "https://app.lightdash.cloud",
+      "instanceUrlRequired": "Please enter a valid Lightdash instance URL.",
+      "saveFailed": "Failed to save Lightdash URL",
+      "save": "Save",
+      "update": "Update",
+      "cancel": "Cancel",
+      "edit": "Edit",
+      "authHint": "Once the URL is saved, connect to authorize Lightdash access.",
+      "pendingHint": "Authorization was started but not finished. Reconnect to try again.",
+      "connectedHint": "Connected and ready for the agent to use.",
+      "status": {
+        "connected": "Connected",
+        "disconnected": "Not connected",
+        "pending": "Authorization started",
+        "noInstance": "No instance URL set"
+      }
+    },
+    "datadog": {
+      "title": "Datadog",
+      "description": "Let the agent query Datadog metrics, logs, and monitors.",
+      "regionHint": "Select your Datadog site region.",
+      "regionPlaceholder": "Select region...",
+      "regionRequired": "Please select a Datadog region.",
+      "saveFailed": "Failed to save Datadog region",
+      "save": "Save",
+      "update": "Update",
+      "cancel": "Cancel",
+      "edit": "Edit",
+      "authHint": "Once the region is saved, connect to authorize Datadog access.",
+      "pendingHint": "Authorization was started but not finished. Reconnect to try again.",
+      "connectedHint": "Connected and ready for the agent to use.",
+      "reconnectRequired": "Reconnect required after changing region.",
+      "status": {
+        "connected": "Connected",
+        "disconnected": "Not connected",
+        "pending": "Authorization started",
+        "noSite": "No site selected"
       }
     }
   },

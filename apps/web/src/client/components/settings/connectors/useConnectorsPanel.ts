@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { OAuthProviderId } from '@accomplish_ai/agent-core/common';
 import { useConnectors } from './useConnectors';
 import { createLogger } from '@/lib/logger';
 
@@ -10,6 +11,7 @@ export function useConnectorsPanel() {
   const {
     connectors,
     slackAuth,
+    builtInAuthStates,
     loading,
     addConnector,
     deleteConnector,
@@ -17,13 +19,17 @@ export function useConnectorsPanel() {
     startOAuth,
     completeOAuth,
     disconnect,
+    authenticateBuiltIn,
+    disconnectBuiltIn,
     authenticateSlack,
     disconnectSlack,
+    refetch,
   } = useConnectors();
 
   const [url, setUrl] = useState('');
   const [adding, setAdding] = useState(false);
   const [slackActionLoading, setSlackActionLoading] = useState(false);
+  const [builtInActionLoading, setBuiltInActionLoading] = useState<Record<string, boolean>>({});
   const [addError, setAddError] = useState<string | null>(null);
   const [oauthError, setOauthError] = useState<string | null>(null);
 
@@ -106,6 +112,40 @@ export function useConnectorsPanel() {
     [startOAuth, t],
   );
 
+  const handleBuiltInAuthenticate = useCallback(
+    async (providerId: OAuthProviderId) => {
+      setBuiltInActionLoading((prev) => ({ ...prev, [providerId]: true }));
+      setOauthError(null);
+      try {
+        await authenticateBuiltIn(providerId);
+      } catch (err) {
+        logger.error('Failed to authenticate built-in connector:', err);
+        const raw = err instanceof Error ? err.message : t('connectors.oauthStartFailed');
+        const cleaned = raw.replace(/^Error invoking remote method '[^']+': (\w+Error: )?/, '');
+        setOauthError(cleaned);
+      } finally {
+        setBuiltInActionLoading((prev) => ({ ...prev, [providerId]: false }));
+      }
+    },
+    [authenticateBuiltIn, t],
+  );
+
+  const handleBuiltInDisconnect = useCallback(
+    async (providerId: OAuthProviderId) => {
+      setBuiltInActionLoading((prev) => ({ ...prev, [providerId]: true }));
+      setOauthError(null);
+      try {
+        await disconnectBuiltIn(providerId);
+      } catch (err) {
+        logger.error('Failed to disconnect built-in connector:', err);
+        setOauthError(err instanceof Error ? err.message : t('connectors.oauthStartFailed'));
+      } finally {
+        setBuiltInActionLoading((prev) => ({ ...prev, [providerId]: false }));
+      }
+    },
+    [disconnectBuiltIn, t],
+  );
+
   const handleSlackAuthenticate = useCallback(async () => {
     setSlackActionLoading(true);
     setAddError(null);
@@ -150,9 +190,15 @@ export function useConnectorsPanel() {
     setAddError(null);
   }, []);
 
+  const dismissTabError = useCallback(() => {
+    setOauthError(null);
+  }, []);
+
   return {
     connectors,
     slackAuth,
+    builtInAuthStates,
+    builtInActionLoading,
     loading,
     deleteConnector,
     toggleEnabled,
@@ -162,11 +208,16 @@ export function useConnectorsPanel() {
     slackActionLoading,
     addError,
     oauthError,
+    tabError: oauthError,
+    dismissTabError,
     handleAdd,
     handleConnect,
+    handleBuiltInAuthenticate,
+    handleBuiltInDisconnect,
     handleSlackAuthenticate,
     handleSlackDisconnect,
     handleKeyDown,
     handleUrlChange,
+    refetch,
   };
 }

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { McpConnector } from '@accomplish_ai/agent-core/common';
+import type { ConnectorAuthStatus, OAuthProviderId } from '@accomplish_ai/agent-core/common';
 import { getAccomplish } from '@/lib/accomplish';
 import { createLogger } from '@/lib/logger';
 
@@ -16,15 +17,19 @@ export function useConnectors() {
     connected: false,
     pendingAuthorization: false,
   });
+  const [builtInAuthStates, setBuiltInAuthStates] = useState<Record<string, ConnectorAuthStatus>>(
+    {},
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchConnectors = useCallback(async () => {
     const accomplish = getAccomplish();
     try {
-      const [connectorsResult, slackStatusResult] = await Promise.allSettled([
+      const [connectorsResult, slackStatusResult, builtInStatusResult] = await Promise.allSettled([
         accomplish.getConnectors(),
         accomplish.getSlackMcpOauthStatus(),
+        accomplish.getBuiltInConnectorAuthStatus(),
       ]);
 
       if (connectorsResult.status === 'fulfilled') {
@@ -35,7 +40,19 @@ export function useConnectors() {
         setSlackAuth(slackStatusResult.value);
       }
 
-      if (connectorsResult.status === 'rejected' && slackStatusResult.status === 'rejected') {
+      if (builtInStatusResult.status === 'fulfilled') {
+        const statusMap: Record<string, ConnectorAuthStatus> = {};
+        for (const status of builtInStatusResult.value) {
+          statusMap[status.providerId] = status;
+        }
+        setBuiltInAuthStates(statusMap);
+      }
+
+      if (
+        connectorsResult.status === 'rejected' &&
+        slackStatusResult.status === 'rejected' &&
+        builtInStatusResult.status === 'rejected'
+      ) {
         throw connectorsResult.reason;
       }
 
@@ -68,7 +85,9 @@ export function useConnectors() {
   const toggleEnabled = useCallback(
     async (id: string) => {
       const connector = connectors.find((c) => c.id === id);
-      if (!connector) return;
+      if (!connector) {
+        return;
+      }
 
       const accomplish = getAccomplish();
       await accomplish.setConnectorEnabled(id, !connector.isEnabled);
@@ -112,6 +131,48 @@ export function useConnectors() {
     );
   }, []);
 
+  // Built-in connector actions
+  const authenticateBuiltIn = useCallback(
+    async (providerId: OAuthProviderId) => {
+      setBuiltInAuthStates((prev) => ({
+        ...prev,
+        [providerId]: {
+          ...(prev[providerId] ?? { providerId, connected: false, pendingAuthorization: false }),
+          pendingAuthorization: true,
+        },
+      }));
+
+      try {
+        const accomplish = getAccomplish();
+        await accomplish.loginBuiltInConnector(providerId);
+        await fetchConnectors();
+      } catch (err) {
+        setBuiltInAuthStates((prev) => ({
+          ...prev,
+          [providerId]: {
+            ...(prev[providerId] ?? { providerId, connected: false, pendingAuthorization: false }),
+            pendingAuthorization: false,
+          },
+        }));
+        throw err;
+      }
+    },
+    [fetchConnectors],
+  );
+
+  const disconnectBuiltIn = useCallback(async (providerId: OAuthProviderId) => {
+    const accomplish = getAccomplish();
+    await accomplish.logoutBuiltInConnector(providerId);
+    setBuiltInAuthStates((prev) => ({
+      ...prev,
+      [providerId]: {
+        providerId,
+        connected: false,
+        pendingAuthorization: false,
+      },
+    }));
+  }, []);
+
   const authenticateSlack = useCallback(async () => {
     const accomplish = getAccomplish();
 
@@ -149,6 +210,7 @@ export function useConnectors() {
   return {
     connectors,
     slackAuth,
+    builtInAuthStates,
     loading,
     error,
     addConnector,
@@ -157,6 +219,8 @@ export function useConnectors() {
     startOAuth,
     completeOAuth,
     disconnect,
+    authenticateBuiltIn,
+    disconnectBuiltIn,
     authenticateSlack,
     disconnectSlack,
     refetch: fetchConnectors,

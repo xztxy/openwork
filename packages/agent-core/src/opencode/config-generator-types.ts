@@ -63,6 +63,12 @@ export interface ConfigGeneratorOptions {
    * Only accounts with status 'connected' should be included.
    */
   gwsAccountsSummary?: Array<{ label: string; email: string; status: string }>;
+
+  /**
+   * Live connection status of all 8 built-in connectors for system-prompt injection.
+   * Populated by the desktop layer from ConnectorAuthStore instances.
+   */
+  builtInConnectorStatuses?: Array<{ displayName: string; connected: boolean }>;
 }
 
 export interface ProviderConfig {

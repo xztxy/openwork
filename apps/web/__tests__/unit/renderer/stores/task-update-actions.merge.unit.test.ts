@@ -1,4 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
+
+// Agent-core transitively loads undici at module evaluation time. The global
+// mock in setup.ts is applied too late for this import chain, so we hoist an
+// explicit mock here to prevent the Node 20 / undici 8 crash.
+vi.mock('undici', () => ({
+  ProxyAgent: class ProxyAgent {},
+  Agent: class Agent {},
+  fetch: vi.fn(),
+  setGlobalDispatcher: vi.fn(),
+  getGlobalDispatcher: vi.fn(),
+}));
 import type { TaskMessage, Task, TaskUpdateEvent } from '@accomplish_ai/agent-core';
 import { createTaskUpdateActions } from '@/stores/task-update-actions';
 import type { TaskState } from '@/stores/taskStore';

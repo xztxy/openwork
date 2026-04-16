@@ -39,6 +39,13 @@ const mockAccomplish = {
   setConnectorEnabled: vi.fn(),
   startConnectorOAuth: vi.fn(),
   disconnectConnector: vi.fn(),
+  getBuiltInConnectorAuthStatus: vi.fn().mockResolvedValue([]),
+  loginBuiltInConnector: vi.fn().mockResolvedValue({ ok: true }),
+  logoutBuiltInConnector: vi.fn().mockResolvedValue(undefined),
+  lightdashGetServerUrl: vi.fn().mockResolvedValue(null),
+  lightdashSetServerUrl: vi.fn().mockResolvedValue(undefined),
+  datadogGetServerUrl: vi.fn().mockResolvedValue(null),
+  datadogSetServerUrl: vi.fn().mockResolvedValue(undefined),
 };
 
 vi.mock('@/lib/accomplish', () => ({

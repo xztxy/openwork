@@ -10,6 +10,15 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Prevent undici from crashing on Node 20 (undici 8 requires Node 22 APIs)
+vi.mock('undici', () => ({
+  ProxyAgent: class ProxyAgent {},
+  Agent: class Agent {},
+  fetch: vi.fn(),
+  setGlobalDispatcher: vi.fn(),
+  getGlobalDispatcher: vi.fn(),
+}));
+
 // Mock electron
 vi.mock('electron', () => ({
   ipcMain: {

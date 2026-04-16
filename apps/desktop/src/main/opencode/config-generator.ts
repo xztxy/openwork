@@ -18,6 +18,9 @@ import { skillsManager } from '../skills';
 import { getLogCollector } from '../logging';
 import * as workspaceManager from '../store/workspaceManager';
 import type { AccountManager } from '../google-accounts/account-manager';
+import { getConnectorAuthStore } from '../connectors/connector-auth-registry';
+import { isDesktopConnectorConnected } from '../connectors/desktop-connector-state';
+import { getConnectorDefinitions } from '@accomplish_ai/agent-core/common';
 
 function logOC(level: 'INFO' | 'WARN' | 'ERROR', msg: string, data?: Record<string, unknown>) {
   try {
@@ -176,6 +179,33 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
     }
   } catch (err) {
     logOC('WARN', '[OpenCode Config] Failed to prepare GWS manifest', { err: String(err) });
+  }
+
+  // Populate built-in connector statuses for system-prompt injection (T006)
+  try {
+    const { getAccountManager: getAccountManagerForStatus } =
+      await import('../google-accounts/index');
+    const accountManagerForStatus = getAccountManagerForStatus();
+    const defs = getConnectorDefinitions();
+    const statuses: Array<{ displayName: string; connected: boolean }> = [];
+    for (const def of defs) {
+      let connected: boolean;
+      if (def.desktopOAuth.kind === 'desktop-google') {
+        // Google's connected state comes from persisted account rows, not in-memory state.
+        connected = accountManagerForStatus.listAccounts().some((a) => a.status === 'connected');
+      } else {
+        const store = getConnectorAuthStore(def.id);
+        connected = store ? store.getOAuthStatus().connected : isDesktopConnectorConnected(def.id);
+      }
+      statuses.push({ displayName: def.displayName, connected });
+    }
+    if (statuses.length > 0) {
+      configOptions.builtInConnectorStatuses = statuses;
+    }
+  } catch (err) {
+    logOC('WARN', '[OpenCode Config] Failed to read built-in connector statuses', {
+      err: String(err),
+    });
   }
 
   const result = generateConfig(configOptions);
