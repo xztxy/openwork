@@ -6,6 +6,7 @@ import {
   ACCOMPLISH_SYSTEM_PROMPT_TEMPLATE,
 } from './system-prompt.js';
 import { buildMcpServers } from './generator-mcp.js';
+import { formatBuiltInConnectorStatusSection } from './completion/context-providers/connector-status.js';
 export type { BrowserConfig, McpServerConfig } from './generator-mcp.js';
 export type {
   ConfigGeneratorOptions,
@@ -185,6 +186,10 @@ ${options.knowledgeNotes}
 </workspace-knowledge>
 `;
     systemPrompt += knowledgeSection;
+  }
+
+  if (options.builtInConnectorStatuses && options.builtInConnectorStatuses.length > 0) {
+    systemPrompt += formatBuiltInConnectorStatusSection(options.builtInConnectorStatuses);
   }
 
   if (!bundledNodeBinPath) {

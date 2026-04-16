@@ -152,7 +152,24 @@ export type {
   OAuthMetadata,
   OAuthClientRegistration,
   McpConnector,
+  ConnectorDesktopOAuthKind,
+  ConnectorAuthStoreConfig,
+  ConnectorCallbackBinding,
+  ConnectorMcpDcrOAuthDefinition,
+  ConnectorMcpFixedClientOAuthDefinition,
+  ConnectorCustomOAuthDefinition,
+  ConnectorDesktopOAuthDefinition,
+  ConnectorDefinition,
+  ConnectorAuthStatus,
 } from './common/types/connector.js';
+
+// Connector registry
+export {
+  getConnectorDefinitions,
+  getConnectorDefinition,
+  getMcpConnectorDefinitions,
+  OAUTH_CALLBACK_PORTS,
+} from './common/types/connector-registry.js';
 
 // Cloud browser types
 export type {

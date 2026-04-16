@@ -18,6 +18,8 @@ import { skillsManager } from '../skills';
 import { getLogCollector } from '../logging';
 import * as workspaceManager from '../store/workspaceManager';
 import type { AccountManager } from '../google-accounts/account-manager';
+import { getAllConnectorAuthStores } from '../connectors/connector-auth-store';
+import { getConnectorDefinition } from '@accomplish_ai/agent-core/common';
 
 function logOC(level: 'INFO' | 'WARN' | 'ERROR', msg: string, data?: Record<string, unknown>) {
   try {
@@ -176,6 +178,29 @@ export async function generateOpenCodeConfig(azureFoundryToken?: string): Promis
     }
   } catch (err) {
     logOC('WARN', '[OpenCode Config] Failed to prepare GWS manifest', { err: String(err) });
+  }
+
+  // Populate built-in connector statuses for system-prompt injection (T006)
+  try {
+    const storeMap = getAllConnectorAuthStores();
+    const statuses: Array<{ displayName: string; connected: boolean }> = [];
+    for (const [providerId, store] of storeMap) {
+      const def = getConnectorDefinition(providerId);
+      if (!def) {
+        continue;
+      }
+      statuses.push({
+        displayName: def.displayName,
+        connected: store.getOAuthStatus().connected,
+      });
+    }
+    if (statuses.length > 0) {
+      configOptions.builtInConnectorStatuses = statuses;
+    }
+  } catch (err) {
+    logOC('WARN', '[OpenCode Config] Failed to read built-in connector statuses', {
+      err: String(err),
+    });
   }
 
   const result = generateConfig(configOptions);

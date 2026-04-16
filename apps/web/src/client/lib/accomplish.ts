@@ -42,6 +42,8 @@ import type {
   ScheduledTask,
   GoogleAccount,
   GoogleAccountStatus,
+  OAuthProviderId,
+  ConnectorAuthStatus,
 } from '@accomplish_ai/agent-core/common';
 
 interface GwsAPI {
@@ -630,6 +632,15 @@ interface AccomplishAPI {
   completeConnectorOAuth(state: string, code: string): Promise<McpConnector>;
   disconnectConnector(connectorId: string): Promise<void>;
   onMcpAuthCallback?(callback: (url: string) => void): () => void;
+
+  // Built-in connector OAuth (Jira, GitHub, Notion, monday.com, Lightdash, Datadog)
+  getBuiltInConnectorAuthStatus(): Promise<ConnectorAuthStatus[]>;
+  loginBuiltInConnector(providerId: OAuthProviderId): Promise<{ ok: boolean }>;
+  logoutBuiltInConnector(providerId: OAuthProviderId): Promise<void>;
+  lightdashGetServerUrl(): Promise<string | null>;
+  lightdashSetServerUrl(url: string): Promise<void>;
+  datadogGetServerUrl(): Promise<string | null>;
+  datadogSetServerUrl(url: string): Promise<void>;
 
   // Accomplish AI Free Tier
   accomplishAiConnect(): Promise<{
