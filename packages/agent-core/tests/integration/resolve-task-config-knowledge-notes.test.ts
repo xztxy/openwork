@@ -31,7 +31,7 @@ type DbModule = typeof import('../../src/storage/database.js');
 type KnModule = typeof import('../../src/storage/repositories/knowledgeNotes.js');
 type WsModule = typeof import('../../src/storage/repositories/workspaces.js');
 
-describe('integration: resolve-task-config reads knowledge notes from the main DB', () => {
+describe('integration: knowledgeNotes repository reads from the main DB (post-consolidation)', () => {
   let Database: BetterSqlite3Module | null = null;
   let dbModule: DbModule | null = null;
   let knModule: KnModule | null = null;

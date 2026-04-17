@@ -84,7 +84,9 @@ function safeFileState(p: string): FileState {
     return { kind: 'present', size: st.size };
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT' || code === 'ENOTDIR') return { kind: 'missing' };
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      return { kind: 'missing' };
+    }
     return { kind: 'unknown' };
   }
 }
@@ -180,9 +182,14 @@ export function importLegacyWorkspaceMeta(
   // guaranteed by the re-read inside every `atomicWriteTerminalStatus`
   // call below.
   const status = readStatus(mainDb);
-  if (status) return;
+  if (status) {
+    return;
+  }
 
-  if (!legacyMetaDbPath) return; // wait for an init that provides the path
+  if (!legacyMetaDbPath) {
+    // wait for an init that provides the path
+    return;
+  }
 
   const walPath = legacyMetaDbPath + '-wal';
   // -shm is always disposable: SQLite regenerates it on demand.
@@ -319,7 +326,9 @@ export function importLegacyWorkspaceMeta(
         let inserted = 0;
         for (const r of rows) {
           const bind: Record<string, unknown> = {};
-          for (const c of t.cols) bind[c] = r[c] ?? null;
+          for (const c of t.cols) {
+            bind[c] = r[c] ?? null;
+          }
           inserted += insert.run(bind).changes;
         }
 
