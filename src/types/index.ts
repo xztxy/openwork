@@ -13,6 +13,7 @@ export type {
   TaskCallbacks,
   TaskProgressEvent,
   OnBeforeStartContext,
+  OnBeforeStartResult,
 } from './task-manager.js';
 
 // Storage API

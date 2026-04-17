@@ -33,6 +33,27 @@ export interface OnBeforeStartContext {
   workspaceId?: string;
 }
 
+/**
+ * Richer return shape for `onBeforeStart` callbacks that want to surface
+ * per-task runtime data back to the adapter beyond just environment vars.
+ *
+ * Callers that only need to set env vars may continue to return a plain
+ * `NodeJS.ProcessEnv` — the adapter normalizes both shapes transparently.
+ *
+ * Field meanings:
+ * - `env`: env vars for the spawned task runtime (e.g. `OPENCODE_CONFIG`).
+ * - `workspaceInstructions`: pre-formatted bullet list of `instruction`-type
+ *   workspace knowledge notes (if any). The adapter injects these as a
+ *   compact, mandatory runtime block via the SDK's `session.prompt({ system })`
+ *   field on EVERY prompt — not just session creation — so the model sees
+ *   them reliably even when the provider's own instructions-channel (e.g.
+ *   OpenAI/Codex path) crowds out the agent-level system prompt.
+ */
+export interface OnBeforeStartResult {
+  env?: NodeJS.ProcessEnv;
+  workspaceInstructions?: string;
+}
+
 /** Callbacks for task lifecycle events */
 export interface TaskCallbacks {
   /**
@@ -121,7 +142,9 @@ export interface TaskAdapterOptions {
    * Both fields are optional — callers that don't have a task context yet
    * (legacy PTY paths, transient OAuth clients) pass an empty object.
    */
-  onBeforeStart?: (ctx: OnBeforeStartContext) => Promise<NodeJS.ProcessEnv | void>;
+  onBeforeStart?: (
+    ctx: OnBeforeStartContext,
+  ) => Promise<NodeJS.ProcessEnv | OnBeforeStartResult | void>;
   /** Function to get display name for a model ID */
   getModelDisplayName?: (modelId: string) => string;
   /**

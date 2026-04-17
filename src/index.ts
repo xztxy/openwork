@@ -37,6 +37,7 @@ export type {
   TaskCallbacks as TaskManagerCallbacks,
   TaskProgressEvent as TaskManagerProgressEvent,
   OnBeforeStartContext,
+  OnBeforeStartResult,
   // Storage API
   StorageAPI,
   StorageOptions,
@@ -194,13 +195,10 @@ export type {
 // Errors
 export { FutureSchemaError } from './storage/migrations/errors.js';
 
-// Workspace meta database
-export {
-  initializeMetaDatabase,
-  getMetaDatabase,
-  closeMetaDatabase,
-  isMetaDatabaseInitialized,
-} from './storage/workspace-meta-db.js';
+// Legacy workspace-meta.db cleanup helper. The tables themselves now live
+// in the main `accomplish.db` per v030; this helper deletes the retired
+// file after verified import.
+export { deleteLegacyWorkspaceMetaFiles } from './storage/delete-legacy-workspace-meta.js';
 
 // Workspace repository
 export {
