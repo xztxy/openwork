@@ -1,4 +1,4 @@
-import { getMetaDatabase } from '../workspace-meta-db.js';
+import { getDatabase } from '../database.js';
 import type {
   Workspace,
   WorkspaceCreateInput,
@@ -23,7 +23,7 @@ function rowToWorkspace(row: Record<string, unknown>): Workspace {
 }
 
 export function listWorkspaces(): Workspace[] {
-  const db = getMetaDatabase();
+  const db = getDatabase();
   const rows = db
     .prepare('SELECT * FROM workspaces ORDER BY sort_order ASC, created_at ASC')
     .all() as Record<string, unknown>[];
@@ -31,7 +31,7 @@ export function listWorkspaces(): Workspace[] {
 }
 
 export function getWorkspace(id: string): Workspace | null {
-  const db = getMetaDatabase();
+  const db = getDatabase();
   const row = db.prepare('SELECT * FROM workspaces WHERE id = ?').get(id) as
     | Record<string, unknown>
     | undefined;
@@ -39,7 +39,7 @@ export function getWorkspace(id: string): Workspace | null {
 }
 
 export function getDefaultWorkspace(): Workspace | null {
-  const db = getMetaDatabase();
+  const db = getDatabase();
   const row = db.prepare('SELECT * FROM workspaces WHERE is_default = 1').get() as
     | Record<string, unknown>
     | undefined;
@@ -47,7 +47,7 @@ export function getDefaultWorkspace(): Workspace | null {
 }
 
 export function createWorkspace(input: WorkspaceCreateInput): Workspace {
-  const db = getMetaDatabase();
+  const db = getDatabase();
   const id = createWorkspaceId();
   const now = new Date().toISOString();
 
@@ -65,7 +65,7 @@ export function createWorkspace(input: WorkspaceCreateInput): Workspace {
 }
 
 export function createDefaultWorkspace(): Workspace {
-  const db = getMetaDatabase();
+  const db = getDatabase();
   const existing = getDefaultWorkspace();
   if (existing) {
     return existing;
@@ -83,7 +83,7 @@ export function createDefaultWorkspace(): Workspace {
 }
 
 export function updateWorkspace(id: string, input: WorkspaceUpdateInput): Workspace | null {
-  const db = getMetaDatabase();
+  const db = getDatabase();
   const existing = getWorkspace(id);
   if (!existing) {
     return null;
@@ -103,7 +103,7 @@ export function updateWorkspace(id: string, input: WorkspaceUpdateInput): Worksp
 }
 
 export function deleteWorkspace(id: string): boolean {
-  const db = getMetaDatabase();
+  const db = getDatabase();
   const workspace = getWorkspace(id);
   if (!workspace || workspace.isDefault) {
     return false;
@@ -114,7 +114,7 @@ export function deleteWorkspace(id: string): boolean {
 }
 
 export function getActiveWorkspaceId(): string | null {
-  const db = getMetaDatabase();
+  const db = getDatabase();
   const row = db
     .prepare("SELECT value FROM workspace_meta WHERE key = 'active_workspace_id'")
     .get() as { value: string } | undefined;
@@ -122,7 +122,7 @@ export function getActiveWorkspaceId(): string | null {
 }
 
 export function setActiveWorkspaceId(id: string): void {
-  const db = getMetaDatabase();
+  const db = getDatabase();
   db.prepare(
     `INSERT INTO workspace_meta (key, value) VALUES ('active_workspace_id', ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`,

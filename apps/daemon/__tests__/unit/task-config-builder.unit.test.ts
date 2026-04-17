@@ -33,7 +33,11 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Tunable via each test.
-let knowledgeNotesText: string | undefined = undefined;
+// Either-or: `knowledgeInstructionsText` → rendered in the binding
+// <workspace-instructions> block; `knowledgeContextText` → rendered in the
+// soft <workspace-knowledge> block. Tests set one or both per scenario.
+let knowledgeInstructionsText: string | undefined = undefined;
+let knowledgeContextText: string | undefined = undefined;
 let activeProviderModel: { provider: string; model: string } | null = null;
 let gwsRows: Record<string, unknown>[] = [];
 
@@ -59,11 +63,22 @@ vi.mock('@accomplish_ai/agent-core/storage/database', () => ({
   getDatabase: vi.fn(() => dbStub),
 }));
 
-// resolveTaskConfig imports getKnowledgeNotesForPrompt directly from the
-// repository module (NOT via the barrel), so the mock must target that
-// module path exactly.
+// resolveTaskConfig imports directly from the repository module (NOT via
+// the barrel), so the mock must target that module path exactly. We stub
+// both `getFormattedKnowledgeNotes` (the new structured API that splits
+// instructions from context) and `getKnowledgeNotesForPrompt` (the legacy
+// single-string API kept for backward compatibility).
 vi.mock('@accomplish_ai/agent-core/storage/repositories/knowledgeNotes', () => ({
-  getKnowledgeNotesForPrompt: vi.fn(() => knowledgeNotesText),
+  getFormattedKnowledgeNotes: vi.fn(() => ({
+    instructions: knowledgeInstructionsText ?? '',
+    context: knowledgeContextText ?? '',
+  })),
+  getKnowledgeNotesForPrompt: vi.fn(() => {
+    const parts: string[] = [];
+    if (knowledgeInstructionsText) parts.push(`### Instruction\n${knowledgeInstructionsText}`);
+    if (knowledgeContextText) parts.push(knowledgeContextText);
+    return parts.join('\n\n');
+  }),
 }));
 
 vi.mock('@accomplish_ai/agent-core', async (importOriginal) => {
@@ -146,7 +161,8 @@ describe('daemon onBeforeStart — integration against real resolveTaskConfig + 
   let tmpUserData: string;
 
   beforeEach(() => {
-    knowledgeNotesText = undefined;
+    knowledgeInstructionsText = undefined;
+    knowledgeContextText = undefined;
     activeProviderModel = null;
     gwsRows = [];
     tmpUserData = path.join(
@@ -194,7 +210,8 @@ describe('daemon onBeforeStart — integration against real resolveTaskConfig + 
   });
 
   it('writes opencode-<taskId>.json containing workspace knowledge notes and OpenAI store:false', async () => {
-    knowledgeNotesText = 'Remember: treat `foo` as a reserved keyword in this workspace.';
+    // Use an `instruction`-type note to exercise the new binding wrapper path.
+    knowledgeInstructionsText = '- Remember: treat `foo` as a reserved keyword in this workspace.';
     const storage = makeStorage();
 
     const { configPath } = await onBeforeStart(
@@ -225,6 +242,57 @@ describe('daemon onBeforeStart — integration against real resolveTaskConfig + 
 
     // OpenAI provider has store:false injected
     expect(written.provider?.openai?.options?.store).toBe(false);
+  });
+
+  it('returns workspaceInstructions alongside env so the adapter can inject them as SDK `system` per-turn', async () => {
+    // The generated config file (tested above) is not enough — the
+    // OpenAI/Codex provider path inside OpenCode has its own
+    // `options.instructions` channel that crowds out the agent-level
+    // prompt. onBeforeStart must return the pre-formatted instruction
+    // bullet list via `workspaceInstructions` so the adapter can
+    // duplicate it into `session.prompt({ system })` on every turn.
+    knowledgeInstructionsText = '- Always add "Haiku" suffix to every reply';
+    const storage = makeStorage();
+
+    const result = await onBeforeStart(
+      storage as never,
+      {
+        userDataPath: tmpUserData,
+        mcpToolsPath: fakeMcpToolsPath,
+        isPackaged: false,
+        resourcesPath: '',
+        appPath: '',
+      },
+      { taskId: 'tsk_ws_instr', workspaceId: 'ws_42' },
+    );
+
+    expect(result.workspaceInstructions).toBeDefined();
+    expect(result.workspaceInstructions).toContain('Always add "Haiku" suffix to every reply');
+    // Env is still populated as before — not clobbered by the new field.
+    expect(result.env.OPENCODE_CONFIG).toBeDefined();
+  });
+
+  it('omits workspaceInstructions when no instruction-type notes exist (context/reference only)', async () => {
+    // The structured return from getFormattedKnowledgeNotes splits by type:
+    // only `instruction` notes go into `.instructions`, so context-only
+    // workspaces should produce a result with no `workspaceInstructions` key.
+    knowledgeInstructionsText = undefined;
+    knowledgeContextText = '### Context\n- Project uses Postgres 16';
+    const storage = makeStorage();
+
+    const result = await onBeforeStart(
+      storage as never,
+      {
+        userDataPath: tmpUserData,
+        mcpToolsPath: fakeMcpToolsPath,
+        isPackaged: false,
+        resourcesPath: '',
+        appPath: '',
+      },
+      { taskId: 'tsk_ctx_only', workspaceId: 'ws_42' },
+    );
+
+    expect(result.workspaceInstructions).toBeUndefined();
   });
 
   it('includes enabled MCP connectors in the written config', async () => {

@@ -50,6 +50,7 @@ import { migration as v028 } from './v028-google-accounts.js';
 // from migration 0 and applies both v028 and v029 in order. Fresh installs
 // and `main`-line upgrades are unaffected.
 import { migration as v029 } from './v029-opencode-sdk-message-fields.js';
+import { migration as v030 } from './v030-workspace-meta-consolidation.js';
 
 const migrations: Migration[] = [
   v001,
@@ -81,13 +82,14 @@ const migrations: Migration[] = [
   v027,
   v028,
   v029,
+  v030,
 ];
 export function registerMigration(migration: Migration): void {
   migrations.push(migration);
   migrations.sort((a, b) => a.version - b.version);
 }
 
-export const CURRENT_VERSION = 29;
+export const CURRENT_VERSION = 30;
 export function getStoredVersion(db: Database): number {
   try {
     const tableExists = db
