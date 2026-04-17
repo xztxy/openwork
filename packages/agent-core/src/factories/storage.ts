@@ -119,6 +119,7 @@ export function createStorage(options: StorageOptions = {}): StorageAPI {
     userDataPath,
     secureStorageAppId = 'ai.accomplish.desktop',
     secureStorageFileName,
+    legacyMetaDbPath,
   } = options;
 
   const storagePath = userDataPath || process.cwd();
@@ -265,7 +266,7 @@ export function createStorage(options: StorageOptions = {}): StorageAPI {
         return;
       }
       const dbPath = databasePath || `${storagePath}/agent-core.db`;
-      initializeDatabase({ databasePath: dbPath, runMigrations });
+      initializeDatabase({ databasePath: dbPath, runMigrations, legacyMetaDbPath });
       initialized = true;
     },
     close() {

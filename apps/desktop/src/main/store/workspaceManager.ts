@@ -1,8 +1,4 @@
-import { app } from 'electron';
-import path from 'path';
 import {
-  initializeMetaDatabase,
-  closeMetaDatabase,
   createDefaultWorkspace,
   createWorkspaceRecord,
   updateWorkspaceRecord,
@@ -30,11 +26,6 @@ function log(level: 'INFO' | 'WARN' | 'ERROR', msg: string, data?: Record<string
   }
 }
 
-function getMetaDatabasePath(): string {
-  const dbName = app.isPackaged ? 'workspace-meta.db' : 'workspace-meta-dev.db';
-  return path.join(app.getPath('userData'), dbName);
-}
-
 let _activeWorkspaceId: string | null = null;
 let _initialized = false;
 
@@ -48,16 +39,16 @@ export function getActiveWorkspace(): string | null {
 
 /**
  * Initialize the workspace system.
- * Creates the meta database and ensures a default workspace exists.
- * Does NOT initialize the main app database - that's done separately.
+ * Ensures a default workspace exists and resolves the active workspace id.
+ * The workspaces/workspace_meta/knowledge_notes tables now live in the main
+ * DB (consolidated in v030), so this function no longer opens a second SQLite
+ * handle — the caller is expected to have already initialized the main DB
+ * via `initializeStorage()`.
  */
 export function initialize(): void {
   log('INFO', '[WorkspaceManager] Initializing...');
 
   try {
-    // Initialize the meta database (workspace metadata only)
-    initializeMetaDatabase(getMetaDatabasePath());
-
     // Ensure default workspace exists
     const defaultWorkspace = createDefaultWorkspace();
     log('INFO', `[WorkspaceManager] Default workspace: ${defaultWorkspace.id}`);
@@ -131,7 +122,9 @@ export { listWorkspaces, getWorkspace };
 
 export function close(): void {
   log('INFO', '[WorkspaceManager] Closing...');
-  closeMetaDatabase();
+  // The workspace tables now share the main DB; closing the main DB is the
+  // caller's responsibility (via `closeStorage()`). Nothing DB-specific to
+  // tear down here.
   _activeWorkspaceId = null;
   _initialized = false;
 }

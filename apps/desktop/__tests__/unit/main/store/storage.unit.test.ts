@@ -1,0 +1,127 @@
+/**
+ * Init-contract assertions for the desktop storage bootstrap.
+ *
+ * The v030 consolidation requires two things the real agent-core helpers
+ * would normally enforce:
+ *
+ *   1. `getStorage()` MUST pass `legacyMetaDbPath` into `createStorage` so
+ *      the in-DB import helper has a path to read from.
+ *   2. `initializeStorage()` MUST call `deleteLegacyWorkspaceMetaFiles`
+ *      AFTER `storage.initialize()` — the real delete helper reads
+ *      `legacy_meta_import_status` from the main DB, which only exists
+ *      once init has run.
+ *
+ * Better-sqlite3 and the real helpers aren't usable in the desktop vitest
+ * env, so we mock both `createStorage` and `deleteLegacyWorkspaceMetaFiles`
+ * and assert the shape + call order.
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import path from 'node:path';
+
+// electron is already mocked in __tests__/setup.ts — configure it for
+// this test file.
+vi.mock('electron', () => ({
+  app: {
+    isPackaged: false,
+    getPath: vi.fn((_key: string) => '/mock/userData'),
+  },
+}));
+
+const createStorageSpy = vi.fn();
+const storageInitializeSpy = vi.fn();
+const storageCloseSpy = vi.fn();
+const storageIsInitializedSpy = vi.fn(() => false);
+const deleteLegacySpy = vi.fn();
+
+// Mock the agent-core barrel — both createStorage and
+// deleteLegacyWorkspaceMetaFiles come from it.
+vi.mock('@accomplish_ai/agent-core', async () => {
+  return {
+    createStorage: vi.fn((options: Record<string, unknown>) => {
+      createStorageSpy(options);
+      let initialized = false;
+      return {
+        initialize: () => {
+          storageInitializeSpy();
+          initialized = true;
+        },
+        close: storageCloseSpy,
+        isDatabaseInitialized: () => {
+          storageIsInitializedSpy();
+          return initialized;
+        },
+      };
+    }),
+    deleteLegacyWorkspaceMetaFiles: vi.fn((p: string) => {
+      deleteLegacySpy(p);
+    }),
+  };
+});
+
+// Deep import mocked — the real module pulls in better-sqlite3.
+vi.mock('@accomplish_ai/agent-core/storage/database', () => ({
+  getDatabase: vi.fn(() => ({
+    prepare: vi.fn(() => ({
+      run: vi.fn(),
+      get: vi.fn(),
+      all: vi.fn(() => []),
+    })),
+  })),
+}));
+
+// Neuter the one-time electron-store import so it doesn't do anything.
+vi.mock('@main/store/electronStoreImport', () => ({
+  importLegacyElectronStoreData: vi.fn(),
+}));
+
+describe('desktop storage bootstrap — init contract', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    createStorageSpy.mockClear();
+    storageInitializeSpy.mockClear();
+    storageCloseSpy.mockClear();
+    storageIsInitializedSpy.mockClear();
+    deleteLegacySpy.mockClear();
+  });
+
+  async function importFreshStorage() {
+    // Reset the storage module so the internal `_storage` singleton starts
+    // empty for this test.
+    vi.resetModules();
+    return await import('../../../../src/main/store/storage');
+  }
+
+  it('getLegacyMetaDbPath returns the dev filename when isPackaged=false', async () => {
+    const storage = await importFreshStorage();
+    const p = storage.getLegacyMetaDbPath();
+    expect(p).toBe(path.join('/mock/userData', 'workspace-meta-dev.db'));
+  });
+
+  it('getStorage passes databasePath AND legacyMetaDbPath to createStorage (dev mode)', async () => {
+    const storage = await importFreshStorage();
+    storage.getStorage();
+
+    expect(createStorageSpy).toHaveBeenCalledTimes(1);
+    const opts = createStorageSpy.mock.calls[0][0] as Record<string, unknown>;
+    expect(opts.databasePath).toBe(path.join('/mock/userData', 'accomplish-dev.db'));
+    expect(opts.legacyMetaDbPath).toBe(path.join('/mock/userData', 'workspace-meta-dev.db'));
+  });
+
+  it('initializeStorage calls deleteLegacyWorkspaceMetaFiles with the same legacy path', async () => {
+    const storage = await importFreshStorage();
+    storage.initializeStorage();
+
+    expect(deleteLegacySpy).toHaveBeenCalledTimes(1);
+    const opts = createStorageSpy.mock.calls[0][0] as Record<string, unknown>;
+    expect(deleteLegacySpy.mock.calls[0][0]).toBe(opts.legacyMetaDbPath);
+  });
+
+  it('initializeStorage invokes storage.initialize() before deleteLegacyWorkspaceMetaFiles', async () => {
+    const storage = await importFreshStorage();
+    storage.initializeStorage();
+
+    const initOrder = storageInitializeSpy.mock.invocationCallOrder[0];
+    const deleteOrder = deleteLegacySpy.mock.invocationCallOrder[0];
+    expect(initOrder).toBeLessThan(deleteOrder);
+  });
+});

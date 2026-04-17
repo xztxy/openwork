@@ -129,14 +129,17 @@ Remaining desktop cleanup: ~~the old manifest producer at
 
 ### Other Task Config Features
 
-**Status: wiring resolved in PR #947.**
+**Status: wiring resolved in PR #947; workspace-meta split retired by the
+v030 consolidation (this PR).**
 
 User connectors, cloud browser config, workspace knowledge notes, language
 prompting, and OpenAI `store: false` all now flow through `resolveTaskConfig`
-on the daemon path per PR #947. A follow-up runtime audit is still recommended
-to confirm UX for each feature, especially workspace knowledge notes (which
-depend on the daemon also opening the separate workspace-meta DB — that fix
-was the last piece landed in PR #947).
+on the daemon path per PR #947. The workspace-meta portion of that PR — the
+daemon-side `initializeMetaDatabase` band-aid — has been superseded: the
+`workspaces`, `workspace_meta`, and `knowledge_notes` tables now live in the
+main `accomplish.db` (migration v030), and the retired `workspace-meta.db`
+file is deleted from disk after a verified import. The daemon no longer
+needs a second DB handle.
 
 Evidence:
 

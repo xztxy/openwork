@@ -3,9 +3,7 @@ import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import {
   createStorage,
-  initializeMetaDatabase,
-  closeMetaDatabase,
-  isMetaDatabaseInitialized,
+  deleteLegacyWorkspaceMetaFiles,
   type StorageAPI,
 } from '@accomplish_ai/agent-core';
 import { log } from './logger.js';
@@ -34,34 +32,31 @@ export class StorageService {
     const secureFileName = isPackaged ? 'secure-storage.json' : 'secure-storage-dev.json';
     const databasePath = join(dir, dbName);
 
+    // Compute the legacy `workspace-meta{.db,-dev.db}` path once as a
+    // function-scoped local. The SAME string is passed both to
+    // `createStorage` (so the in-DB import helper reads from it) and to
+    // `deleteLegacyWorkspaceMetaFiles` below (so the deletion helper's
+    // path-bound safety check matches). One variable, two references — no
+    // byte-drift possible between import and delete.
+    const metaDbName = isPackaged ? 'workspace-meta.db' : 'workspace-meta-dev.db';
+    const legacyMetaDbPath = join(dir, metaDbName);
+
     this.storage = createStorage({
       databasePath,
       runMigrations: true,
       userDataPath: dir,
       secureStorageFileName: secureFileName,
+      legacyMetaDbPath,
     });
 
     this.storage.initialize();
     log.info(`[StorageService] Database initialized at ${databasePath}`);
 
-    // The workspace-meta database holds workspace metadata + knowledge-notes
-    // rows. It is a SIBLING SQLite file, not part of `accomplish.db`. Before
-    // PR #946 only the desktop main process called `initializeMetaDatabase`;
-    // the daemon never touched the module. PR #946 routes daemon task-config
-    // through `resolveTaskConfig`, which calls `getKnowledgeNotesForPrompt`
-    // on every task — and that throws "Workspace meta database not
-    // initialized" unless the meta DB handle is open. The try/catch inside
-    // `resolveTaskConfig` swallows it into a log warning, so daemon tasks
-    // silently drop workspace knowledge notes.
-    //
-    // Initialise it here alongside the main DB so both processes share the
-    // same on-disk file. We do NOT create a default workspace here — that
-    // stays a desktop-only concern (daemon-only runs against an empty meta
-    // DB just return empty knowledge notes, which is fine).
-    const metaDbName = isPackaged ? 'workspace-meta.db' : 'workspace-meta-dev.db';
-    const metaDbPath = join(dir, metaDbName);
-    initializeMetaDatabase(metaDbPath);
-    log.info(`[StorageService] Workspace meta database initialized at ${metaDbPath}`);
+    // After `storage.initialize()` has run v030 and the in-DB import helper,
+    // delete the retired legacy triplet. No-op unless the helper wrote
+    // `legacy_meta_import_status='copied'` AND the stored path byte-matches
+    // this local. Safe to run on every boot.
+    deleteLegacyWorkspaceMetaFiles(legacyMetaDbPath);
 
     return this.storage;
   }
@@ -78,14 +73,6 @@ export class StorageService {
       this.storage.close();
       this.storage = null;
       log.info('[StorageService] Database closed');
-    }
-    // Mirror the main-DB teardown for the workspace-meta handle. Calling
-    // `closeMetaDatabase` when no handle is open is a no-op in agent-core
-    // but guarding explicitly documents intent and avoids a superfluous
-    // import-for-side-effect.
-    if (isMetaDatabaseInitialized()) {
-      closeMetaDatabase();
-      log.info('[StorageService] Workspace meta database closed');
     }
   }
 }

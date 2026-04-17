@@ -430,9 +430,8 @@ graph TB
         end
 
         subgraph "User Data Directory"
-            SQLiteDB["accomplish.db<br/>(SQLite)"]
+            SQLiteDB["accomplish.db<br/>(SQLite — all persisted state:<br/>tasks, workspaces, workspace_meta,<br/>knowledge_notes, settings, etc.)"]
             EncryptedKeys["Encrypted API Keys<br/>(AES-256-GCM)"]
-            WorkspaceMeta["workspace-meta.db"]
         end
 
         subgraph "Spawned Processes"
@@ -456,7 +455,7 @@ graph TB
 
     class MainProcess,PreloadScript,RendererProcess processNode
     class WebBuild,OpenCodeBin,MCPTools,BundledNode resourceNode
-    class SQLiteDB,EncryptedKeys,WorkspaceMeta dataNode
+    class SQLiteDB,EncryptedKeys dataNode
     class PTY spawnedNode
 ```
 

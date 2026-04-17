@@ -34,6 +34,23 @@ export interface StorageOptions {
   secureStorageAppId?: string;
   /** File name for the encrypted secure storage file */
   secureStorageFileName?: string;
+  /**
+   * Path to the legacy `workspace-meta{.db,-dev.db}` SQLite file produced by
+   * PR #748 (consolidated away by the v030 migration).
+   *
+   * Required for callers that pass `databasePath` AND call `.initialize()` on
+   * the returned API — i.e. desktop `getStorage()` and daemon
+   * `StorageService.initialize()`. On the v30 upgrade boot the initializer
+   * invokes `importLegacyWorkspaceMeta` to copy the old rows into
+   * `accomplish.db`; after successful import the deletion helper uses the
+   * same path to remove the retired file.
+   *
+   * MUST NOT be passed by callers that use the API for secure-storage only
+   * without opening the SQLite DB (e.g. `apps/desktop/src/main/store/secureStorage.ts`,
+   * which constructs a `StorageAPI` without `databasePath`). Test fixtures may
+   * omit it to exercise the empty-install / no-legacy-file behavior.
+   */
+  legacyMetaDbPath?: string;
 }
 
 /** A persisted task record from the database */

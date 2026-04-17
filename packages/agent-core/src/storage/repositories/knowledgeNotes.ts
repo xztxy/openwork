@@ -1,4 +1,4 @@
-import { getMetaDatabase } from '../workspace-meta-db.js';
+import { getDatabase } from '../database.js';
 import type {
   KnowledgeNote,
   KnowledgeNoteCreateInput,
@@ -31,7 +31,7 @@ function rowToNote(row: Record<string, unknown>): KnowledgeNote {
 }
 
 export function listKnowledgeNotes(workspaceId: string): KnowledgeNote[] {
-  const db = getMetaDatabase();
+  const db = getDatabase();
   const rows = db
     .prepare('SELECT * FROM knowledge_notes WHERE workspace_id = ? ORDER BY created_at ASC')
     .all(workspaceId) as Record<string, unknown>[];
@@ -39,7 +39,7 @@ export function listKnowledgeNotes(workspaceId: string): KnowledgeNote[] {
 }
 
 export function getKnowledgeNote(id: string, workspaceId: string): KnowledgeNote | null {
-  const db = getMetaDatabase();
+  const db = getDatabase();
   const row = db
     .prepare('SELECT * FROM knowledge_notes WHERE id = ? AND workspace_id = ?')
     .get(id, workspaceId) as Record<string, unknown> | undefined;
@@ -47,7 +47,7 @@ export function getKnowledgeNote(id: string, workspaceId: string): KnowledgeNote
 }
 
 export function createKnowledgeNote(input: KnowledgeNoteCreateInput): KnowledgeNote {
-  const db = getMetaDatabase();
+  const db = getDatabase();
 
   const count = db
     .prepare('SELECT COUNT(*) as cnt FROM knowledge_notes WHERE workspace_id = ?')
@@ -73,7 +73,7 @@ export function updateKnowledgeNote(
   workspaceId: string,
   input: KnowledgeNoteUpdateInput,
 ): KnowledgeNote | null {
-  const db = getMetaDatabase();
+  const db = getDatabase();
   const existing = getKnowledgeNote(id, workspaceId);
   if (!existing) {
     return null;
@@ -95,7 +95,7 @@ export function updateKnowledgeNote(
 }
 
 export function deleteKnowledgeNote(id: string, workspaceId: string): boolean {
-  const db = getMetaDatabase();
+  const db = getDatabase();
   const result = db
     .prepare('DELETE FROM knowledge_notes WHERE id = ? AND workspace_id = ?')
     .run(id, workspaceId);

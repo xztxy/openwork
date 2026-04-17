@@ -89,7 +89,7 @@ Never skip a step — all 4 must be done together.
 ### SQLite / Migrations
 
 - DB: `accomplish.db` (prod) / `accomplish-dev.db` (dev), in Electron user-data directory
-- Current schema version: **6** (in `packages/agent-core/src/storage/migrations/index.ts`)
+- Current schema version: **30** (in `packages/agent-core/src/storage/migrations/index.ts`)
 - To add a migration: create `vXXX-description.ts`, import + add to the `migrations` array, bump `CURRENT_VERSION`
 - **Never modify released migration files** — always add a new one
 
