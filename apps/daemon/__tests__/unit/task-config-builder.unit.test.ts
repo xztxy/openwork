@@ -244,6 +244,57 @@ describe('daemon onBeforeStart — integration against real resolveTaskConfig + 
     expect(written.provider?.openai?.options?.store).toBe(false);
   });
 
+  it('returns workspaceInstructions alongside env so the adapter can inject them as SDK `system` per-turn', async () => {
+    // The generated config file (tested above) is not enough — the
+    // OpenAI/Codex provider path inside OpenCode has its own
+    // `options.instructions` channel that crowds out the agent-level
+    // prompt. onBeforeStart must return the pre-formatted instruction
+    // bullet list via `workspaceInstructions` so the adapter can
+    // duplicate it into `session.prompt({ system })` on every turn.
+    knowledgeInstructionsText = '- Always add "Haiku" suffix to every reply';
+    const storage = makeStorage();
+
+    const result = await onBeforeStart(
+      storage as never,
+      {
+        userDataPath: tmpUserData,
+        mcpToolsPath: fakeMcpToolsPath,
+        isPackaged: false,
+        resourcesPath: '',
+        appPath: '',
+      },
+      { taskId: 'tsk_ws_instr', workspaceId: 'ws_42' },
+    );
+
+    expect(result.workspaceInstructions).toBeDefined();
+    expect(result.workspaceInstructions).toContain('Always add "Haiku" suffix to every reply');
+    // Env is still populated as before — not clobbered by the new field.
+    expect(result.env.OPENCODE_CONFIG).toBeDefined();
+  });
+
+  it('omits workspaceInstructions when no instruction-type notes exist (context/reference only)', async () => {
+    // The structured return from getFormattedKnowledgeNotes splits by type:
+    // only `instruction` notes go into `.instructions`, so context-only
+    // workspaces should produce a result with no `workspaceInstructions` key.
+    knowledgeInstructionsText = undefined;
+    knowledgeContextText = '### Context\n- Project uses Postgres 16';
+    const storage = makeStorage();
+
+    const result = await onBeforeStart(
+      storage as never,
+      {
+        userDataPath: tmpUserData,
+        mcpToolsPath: fakeMcpToolsPath,
+        isPackaged: false,
+        resourcesPath: '',
+        appPath: '',
+      },
+      { taskId: 'tsk_ctx_only', workspaceId: 'ws_42' },
+    );
+
+    expect(result.workspaceInstructions).toBeUndefined();
+  });
+
   it('includes enabled MCP connectors in the written config', async () => {
     const storage = makeStorage({
       getEnabledConnectors: vi.fn(() => [

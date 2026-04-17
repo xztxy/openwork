@@ -120,7 +120,17 @@ export class TaskService extends EventEmitter {
         // `ctx.taskId` to compute a per-task config filename.
         onBeforeStart: async (ctx) => {
           const result = await onBeforeStart(this.storage, this.opts, ctx);
-          return result.env;
+          // Return the rich `OnBeforeStartResult` shape so the adapter
+          // can inject `workspaceInstructions` as a compact `system`
+          // block on every `session.prompt` call. Agent-level prompts
+          // alone lose to provider-native instruction channels; see
+          // `OpenCodeAdapter.buildWorkspaceInstructionRuntimeBlock`.
+          return {
+            env: result.env,
+            ...(result.workspaceInstructions
+              ? { workspaceInstructions: result.workspaceInstructions }
+              : {}),
+          };
         },
         // SDK-based adapter resolves its `opencode serve` URL here. The
         // optional `ctx` carries the same per-task context into the

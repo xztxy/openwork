@@ -123,7 +123,22 @@ export async function onBeforeStart(
   storage: StorageAPI,
   opts: TaskConfigBuilderOptions,
   ctx: OnBeforeStartContext,
-): Promise<{ configPath: string; env: NodeJS.ProcessEnv }> {
+): Promise<{
+  configPath: string;
+  env: NodeJS.ProcessEnv;
+  /**
+   * `instruction`-type workspace knowledge notes pre-formatted as a
+   * bullet list. Returned here (in addition to being baked into
+   * `agent.accomplish.prompt` in the generated config file) so the
+   * adapter can inject them as a compact runtime `system` block on
+   * every `session.prompt` call. See `OpenCodeAdapter.buildWorkspaceInstructionRuntimeBlock`
+   * for the rationale — provider-native instruction channels (OpenAI/
+   * Codex path especially) crowd out the agent-level prompt, so we
+   * carry the mandatory rules through the SDK's first-class `system`
+   * field as well.
+   */
+  workspaceInstructions?: string;
+}> {
   const authPath = getOpenCodeAuthJsonPath();
   const apiKeys = await storage.getAllApiKeys();
   await syncApiKeysToOpenCodeAuth(authPath, apiKeys);
@@ -193,6 +208,9 @@ export async function onBeforeStart(
   return {
     configPath: result.configPath,
     env,
+    ...(configOptions.knowledgeInstructions
+      ? { workspaceInstructions: configOptions.knowledgeInstructions }
+      : {}),
   };
 }
 export * from './task-service-helpers.js';

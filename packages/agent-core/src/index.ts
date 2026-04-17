@@ -37,6 +37,7 @@ export type {
   TaskCallbacks as TaskManagerCallbacks,
   TaskProgressEvent as TaskManagerProgressEvent,
   OnBeforeStartContext,
+  OnBeforeStartResult,
   // Storage API
   StorageAPI,
   StorageOptions,

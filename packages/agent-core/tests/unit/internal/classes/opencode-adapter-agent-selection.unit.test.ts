@@ -49,6 +49,7 @@ describe('OpenCodeAdapter agent selection on session.prompt', () => {
   interface PromptCall {
     sessionID: string;
     agent?: string;
+    system?: string;
     text?: string;
   }
 
@@ -63,10 +64,16 @@ describe('OpenCodeAdapter agent selection on session.prompt', () => {
         create: async (_args: { title: string }) => {
           return { id: 'session_abc' };
         },
-        prompt: (args: { sessionID: string; agent?: string; parts: Array<{ text?: string }> }) => {
+        prompt: (args: {
+          sessionID: string;
+          agent?: string;
+          system?: string;
+          parts: Array<{ text?: string }>;
+        }) => {
           promptCalls.push({
             sessionID: args.sessionID,
             agent: args.agent,
+            system: args.system,
             text: args.parts[0]?.text,
           });
           return Promise.resolve();
@@ -94,11 +101,14 @@ describe('OpenCodeAdapter agent selection on session.prompt', () => {
     config: { prompt: string; sessionId?: string },
     fake: ReturnType<typeof buildFakeClient>,
   ): Promise<void> {
-    (
+    const adapterOpts = (
       adapter as unknown as {
-        options: { getServerUrl: (taskId: string) => Promise<string> };
+        options: {
+          getServerUrl: (taskId: string) => Promise<string>;
+        };
       }
-    ).options.getServerUrl = async () => 'http://127.0.0.1:4096';
+    ).options;
+    adapterOpts.getServerUrl = async () => 'http://127.0.0.1:4096';
 
     let clientAssigned = false;
     Object.defineProperty(adapter, 'client', {
@@ -148,5 +158,98 @@ describe('OpenCodeAdapter agent selection on session.prompt', () => {
     expect(fake.promptCalls.length).toBe(1);
     expect(fake.promptCalls[0].agent).toBe(ACCOMPLISH_AGENT_NAME);
     expect(fake.promptCalls[0].sessionID).toBe('existing_session');
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Runtime per-turn `system` injection for workspace instructions.
+  //
+  // The agent-level `agent.accomplish.prompt` is not enough: the OpenAI/
+  // Codex provider path inside OpenCode injects its own `options.instructions`
+  // channel that crowds out the agent-level prompt, so mandatory user rules
+  // (e.g. "always add Haiku suffix") never reach the model. Fix: `onBeforeStart`
+  // returns `{ env, workspaceInstructions }`, the adapter stores the
+  // instructions, and every `session.prompt` call includes them as the
+  // SDK's first-class `system` field. These tests pin that pipeline.
+  // ──────────────────────────────────────────────────────────────────────
+  it('session.prompt carries system= with workspace instructions when onBeforeStart returns them', async () => {
+    const adapter = new OpenCodeAdapter(
+      {
+        platform: 'darwin',
+        isPackaged: false,
+        tempPath: '/tmp',
+        onBeforeStart: async () => ({
+          env: {},
+          workspaceInstructions: '- Always add "Haiku" suffix string for any reply',
+        }),
+      },
+      'tsk_ws_instr',
+    );
+    const fake = buildFakeClient();
+    await runStartTask(adapter, { prompt: 'tell me about yourself' }, fake);
+
+    expect(fake.promptCalls.length).toBe(1);
+    const call = fake.promptCalls[0];
+    expect(call.system).toBeDefined();
+    // The runtime block wraps the instructions under a mandatory header
+    // that's deliberately terse but explicit about overriding the
+    // conversational-bypass default-concise behavior.
+    expect(call.system).toContain('MANDATORY WORKSPACE INSTRUCTIONS');
+    // The exact user-supplied instruction text is preserved verbatim.
+    expect(call.system).toContain('Always add "Haiku" suffix string for any reply');
+    // It's wrapped in the <workspace-instructions> tag so the model can
+    // pattern-match it reliably.
+    expect(call.system).toContain('<workspace-instructions>');
+    expect(call.system).toContain('</workspace-instructions>');
+  });
+
+  it('session.prompt omits system= when no workspace instructions are set', async () => {
+    const adapter = new OpenCodeAdapter(
+      {
+        platform: 'darwin',
+        isPackaged: false,
+        tempPath: '/tmp',
+        // onBeforeStart returns a legacy plain-env shape, no workspaceInstructions.
+        onBeforeStart: async () => ({ ACCOMPLISH_SOME_VAR: '1' }) as NodeJS.ProcessEnv,
+      },
+      'tsk_no_instr',
+    );
+    const fake = buildFakeClient();
+    await runStartTask(adapter, { prompt: 'hi' }, fake);
+
+    expect(fake.promptCalls.length).toBe(1);
+    // Legacy callers that return a bare env object shouldn't accidentally
+    // trigger a `system` injection. The adapter only populates `system`
+    // when `onBeforeStart` returns the rich `{ env, workspaceInstructions }`
+    // shape with a non-empty `workspaceInstructions` field.
+    expect(fake.promptCalls[0].system).toBeUndefined();
+  });
+
+  it('resume path also carries system= (workspace rules apply on every turn, not just session creation)', async () => {
+    const adapter = new OpenCodeAdapter(
+      {
+        platform: 'darwin',
+        isPackaged: false,
+        tempPath: '/tmp',
+        onBeforeStart: async () => ({
+          env: {},
+          workspaceInstructions: '- Reply in haiku form',
+        }),
+      },
+      'tsk_resume_system',
+    );
+    const fake = buildFakeClient();
+    await runStartTask(
+      adapter,
+      { prompt: 'follow-up', sessionId: 'session_was_created_before_note_was_added' },
+      fake,
+    );
+
+    // The critical property: a session that was created BEFORE the user
+    // added the workspace note must STILL get the instructions injected
+    // on subsequent turns, because the runtime `system` field is per-call,
+    // not sticky to session creation.
+    expect(fake.promptCalls.length).toBe(1);
+    expect(fake.promptCalls[0].sessionID).toBe('session_was_created_before_note_was_added');
+    expect(fake.promptCalls[0].system).toContain('Reply in haiku form');
   });
 });

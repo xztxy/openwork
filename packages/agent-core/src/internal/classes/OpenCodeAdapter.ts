@@ -60,7 +60,7 @@ import {
 } from '../../opencode/completion/index.js';
 
 import type { TaskConfig, Task, TaskResult } from '../../common/types/task.js';
-import type { OnBeforeStartContext } from '../../types/task-manager.js';
+import type { OnBeforeStartContext, OnBeforeStartResult } from '../../types/task-manager.js';
 import type { OpenCodeMessage } from '../../common/types/opencode.js';
 import type { PermissionRequest, PermissionResponse } from '../../common/types/permission.js';
 import {
@@ -155,7 +155,9 @@ export interface AdapterOptions {
    * per-task config filename, workspaceId for workspace knowledge notes).
    * Callers that don't have a task context pass an empty object.
    */
-  onBeforeStart?: (ctx: OnBeforeStartContext) => Promise<NodeJS.ProcessEnv | void>;
+  onBeforeStart?: (
+    ctx: OnBeforeStartContext,
+  ) => Promise<NodeJS.ProcessEnv | OnBeforeStartResult | void>;
   getModelDisplayName?: (modelId: string) => string;
   /** Lazy sandbox factory, called once per adapter instance. */
   sandboxFactory?: () => { provider: SandboxProvider; config: SandboxConfig };
@@ -238,6 +240,14 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
   private isDisposed = false;
   private wasInterrupted = false;
   private externalEnv: NodeJS.ProcessEnv | undefined;
+  /**
+   * Most recent `instruction`-type workspace knowledge notes returned by
+   * `onBeforeStart`. Injected as a compact, mandatory runtime block on
+   * every `session.prompt({ system })` call — the generated config's
+   * agent-level prompt is too easily crowded out by provider-native
+   * instruction channels (OpenAI/Codex path in particular).
+   */
+  private workspaceInstructions: string | undefined;
 
   /** Most recent permission/question request awaiting a caller reply. */
   private pendingRequest: PendingRequest | null = null;
@@ -399,7 +409,22 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     };
 
     if (this.options.onBeforeStart) {
-      this.externalEnv = (await this.options.onBeforeStart(onBeforeStartCtx)) ?? {};
+      const rawResult = await this.options.onBeforeStart(onBeforeStartCtx);
+      // Normalize the three return shapes:
+      //   1. `void` (legacy, nothing to do)
+      //   2. `NodeJS.ProcessEnv` (legacy env-only return)
+      //   3. `OnBeforeStartResult` ({ env?, workspaceInstructions? })
+      // We distinguish (3) by the presence of an `env` property, which is
+      // unambiguous: real env objects are flat string→string maps, not
+      // nested objects with an `env` key.
+      if (rawResult && typeof rawResult === 'object' && 'env' in rawResult) {
+        const result = rawResult as OnBeforeStartResult;
+        this.externalEnv = result.env ?? {};
+        this.workspaceInstructions = result.workspaceInstructions;
+      } else {
+        this.externalEnv = (rawResult as NodeJS.ProcessEnv | undefined) ?? {};
+        this.workspaceInstructions = undefined;
+      }
     }
 
     // Resolve the running opencode-serve URL. Phase 2 populates this from the
@@ -488,10 +513,20 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     // `config.agent` field in `opencode.json` and `default_agent` are
     // consulted by the CLI path; the SDK path requires this explicit
     // per-prompt selection. See `tests/unit/opencode/opencode-adapter-agent.test.ts`.
+    // Build the compact workspace-instructions runtime block (if the
+    // active workspace has any `instruction`-type notes). Passed as the
+    // SDK's `system` field on EVERY prompt call so mandatory user rules
+    // reach the model reliably — not just via `agent.accomplish.prompt`,
+    // which can be crowded out by provider-native instruction channels
+    // (observed specifically on OpenAI/Codex paths where OpenCode's own
+    // provider `options.instructions` dominates the agent-level prompt).
+    const runtimeSystem = this.buildWorkspaceInstructionRuntimeBlock();
+
     this.client.session
       .prompt({
         sessionID: sessionId,
         agent: ACCOMPLISH_AGENT_NAME,
+        ...(runtimeSystem ? { system: runtimeSystem } : {}),
         parts: [{ type: 'text', text: config.prompt }],
         ...(model ? { model } : {}),
       })
@@ -673,6 +708,39 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     return trimmed.length > 80 ? `${trimmed.slice(0, 80)}...` : trimmed;
   }
 
+  /**
+   * Build a compact runtime system-instruction block from the most recent
+   * `workspaceInstructions` returned by `onBeforeStart`. Returns `undefined`
+   * if the workspace has no `instruction`-type notes.
+   *
+   * The block is deliberately short and forceful — the full Accomplish
+   * identity + conversational-bypass rules live in `agent.accomplish.prompt`
+   * and reach the model via that channel. Passing the entire 22KB prompt
+   * again as `system` would bloat each turn and still bury the rule.
+   * Instead we duplicate ONLY the mandatory workspace rules into the SDK's
+   * `system` field on every prompt so provider-native instruction channels
+   * (OpenAI/Codex path in particular) cannot crowd them out.
+   */
+  private buildWorkspaceInstructionRuntimeBlock(): string | undefined {
+    if (!this.workspaceInstructions) return undefined;
+    return [
+      '<workspace-instructions>',
+      'MANDATORY WORKSPACE INSTRUCTIONS.',
+      '',
+      'These are persistent user instructions saved for this workspace.',
+      'They apply to THIS response and every subsequent response in this',
+      'session, including short conversational replies, direct answers to',
+      'simple questions, and tool-using multi-step tasks. Follow them',
+      'literally on every reply. They OVERRIDE the default "respond',
+      'concisely" / "1-3 sentences" behavior described in the agent',
+      'prompt. Only ignore them if following them would conflict with a',
+      'higher-priority safety or system rule.',
+      '',
+      this.workspaceInstructions,
+      '</workspace-instructions>',
+    ].join('\n');
+  }
+
   private buildModelParam(config: TaskConfig): { providerID: string; modelID: string } | null {
     if (!config.modelId || !config.provider) return null;
     return { providerID: config.provider, modelID: config.modelId };
@@ -687,10 +755,15 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
           // must also select the Accomplish agent, or the continuation
           // nudge runs under OpenCode's default agent with none of the
           // workspace instructions / skills / connector rules loaded.
+          // Also pass the compact workspace-instructions `system` block
+          // every turn, same rationale as the initial prompt: agent-level
+          // prompts get crowded out by provider-native instruction channels.
+          const runtimeSystem = this.buildWorkspaceInstructionRuntimeBlock();
           this.client.session
             .prompt({
               sessionID: this.currentSessionId,
               agent: ACCOMPLISH_AGENT_NAME,
+              ...(runtimeSystem ? { system: runtimeSystem } : {}),
               parts: [{ type: 'text', text: prompt }],
             })
             .catch((err: unknown) => {
