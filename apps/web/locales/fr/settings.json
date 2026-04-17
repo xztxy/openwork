@@ -672,6 +672,8 @@
       "deleteFailed": "Note introuvable ou impossible à supprimer."
     },
     "empty": "Aucune note de contexte. Ajoutez des notes pour donner à votre IA un contexte persistant.",
-    "maxNotes": "Maximum {{max}} notes par espace de travail"
+    "maxNotes": "Maximum {{max}} notes par espace de travail",
+    "cancel": "Annuler",
+    "save": "Enregistrer"
   }
 }
