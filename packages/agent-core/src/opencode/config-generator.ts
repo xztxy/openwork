@@ -173,32 +173,44 @@ ${accountRows}
   // mandatory persistent rules that override the default conversational-
   // bypass concise-by-default behavior, while `context`/`reference` notes
   // stay as soft workspace background.
+  //
+  // POSITIONING: the instructions block is PREPENDED to the top of the
+  // prompt (before the base template's conversational-bypass and response-
+  // style rules). Appending to the end put it at 94% of an 18KB prompt,
+  // where model attention is weakest — the early rules dominated and
+  // instructions were ignored. Putting it first gives user instructions
+  // primacy over the default behavior rules they're meant to override.
+  // Soft context stays appended (end of prompt) since it's background info,
+  // not a rule.
   if (options.knowledgeInstructions) {
-    systemPrompt += `
-
-<workspace-instructions>
+    const instructionsBlock = `<workspace-instructions>
 ##############################################################################
 # MANDATORY WORKSPACE INSTRUCTIONS — MUST BE FOLLOWED
 ##############################################################################
 
-The user has saved the following instructions for this workspace. These
-are PERSISTENT USER INSTRUCTIONS that apply to EVERY response in this
-workspace, including:
-- Short conversational replies (they OVERRIDE the default concise-by-default
-  behavior described earlier in this prompt).
+The user has saved the following instructions for THIS SPECIFIC WORKSPACE.
+These are PERSISTENT USER INSTRUCTIONS that apply to EVERY response in
+this workspace, including:
+- Short conversational replies — these instructions OVERRIDE the default
+  "concise by default" / "1-3 sentences" / conversational-bypass rules
+  described later in this prompt.
 - Direct answers to simple questions.
 - Task workflow responses.
 - Tool-using multi-step tasks.
 
-Follow each instruction below unless it conflicts with a higher-priority
-safety or system rule. When two instructions conflict, prefer the most
-recently-added one. Do not ask the user to re-explain anything below.
+Follow each instruction below LITERALLY, on EVERY response, for the
+duration of this workspace session. When two instructions conflict,
+prefer the most recently added one. These instructions take precedence
+over any response-style defaults in the rest of this prompt, except
+where they would conflict with a higher-priority safety or system rule.
 
 ${options.knowledgeInstructions}
 
 ##############################################################################
 </workspace-instructions>
+
 `;
+    systemPrompt = instructionsBlock + systemPrompt;
   }
 
   if (options.knowledgeContext) {
