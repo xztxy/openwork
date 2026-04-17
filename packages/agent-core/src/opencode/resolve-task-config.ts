@@ -17,7 +17,7 @@ import type { ConfigGeneratorOptions, ProviderConfig } from './config-generator.
 import type { BrowserConfig } from './generator-mcp.js';
 import type { AccomplishRuntime, StorageDeps } from './accomplish-runtime.js';
 import { isTokenExpired, refreshAccessToken } from '../connectors/oauth-tokens.js';
-import { getKnowledgeNotesForPrompt } from '../storage/repositories/knowledgeNotes.js';
+import { getFormattedKnowledgeNotes } from '../storage/repositories/knowledgeNotes.js';
 import { buildProviderConfigs } from './config-builder.js';
 import { prepareGwsManifest, type LogFn } from '../google-accounts/index.js';
 
@@ -157,14 +157,18 @@ export async function resolveTaskConfig(
   // 4. Resolve cloud browser config
   const browser = resolveCloudBrowser(storage);
 
-  // 5. Resolve workspace knowledge notes
-  let knowledgeNotes: string | undefined;
+  // 5. Resolve workspace knowledge notes — split into binding instructions
+  //    (rendered under a MANDATORY wrapper) and soft context (rendered under
+  //    a "background info" wrapper). Per the post-review fix for Codex P2,
+  //    instruction-type notes must be framed as persistent user instructions
+  //    that override conversational-bypass default-concise behavior.
+  let knowledgeInstructions: string | undefined;
+  let knowledgeContext: string | undefined;
   if (workspaceId) {
     try {
-      const formatted = getKnowledgeNotesForPrompt(workspaceId);
-      if (formatted) {
-        knowledgeNotes = formatted;
-      }
+      const formatted = getFormattedKnowledgeNotes(workspaceId);
+      if (formatted.instructions) knowledgeInstructions = formatted.instructions;
+      if (formatted.context) knowledgeContext = formatted.context;
     } catch (error) {
       log('WARN', '[resolveTaskConfig] Failed to load workspace knowledge notes', {
         workspaceId,
@@ -227,7 +231,8 @@ export async function resolveTaskConfig(
       smallModel: modelOverride?.smallModel,
       connectors: connectors.length > 0 ? connectors : undefined,
       browser,
-      knowledgeNotes,
+      knowledgeInstructions,
+      knowledgeContext,
       language,
       configFileName,
       gwsAccountsManifestPath,

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -474,22 +474,46 @@ describe('importLegacyWorkspaceMeta', () => {
     expect(fs.existsSync(legacyPath)).toBe(true);
   });
 
-  // --- 18g. statSync throws (EACCES simulation) ---
-  it('18g. statSync throwing is caught; status is NOT forced to none', () => {
+  // --- 18g. statSync throws — force `safeFileState` to return 'unknown' ---
+  it('18g. statSync EACCES → unknown state → helper never writes status=none', async () => {
     if (!Database || !importModule) return;
     const db = openMainDb();
-    // We can't easily make statSync throw EACCES on a real file cross-platform
-    // without affecting other operations. Instead, we exercise the *contract*:
-    // a legacy file that exists but isn't a valid SQLite DB triggers the
-    // openLegacy fail path and writes status='failed', NOT 'none'. This
-    // proves the helper doesn't collapse unknown/open-error states into
-    // a "nothing to do" terminal, which would delete the file forever.
-    const legacyPath = path.join(testDir, 'unknown-state.db');
-    fs.writeFileSync(legacyPath, Buffer.from('definitely not sqlite content'));
-    importModule.importLegacyWorkspaceMeta(db, legacyPath, 29);
-    expect(readStatus(db)).toBe('failed');
-    expect(readStatus(db)).not.toBe('none'); // explicitly verify no 'none' collapse
-    expect(fs.existsSync(legacyPath)).toBe(true); // preserved
+    const legacyPath = path.join(testDir, 'permission-denied.db');
+    // Seed a valid legacy file so fallthrough-import-path can actually
+    // succeed if statSync behaves. We're testing the 'unknown' state,
+    // not openLegacy failures.
+    const seededLegacy = buildLegacyDb({ workspaces: [{ id: 'ws-ok', name: 'OK' }] });
+    fs.copyFileSync(seededLegacy, legacyPath);
+
+    // Mock fs.statSync to throw EACCES specifically for the legacy main path.
+    // safeFileState catches the error and must return { kind: 'unknown' },
+    // NOT { kind: 'missing' } — otherwise the helper would treat the file as
+    // absent and potentially write status='none' on the upgrade boot.
+    const { default: fsModule } = await import('fs');
+    const realStatSync = fsModule.statSync;
+    const statSpy = vi.spyOn(fsModule, 'statSync').mockImplementation(((p: fs.PathLike) => {
+      if (p === legacyPath) {
+        const err = new Error('EACCES: permission denied') as NodeJS.ErrnoException;
+        err.code = 'EACCES';
+        throw err;
+      }
+      return realStatSync(p as fs.PathLike);
+    }) as typeof fsModule.statSync);
+    try {
+      importModule.importLegacyWorkspaceMeta(db, legacyPath, 29);
+
+      // Contract: unknown → helper falls through to import path; it does
+      // NOT write 'none' just because it couldn't stat. Final status
+      // depends on whether openLegacy succeeded — with a valid seeded
+      // file it should be 'copied'. Either way, status must never be
+      // 'none' — that's the property we're pinning.
+      const status = readStatus(db);
+      expect(status).not.toBe('none');
+      // The legacy file is preserved regardless (not inline-deleted).
+      expect(fs.existsSync(legacyPath)).toBe(true);
+    } finally {
+      statSpy.mockRestore();
+    }
   });
 
   // --- 18i. Cleanup failure leaves status missing ---
@@ -555,23 +579,69 @@ describe('importLegacyWorkspaceMeta', () => {
     }
   });
 
-  // --- CONCURRENCY: atomic terminal-write guard ---
-  it('atomicWriteTerminalStatus: two processes racing — second caller does not clobber first', () => {
+  // --- CONCURRENCY: atomic terminal-write guard (direct) ---
+  // Tests the guard via the exported `__testing.atomicWriteTerminalStatus`
+  // symbol. The higher-level helper short-circuits at its fast-path before
+  // reaching the guard when status is already terminal — the only realistic
+  // way the guard matters is a race where a losing worker arrives at the
+  // outer catch with stale status knowledge. Exercising it directly proves
+  // the regression would bite.
+  it('atomicWriteTerminalStatus: refuses to write when status is already terminal', () => {
     if (!Database || !importModule) return;
-    // Simulate the race: Process A (our first call) imports successfully
-    // and writes status='copied'. Process B (our second call) then
-    // attempts to write status='failed' through the outer catch path —
-    // it should NOT overwrite A's terminal 'copied'.
-    const dbA = openMainDb('race');
+    const db = openMainDb('race-direct');
+    // Simulate Process A having committed status='copied'.
+    db.prepare(
+      "INSERT INTO schema_meta (key, value) VALUES ('legacy_meta_import_status', 'copied')",
+    ).run();
+
+    // Process B arrives late, thought status was missing when it started,
+    // and its outer catch now calls the atomic helper with 'failed'.
+    // The guard must re-read status inside its IMMEDIATE tx and refuse.
+    const wrote = importModule.__testing.atomicWriteTerminalStatus(db, 'failed');
+    expect(wrote).toBe(false);
+
+    // Terminal 'copied' survives.
+    const status = (
+      db.prepare("SELECT value FROM schema_meta WHERE key = 'legacy_meta_import_status'").get() as {
+        value: string;
+      }
+    ).value;
+    expect(status).toBe('copied');
+  });
+
+  it('atomicWriteTerminalStatus: writes when status is still missing', () => {
+    if (!Database || !importModule) return;
+    const db = openMainDb('race-direct-2');
+    // Status is missing — guard allows the write.
+    const wrote = importModule.__testing.atomicWriteTerminalStatus(db, 'failed');
+    expect(wrote).toBe(true);
+    expect(readStatus(db)).toBe('failed');
+  });
+
+  it('atomicWriteTerminalStatus: also writes the path key when status is copied', () => {
+    if (!Database || !importModule) return;
+    const db = openMainDb('race-direct-3');
+    const wrote = importModule.__testing.atomicWriteTerminalStatus(db, 'copied', '/a/legacy.db');
+    expect(wrote).toBe(true);
+    expect(readStatus(db)).toBe('copied');
+    expect(readPath(db)).toBe('/a/legacy.db');
+  });
+
+  // End-to-end race: same scenario via the public helper — ensures the
+  // outer-catch path in the real helper also respects the guard.
+  it('Second helper call with already-terminal status does not clobber', () => {
+    if (!Database || !importModule) return;
+    const dbA = openMainDb('e2e-race');
     const legacyA = buildLegacyDb({ workspaces: [{ id: 'ws-race', name: 'Racer' }] });
     importModule.importLegacyWorkspaceMeta(dbA, legacyA, 29);
     expect(readStatus(dbA)).toBe('copied');
 
-    // Now simulate Process B coming in late: call the helper again with
-    // a bad legacy file. Its outer catch will try to write 'failed'
-    // through atomicWriteTerminalStatus — but since status is already
-    // 'copied', the atomic guard should refuse the write.
-    const badLegacy = path.join(testDir, 'bad.db');
+    // Now call the helper again with a broken legacy. Fast-path status
+    // check sees terminal 'copied' and returns immediately — outer catch
+    // never fires, so atomicWriteTerminalStatus isn't invoked via this
+    // path. But we verify the public contract holds end-to-end: a second
+    // call can't silently change a terminal state to anything else.
+    const badLegacy = path.join(testDir, 'bad-e2e.db');
     fs.writeFileSync(badLegacy, Buffer.from('garbage'));
     importModule.importLegacyWorkspaceMeta(dbA, badLegacy, 29);
     // Terminal 'copied' must survive.

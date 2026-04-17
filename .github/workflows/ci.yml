@@ -52,6 +52,14 @@ jobs:
         run: pnpm build
 
       - name: Run agent-core tests
+        env:
+          # Fail loudly if better-sqlite3 native bindings can't load. The
+          # v030 workspace-meta consolidation tests short-circuit gracefully
+          # when bindings are unavailable (so local `pnpm test` still works
+          # without native modules), but CI must exercise the real SQLite
+          # paths — otherwise migration/import/delete coverage silently
+          # reports green.
+          REQUIRE_SQLITE_TESTS: '1'
         run: pnpm -F @accomplish_ai/agent-core test
 
   # Run unit and integration tests in parallel

@@ -33,7 +33,11 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Tunable via each test.
-let knowledgeNotesText: string | undefined = undefined;
+// Either-or: `knowledgeInstructionsText` → rendered in the binding
+// <workspace-instructions> block; `knowledgeContextText` → rendered in the
+// soft <workspace-knowledge> block. Tests set one or both per scenario.
+let knowledgeInstructionsText: string | undefined = undefined;
+let knowledgeContextText: string | undefined = undefined;
 let activeProviderModel: { provider: string; model: string } | null = null;
 let gwsRows: Record<string, unknown>[] = [];
 
@@ -59,11 +63,22 @@ vi.mock('@accomplish_ai/agent-core/storage/database', () => ({
   getDatabase: vi.fn(() => dbStub),
 }));
 
-// resolveTaskConfig imports getKnowledgeNotesForPrompt directly from the
-// repository module (NOT via the barrel), so the mock must target that
-// module path exactly.
+// resolveTaskConfig imports directly from the repository module (NOT via
+// the barrel), so the mock must target that module path exactly. We stub
+// both `getFormattedKnowledgeNotes` (the new structured API that splits
+// instructions from context) and `getKnowledgeNotesForPrompt` (the legacy
+// single-string API kept for backward compatibility).
 vi.mock('@accomplish_ai/agent-core/storage/repositories/knowledgeNotes', () => ({
-  getKnowledgeNotesForPrompt: vi.fn(() => knowledgeNotesText),
+  getFormattedKnowledgeNotes: vi.fn(() => ({
+    instructions: knowledgeInstructionsText ?? '',
+    context: knowledgeContextText ?? '',
+  })),
+  getKnowledgeNotesForPrompt: vi.fn(() => {
+    const parts: string[] = [];
+    if (knowledgeInstructionsText) parts.push(`### Instruction\n${knowledgeInstructionsText}`);
+    if (knowledgeContextText) parts.push(knowledgeContextText);
+    return parts.join('\n\n');
+  }),
 }));
 
 vi.mock('@accomplish_ai/agent-core', async (importOriginal) => {
@@ -146,7 +161,8 @@ describe('daemon onBeforeStart — integration against real resolveTaskConfig + 
   let tmpUserData: string;
 
   beforeEach(() => {
-    knowledgeNotesText = undefined;
+    knowledgeInstructionsText = undefined;
+    knowledgeContextText = undefined;
     activeProviderModel = null;
     gwsRows = [];
     tmpUserData = path.join(
@@ -194,7 +210,8 @@ describe('daemon onBeforeStart — integration against real resolveTaskConfig + 
   });
 
   it('writes opencode-<taskId>.json containing workspace knowledge notes and OpenAI store:false', async () => {
-    knowledgeNotesText = 'Remember: treat `foo` as a reserved keyword in this workspace.';
+    // Use an `instruction`-type note to exercise the new binding wrapper path.
+    knowledgeInstructionsText = '- Remember: treat `foo` as a reserved keyword in this workspace.';
     const storage = makeStorage();
 
     const { configPath } = await onBeforeStart(

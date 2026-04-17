@@ -168,24 +168,56 @@ ${accountRows}
     systemPrompt += gwsSection;
   }
 
-  if (options.knowledgeNotes) {
-    const knowledgeSection = `
+  // Two distinct injection blocks with distinct binding strength, per the
+  // PR #847 review (Codex P2): `instruction`-type notes MUST be treated as
+  // mandatory persistent rules that override the default conversational-
+  // bypass concise-by-default behavior, while `context`/`reference` notes
+  // stay as soft workspace background.
+  if (options.knowledgeInstructions) {
+    systemPrompt += `
+
+<workspace-instructions>
+##############################################################################
+# MANDATORY WORKSPACE INSTRUCTIONS — MUST BE FOLLOWED
+##############################################################################
+
+The user has saved the following instructions for this workspace. These
+are PERSISTENT USER INSTRUCTIONS that apply to EVERY response in this
+workspace, including:
+- Short conversational replies (they OVERRIDE the default concise-by-default
+  behavior described earlier in this prompt).
+- Direct answers to simple questions.
+- Task workflow responses.
+- Tool-using multi-step tasks.
+
+Follow each instruction below unless it conflicts with a higher-priority
+safety or system rule. When two instructions conflict, prefer the most
+recently-added one. Do not ask the user to re-explain anything below.
+
+${options.knowledgeInstructions}
+
+##############################################################################
+</workspace-instructions>
+`;
+  }
+
+  if (options.knowledgeContext) {
+    systemPrompt += `
 
 <workspace-knowledge>
 ##############################################################################
 # WORKSPACE KNOWLEDGE - Persistent context for this workspace
 ##############################################################################
 
-The user has saved the following knowledge notes for this workspace.
-Use this information as context for all tasks. Do not ask the user to
+The user has saved the following background context for this workspace.
+Use this information to inform your work. Do not ask the user to
 re-explain anything covered here.
 
-${options.knowledgeNotes}
+${options.knowledgeContext}
 
 ##############################################################################
 </workspace-knowledge>
 `;
-    systemPrompt += knowledgeSection;
   }
 
   if (options.builtInConnectorStatuses && options.builtInConnectorStatuses.length > 0) {

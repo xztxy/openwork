@@ -255,14 +255,20 @@ export function importLegacyWorkspaceMeta(
   // terminal status on re-read and bail without clobbering it. If ANY step
   // throws, the outer catch writes `'failed'` through the same atomic
   // helper (which itself re-reads before writing).
+  // The transaction returns an explicit outcome so the caller can log
+  // accurately. Prior version always logged "Imported legacy workspace meta"
+  // even when the tx returned early because another process won the race
+  // or the conflict guard fired — confusing during upgrade debugging.
+  type ImportOutcome = 'copied' | 'skipped_race' | 'conflict';
+
   try {
-    const runImport = mainDb.transaction(() => {
+    const runImport = mainDb.transaction((): ImportOutcome => {
       // Re-read status INSIDE the IMMEDIATE tx. Another process may have
       // committed a terminal state between our fast-path check and now.
       const statusNow = readStatus(mainDb);
       if (statusNow) {
         // The other process won the race. Their terminal outcome stands.
-        return;
+        return 'skipped_race';
       }
 
       // Conflict guard — any of the three destination tables already has
@@ -286,7 +292,7 @@ export function importLegacyWorkspaceMeta(
             `required. Legacy file left at: ${legacyMetaDbPath}`,
         );
         writeStatus(mainDb, 'conflict');
-        return;
+        return 'conflict';
       }
 
       for (const t of tables) {
@@ -362,9 +368,22 @@ export function importLegacyWorkspaceMeta(
       // to delete unless the stored path matches what it's handed.
       writeStatus(mainDb, 'copied');
       writeImportPath(mainDb, legacyMetaDbPath);
+      return 'copied';
     });
-    runImport.immediate();
-    log.info(`Imported legacy workspace meta from ${legacyMetaDbPath}`);
+    const outcome = runImport.immediate() as ImportOutcome;
+    switch (outcome) {
+      case 'copied':
+        log.info(`Imported legacy workspace meta from ${legacyMetaDbPath}`);
+        break;
+      case 'skipped_race':
+        log.info(`Legacy workspace meta already imported by another process; this call skipped`);
+        break;
+      case 'conflict':
+        // The error log inside the tx already recorded the "refusing" message.
+        // No additional info-level log here; a support-desk grep for 'conflict'
+        // pulls the error line.
+        break;
+    }
   } catch (err) {
     log.warn(`Import rolled back: ${(err as Error).message}`);
     // runImport's transaction already rolled back. Write 'failed'
@@ -375,3 +394,14 @@ export function importLegacyWorkspaceMeta(
     legacyDb.close();
   }
 }
+
+/**
+ * @internal — exported for unit-testing the atomic terminal-status guard.
+ *
+ * Do NOT use in production code. The guard is called by `importLegacyWorkspaceMeta`
+ * on its outer-catch path; direct callers would bypass the normal flow and
+ * risk writing status values that don't correspond to a real attempt.
+ */
+export const __testing = {
+  atomicWriteTerminalStatus,
+};

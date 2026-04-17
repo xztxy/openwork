@@ -102,10 +102,29 @@ export function deleteKnowledgeNote(id: string, workspaceId: string): boolean {
   return result.changes > 0;
 }
 
-export function getKnowledgeNotesForPrompt(workspaceId: string): string {
+/**
+ * Formatted knowledge notes split by binding strength.
+ *
+ * - `instructions`: `instruction`-type notes rendered as a bullet list. The
+ *   wrapper in `generateConfig` frames them as MANDATORY persistent user
+ *   instructions that must be followed for every response (including short
+ *   conversational-bypass replies), unless they conflict with higher-
+ *   priority safety/system rules.
+ * - `context`: `context` + `reference` notes rendered as soft workspace
+ *   background information. The wrapper frames them as persistent context,
+ *   not binding rules.
+ *
+ * Both strings are empty when no notes of that class exist.
+ */
+export interface FormattedKnowledgeNotes {
+  instructions: string;
+  context: string;
+}
+
+export function getFormattedKnowledgeNotes(workspaceId: string): FormattedKnowledgeNotes {
   const notes = listKnowledgeNotes(workspaceId);
   if (notes.length === 0) {
-    return '';
+    return { instructions: '', context: '' };
   }
 
   const grouped: Record<KnowledgeNoteType, string[]> = {
@@ -121,14 +140,39 @@ export function getKnowledgeNotesForPrompt(workspaceId: string): string {
     grouped[note.type].push(note.content);
   }
 
-  const sections: string[] = [];
-  for (const type of ['context', 'instruction', 'reference'] as KnowledgeNoteType[]) {
+  const instructions =
+    grouped.instruction.length > 0 ? grouped.instruction.map((c) => `- ${c}`).join('\n') : '';
+
+  const contextSections: string[] = [];
+  for (const type of ['context', 'reference'] as const) {
     if (grouped[type].length > 0) {
       const label = NOTE_TYPE_LABELS[type];
       const items = grouped[type].map((c) => `- ${c}`).join('\n');
-      sections.push(`### ${label}\n${items}`);
+      contextSections.push(`### ${label}\n${items}`);
     }
   }
 
+  return {
+    instructions,
+    context: contextSections.join('\n\n'),
+  };
+}
+
+/**
+ * Legacy single-string formatter kept for backward compatibility with any
+ * caller that still injects all types into one soft `<workspace-knowledge>`
+ * block. New callers should prefer `getFormattedKnowledgeNotes` so
+ * instruction-type notes can be rendered under a binding wrapper per the
+ * PR #847 review (Codex P2).
+ */
+export function getKnowledgeNotesForPrompt(workspaceId: string): string {
+  const { instructions, context } = getFormattedKnowledgeNotes(workspaceId);
+  const sections: string[] = [];
+  if (instructions) {
+    sections.push(`### ${NOTE_TYPE_LABELS.instruction}\n${instructions}`);
+  }
+  if (context) {
+    sections.push(context);
+  }
   return sections.join('\n\n');
 }
