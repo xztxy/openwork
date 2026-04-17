@@ -18,11 +18,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import path from 'node:path';
 
-// electron is already mocked in __tests__/setup.ts — configure it for
-// this test file.
+// electron mock — `isPackaged` is mutable so individual tests can toggle
+// between dev and packaged filenames. Read via a module-level ref so the
+// mock's factory doesn't snapshot at import time.
+const electronState = { isPackaged: false };
 vi.mock('electron', () => ({
   app: {
-    isPackaged: false,
+    get isPackaged() {
+      return electronState.isPackaged;
+    },
     getPath: vi.fn((_key: string) => '/mock/userData'),
   },
 }));
@@ -82,6 +86,7 @@ describe('desktop storage bootstrap — init contract', () => {
     storageCloseSpy.mockClear();
     storageIsInitializedSpy.mockClear();
     deleteLegacySpy.mockClear();
+    electronState.isPackaged = false; // default each test to dev mode
   });
 
   async function importFreshStorage() {
@@ -97,6 +102,13 @@ describe('desktop storage bootstrap — init contract', () => {
     expect(p).toBe(path.join('/mock/userData', 'workspace-meta-dev.db'));
   });
 
+  it('getLegacyMetaDbPath returns the packaged filename when isPackaged=true', async () => {
+    electronState.isPackaged = true;
+    const storage = await importFreshStorage();
+    const p = storage.getLegacyMetaDbPath();
+    expect(p).toBe(path.join('/mock/userData', 'workspace-meta.db'));
+  });
+
   it('getStorage passes databasePath AND legacyMetaDbPath to createStorage (dev mode)', async () => {
     const storage = await importFreshStorage();
     storage.getStorage();
@@ -107,6 +119,16 @@ describe('desktop storage bootstrap — init contract', () => {
     expect(opts.legacyMetaDbPath).toBe(path.join('/mock/userData', 'workspace-meta-dev.db'));
   });
 
+  it('getStorage uses the packaged filenames when isPackaged=true', async () => {
+    electronState.isPackaged = true;
+    const storage = await importFreshStorage();
+    storage.getStorage();
+
+    const opts = createStorageSpy.mock.calls[0][0] as Record<string, unknown>;
+    expect(opts.databasePath).toBe(path.join('/mock/userData', 'accomplish.db'));
+    expect(opts.legacyMetaDbPath).toBe(path.join('/mock/userData', 'workspace-meta.db'));
+  });
+
   it('initializeStorage calls deleteLegacyWorkspaceMetaFiles with the same legacy path', async () => {
     const storage = await importFreshStorage();
     storage.initializeStorage();
@@ -114,6 +136,19 @@ describe('desktop storage bootstrap — init contract', () => {
     expect(deleteLegacySpy).toHaveBeenCalledTimes(1);
     const opts = createStorageSpy.mock.calls[0][0] as Record<string, unknown>;
     expect(deleteLegacySpy.mock.calls[0][0]).toBe(opts.legacyMetaDbPath);
+  });
+
+  it('initializeStorage in packaged mode passes the packaged path to deleteLegacyWorkspaceMetaFiles', async () => {
+    electronState.isPackaged = true;
+    const storage = await importFreshStorage();
+    storage.initializeStorage();
+
+    const packagedLegacy = path.join('/mock/userData', 'workspace-meta.db');
+    expect(deleteLegacySpy).toHaveBeenCalledWith(packagedLegacy);
+    // Same-source invariant: both createStorage and the delete call see
+    // byte-identical packaged paths.
+    const opts = createStorageSpy.mock.calls[0][0] as Record<string, unknown>;
+    expect(opts.legacyMetaDbPath).toBe(packagedLegacy);
   });
 
   it('initializeStorage invokes storage.initialize() before deleteLegacyWorkspaceMetaFiles', async () => {

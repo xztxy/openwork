@@ -27,7 +27,14 @@ describe('migration v030: workspace-meta consolidation', () => {
       Database = BetterSqlite3;
       migrationModule =
         await import('../../../../src/storage/migrations/v030-workspace-meta-consolidation.js');
-    } catch {
+    } catch (err) {
+      if (process.env.REQUIRE_SQLITE_TESTS) {
+        throw new Error(
+          `REQUIRE_SQLITE_TESTS set but better-sqlite3 failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
       console.warn('Skipping v030 migration tests: better-sqlite3 native module not available');
     }
 

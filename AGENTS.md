@@ -127,7 +127,7 @@ Static assets go in `apps/web/public/assets/`.
 
 1. Create `packages/agent-core/src/storage/migrations/vXXX-description.ts` (use `.js` extension in imports)
 2. Import and add to the `migrations` array in `packages/agent-core/src/storage/migrations/index.ts`
-3. Bump `CURRENT_VERSION` (currently 6)
+3. Bump `CURRENT_VERSION` (see the `CURRENT_VERSION` export in `packages/agent-core/src/storage/migrations/index.ts` for the current value)
 4. Run `pnpm -F @accomplish_ai/agent-core test`
 
 ### Changing Agent-Core Public API

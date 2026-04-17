@@ -131,17 +131,57 @@ function openLegacy(path: string): Database.Database {
   }
 }
 
+/**
+ * Atomically write a terminal status IF status is still missing.
+ *
+ * Takes an IMMEDIATE write lock on the main DB, re-reads status, and only
+ * writes the new value if no terminal state has been recorded yet. Prevents
+ * racing processes (desktop + daemon on first v30 upgrade) from clobbering
+ * each other's terminal outcomes.
+ *
+ * Rationale: on first upgrade, desktop and daemon both open the same
+ * `accomplish.db` moments apart. Both may observe `status=missing` before
+ * either acquires a write lock. Without this guard, whichever one fails
+ * second (e.g. because `INSERT OR IGNORE` now finds rows already present
+ * and the count-mismatch throws) would unconditionally write `'failed'`
+ * over the first process's `'copied'` — silently corrupting the terminal
+ * outcome.
+ *
+ * When `legacyPath` is provided alongside `'copied'`, both `schema_meta`
+ * keys (`legacy_meta_import_status` + `legacy_meta_import_path`) are
+ * written inside the same transaction.
+ */
+function atomicWriteTerminalStatus(
+  mainDb: Database.Database,
+  status: ImportStatus,
+  legacyPath?: string,
+): boolean {
+  const tx = mainDb.transaction(() => {
+    const current = readStatus(mainDb);
+    if (current) {
+      // Another process raced us to a terminal state. Leave their decision.
+      return false;
+    }
+    writeStatus(mainDb, status);
+    if (status === 'copied' && legacyPath) {
+      writeImportPath(mainDb, legacyPath);
+    }
+    return true;
+  });
+  return tx.immediate() as boolean;
+}
+
 export function importLegacyWorkspaceMeta(
   mainDb: Database.Database,
   legacyMetaDbPath: string | undefined,
   preMigrationVersion: number,
 ): void {
+  // Fast-path outside-tx check — for performance only. Correctness is
+  // guaranteed by the re-read inside every `atomicWriteTerminalStatus`
+  // call below.
   const status = readStatus(mainDb);
-
-  // ALL non-missing states are terminal. Retry is manual recovery only.
   if (status) return;
 
-  // Status is missing: first (and only) opportunity.
   if (!legacyMetaDbPath) return; // wait for an init that provides the path
 
   const walPath = legacyMetaDbPath + '-wal';
@@ -167,40 +207,8 @@ export function importLegacyWorkspaceMeta(
     // the next boot retries (important: EACCES/EBUSY must not become a
     // permanent "stale file + terminal status" state).
     if (cleaned && preMigrationVersion < 30) {
-      writeStatus(mainDb, 'none');
+      atomicWriteTerminalStatus(mainDb, 'none');
     }
-    return;
-  }
-
-  // Conflict guard — any of the three destination tables already has rows.
-  // Counting all three catches stale workspace_meta / knowledge_notes from
-  // a botched recovery, not just the normal auto-created-Default case.
-  const existingRows = (
-    mainDb
-      .prepare(
-        `SELECT
-           (SELECT COUNT(*) FROM workspaces) +
-           (SELECT COUNT(*) FROM workspace_meta) +
-           (SELECT COUNT(*) FROM knowledge_notes) AS n`,
-      )
-      .get() as { n: number }
-  ).n;
-  if (existingRows > 0) {
-    log.error(
-      `Refusing to import: destination tables already hold ${existingRows} row(s) ` +
-        `across workspaces/workspace_meta/knowledge_notes. Manual reconciliation ` +
-        `required. Legacy file left at: ${legacyMetaDbPath}`,
-    );
-    writeStatus(mainDb, 'conflict');
-    return;
-  }
-
-  let legacyDb: Database.Database;
-  try {
-    legacyDb = openLegacy(legacyMetaDbPath);
-  } catch (err) {
-    log.warn(`Could not open legacy DB at ${legacyMetaDbPath}: ${(err as Error).message}`);
-    writeStatus(mainDb, 'failed');
     return;
   }
 
@@ -231,8 +239,56 @@ export function importLegacyWorkspaceMeta(
     },
   ];
 
+  let legacyDb: Database.Database;
+  try {
+    legacyDb = openLegacy(legacyMetaDbPath);
+  } catch (err) {
+    log.warn(`Could not open legacy DB at ${legacyMetaDbPath}: ${(err as Error).message}`);
+    atomicWriteTerminalStatus(mainDb, 'failed');
+    return;
+  }
+
+  // One IMMEDIATE transaction around the entire decision: status re-check,
+  // conflict guard, copy, verification, status + path write. IMMEDIATE
+  // acquires the reserved lock up front so two processes racing to import
+  // serialize correctly — the loser of the race will see the winner's
+  // terminal status on re-read and bail without clobbering it. If ANY step
+  // throws, the outer catch writes `'failed'` through the same atomic
+  // helper (which itself re-reads before writing).
   try {
     const runImport = mainDb.transaction(() => {
+      // Re-read status INSIDE the IMMEDIATE tx. Another process may have
+      // committed a terminal state between our fast-path check and now.
+      const statusNow = readStatus(mainDb);
+      if (statusNow) {
+        // The other process won the race. Their terminal outcome stands.
+        return;
+      }
+
+      // Conflict guard — any of the three destination tables already has
+      // rows. Counting all three catches stale workspace_meta /
+      // knowledge_notes from a botched recovery, not just the normal
+      // auto-created-Default case.
+      const existingRows = (
+        mainDb
+          .prepare(
+            `SELECT
+               (SELECT COUNT(*) FROM workspaces) +
+               (SELECT COUNT(*) FROM workspace_meta) +
+               (SELECT COUNT(*) FROM knowledge_notes) AS n`,
+          )
+          .get() as { n: number }
+      ).n;
+      if (existingRows > 0) {
+        log.error(
+          `Refusing to import: destination tables already hold ${existingRows} row(s) ` +
+            `across workspaces/workspace_meta/knowledge_notes. Manual reconciliation ` +
+            `required. Legacy file left at: ${legacyMetaDbPath}`,
+        );
+        writeStatus(mainDb, 'conflict');
+        return;
+      }
+
       for (const t of tables) {
         const present = legacyDb
           .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?")
@@ -301,20 +357,20 @@ export function importLegacyWorkspaceMeta(
         }
       }
 
-      // Atomic status + path write inside the same transaction as the
-      // copies. Both keys land together or not at all; §5 refuses to
-      // delete unless the stored path matches what it's handed.
+      // Atomic status + path write inside the same IMMEDIATE transaction
+      // as the copies. Both keys land together or not at all; §5 refuses
+      // to delete unless the stored path matches what it's handed.
       writeStatus(mainDb, 'copied');
       writeImportPath(mainDb, legacyMetaDbPath);
     });
-    runImport();
+    runImport.immediate();
     log.info(`Imported legacy workspace meta from ${legacyMetaDbPath}`);
   } catch (err) {
     log.warn(`Import rolled back: ${(err as Error).message}`);
-    // runImport's transaction already rolled back; mark status on the
-    // outer DB (not inside the rolled-back tx) so the terminal 'failed'
-    // state persists and we don't retry on every boot.
-    writeStatus(mainDb, 'failed');
+    // runImport's transaction already rolled back. Write 'failed'
+    // atomically so we don't clobber another process's terminal 'copied'
+    // if they raced and won.
+    atomicWriteTerminalStatus(mainDb, 'failed');
   } finally {
     legacyDb.close();
   }

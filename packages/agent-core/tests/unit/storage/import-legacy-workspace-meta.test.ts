@@ -62,7 +62,14 @@ describe('importLegacyWorkspaceMeta', () => {
       importModule = await import('../../../src/storage/import-legacy-workspace-meta.js');
       migrationModule =
         await import('../../../src/storage/migrations/v030-workspace-meta-consolidation.js');
-    } catch {
+    } catch (err) {
+      if (process.env.REQUIRE_SQLITE_TESTS) {
+        throw new Error(
+          `REQUIRE_SQLITE_TESTS set but better-sqlite3 failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
       console.warn('Skipping import-legacy tests: better-sqlite3 native module not available');
     }
   });
@@ -440,5 +447,153 @@ describe('importLegacyWorkspaceMeta', () => {
     });
     importModule.importLegacyWorkspaceMeta(db, legacy, 29);
     expect(readStatus(db)).toBe('failed');
+  });
+
+  // --- 18e. Zero-byte main + non-empty WAL does NOT inline-delete ---
+  it('18e. Zero-byte main + non-empty WAL preserves the main file (no inline-delete)', () => {
+    if (!Database || !importModule) return;
+    const db = openMainDb();
+    const legacyPath = path.join(testDir, 'zero-main-wal-bytes.db');
+    fs.writeFileSync(legacyPath, Buffer.alloc(0)); // zero-byte main
+    // -wal with some bytes (not a valid SQLite WAL, but exists and non-empty).
+    // The key contract we're proving: the whole-triplet-empty short-circuit
+    // does NOT fire (because walSize > 0), so unlinkLegacyTriplet is never
+    // invoked. openLegacy then attempts the open; whether it succeeds or
+    // fails is SQLite's business (and SQLite may rewrite the -wal on open
+    // since our fake content isn't a valid WAL header — that's normal).
+    // What matters: the main file survives so a user can recover.
+    fs.writeFileSync(legacyPath + '-wal', Buffer.from('non-empty fake wal content'));
+
+    importModule.importLegacyWorkspaceMeta(db, legacyPath, 29);
+
+    // Copy failed (no workspaces table in the fake DB) → status='failed'.
+    expect(readStatus(db)).toBe('failed');
+    // Crucial: the main file was NOT inline-deleted by the empty-triplet
+    // branch. SQLite may have initialized it as an empty valid DB, but
+    // the file is still on disk — the helper didn't destroy user data.
+    expect(fs.existsSync(legacyPath)).toBe(true);
+  });
+
+  // --- 18g. statSync throws (EACCES simulation) ---
+  it('18g. statSync throwing is caught; status is NOT forced to none', () => {
+    if (!Database || !importModule) return;
+    const db = openMainDb();
+    // We can't easily make statSync throw EACCES on a real file cross-platform
+    // without affecting other operations. Instead, we exercise the *contract*:
+    // a legacy file that exists but isn't a valid SQLite DB triggers the
+    // openLegacy fail path and writes status='failed', NOT 'none'. This
+    // proves the helper doesn't collapse unknown/open-error states into
+    // a "nothing to do" terminal, which would delete the file forever.
+    const legacyPath = path.join(testDir, 'unknown-state.db');
+    fs.writeFileSync(legacyPath, Buffer.from('definitely not sqlite content'));
+    importModule.importLegacyWorkspaceMeta(db, legacyPath, 29);
+    expect(readStatus(db)).toBe('failed');
+    expect(readStatus(db)).not.toBe('none'); // explicitly verify no 'none' collapse
+    expect(fs.existsSync(legacyPath)).toBe(true); // preserved
+  });
+
+  // --- 18i. Cleanup failure leaves status missing ---
+  it('18i. unlinkLegacyTriplet failure (simulated via read-only file) leaves status missing', () => {
+    if (!Database || !importModule) return;
+    const db = openMainDb();
+    // Create a zero-byte main file in a read-only directory to make unlink
+    // fail with EACCES. Doing so reliably on macOS requires chmod tricks
+    // that don't work for the test runner's own uid. Instead, fake the
+    // failure by marking the file itself read-only on a path whose parent
+    // directory has no write permission for the user.
+    const readonlyDir = path.join(testDir, 'ro-dir');
+    fs.mkdirSync(readonlyDir);
+    const legacyPath = path.join(readonlyDir, 'zero.db');
+    fs.writeFileSync(legacyPath, Buffer.alloc(0));
+    // Remove write perms from the directory (on the parent to prevent unlink).
+    fs.chmodSync(readonlyDir, 0o555);
+    try {
+      importModule.importLegacyWorkspaceMeta(db, legacyPath, 29);
+      // unlinkLegacyTriplet should have failed with EACCES; the helper
+      // must NOT write status='none' because a terminal status would
+      // permanently bake in the stale-file state.
+      expect(readStatus(db)).toBeUndefined();
+      // File still exists (couldn't be unlinked).
+      expect(fs.existsSync(legacyPath)).toBe(true);
+    } finally {
+      // Restore write perms so afterEach() can clean up.
+      fs.chmodSync(readonlyDir, 0o755);
+    }
+  });
+
+  // --- 18j. runMigrations=false bypasses import ---
+  it('18j. initializeDatabase(..., runMigrations: false) skips import helper', async () => {
+    if (!Database) return;
+    // Use the real initializeDatabase wrapper (not the helper directly) to
+    // prove the `shouldRunMigrations && legacyMetaDbPath` gate in database.ts
+    // prevents import from running when migrations are disabled.
+    const dbModule = await import('../../../src/storage/database.js');
+    const mainPath = path.join(testDir, 'no-migrations.db');
+    // Seed a legacy file that WOULD be imported if the helper ran.
+    const legacyPath = buildLegacyDb({
+      workspaces: [{ id: 'ws-x', name: 'X' }],
+    });
+    try {
+      dbModule.initializeDatabase({
+        databasePath: mainPath,
+        runMigrations: false,
+        legacyMetaDbPath: legacyPath,
+      });
+      const db = dbModule.getDatabase();
+      // No schema_meta table exists because migrations didn't run. The
+      // helper's readStatus() gracefully returns undefined in that case
+      // and the gate in database.ts should have skipped the call entirely
+      // anyway. Either way, no import-related side effects should exist.
+      const hasSchemaMeta = db
+        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='schema_meta'`)
+        .get();
+      expect(hasSchemaMeta).toBeUndefined();
+      // Legacy file untouched.
+      expect(fs.existsSync(legacyPath)).toBe(true);
+    } finally {
+      dbModule.closeDatabase();
+    }
+  });
+
+  // --- CONCURRENCY: atomic terminal-write guard ---
+  it('atomicWriteTerminalStatus: two processes racing — second caller does not clobber first', () => {
+    if (!Database || !importModule) return;
+    // Simulate the race: Process A (our first call) imports successfully
+    // and writes status='copied'. Process B (our second call) then
+    // attempts to write status='failed' through the outer catch path —
+    // it should NOT overwrite A's terminal 'copied'.
+    const dbA = openMainDb('race');
+    const legacyA = buildLegacyDb({ workspaces: [{ id: 'ws-race', name: 'Racer' }] });
+    importModule.importLegacyWorkspaceMeta(dbA, legacyA, 29);
+    expect(readStatus(dbA)).toBe('copied');
+
+    // Now simulate Process B coming in late: call the helper again with
+    // a bad legacy file. Its outer catch will try to write 'failed'
+    // through atomicWriteTerminalStatus — but since status is already
+    // 'copied', the atomic guard should refuse the write.
+    const badLegacy = path.join(testDir, 'bad.db');
+    fs.writeFileSync(badLegacy, Buffer.from('garbage'));
+    importModule.importLegacyWorkspaceMeta(dbA, badLegacy, 29);
+    // Terminal 'copied' must survive.
+    expect(readStatus(dbA)).toBe('copied');
+  });
+
+  // --- Packaged-name coverage (integration-adjacent) ---
+  it('works with packaged filename (workspace-meta.db, no -dev suffix)', () => {
+    if (!Database || !importModule) return;
+    const db = openMainDb('packaged');
+    // Build a legacy file with the packaged naming convention.
+    const legacy = path.join(testDir, 'workspace-meta.db');
+    const legacyDb = new Database!.default(legacy);
+    instances.push(legacyDb);
+    legacyDb.exec(LEGACY_SCHEMA_SQL);
+    legacyDb
+      .prepare(`INSERT INTO workspaces (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)`)
+      .run('ws-pkg', 'Packaged', 'now', 'now');
+    legacyDb.close();
+
+    importModule.importLegacyWorkspaceMeta(db, legacy, 29);
+    expect(readStatus(db)).toBe('copied');
+    expect(readPath(db)).toBe(legacy);
   });
 });

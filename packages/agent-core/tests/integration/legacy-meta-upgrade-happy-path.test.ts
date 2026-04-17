@@ -64,7 +64,14 @@ describe('integration: legacy-meta upgrade happy path', () => {
       Database = m;
       dbModule = await import('../../src/storage/database.js');
       deleteModule = await import('../../src/storage/delete-legacy-workspace-meta.js');
-    } catch {
+    } catch (err) {
+      if (process.env.REQUIRE_SQLITE_TESTS) {
+        throw new Error(
+          `REQUIRE_SQLITE_TESTS set but better-sqlite3 failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
       console.warn('Skipping integration test: better-sqlite3 native module not available');
     }
   });

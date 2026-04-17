@@ -146,9 +146,12 @@ Evidence:
 - Daemon `task-config-builder.ts` routes through `resolveTaskConfig` with
   `accomplishRuntime`, `accomplishStorageDeps`, `configFileName`, and the
   workspace-scoped `OnBeforeStartContext`.
-- `apps/daemon/src/storage-service.ts` calls `initializeMetaDatabase` alongside
-  the main DB so knowledge-note lookups via `getKnowledgeNotesForPrompt` do
-  not silently fail.
+- `apps/daemon/src/storage-service.ts` passes `legacyMetaDbPath` into
+  `createStorage({ databasePath, legacyMetaDbPath, ... })` and, after
+  `this.storage.initialize()` runs the in-DB import helper, calls
+  `deleteLegacyWorkspaceMetaFiles(legacyMetaDbPath)` to retire the old
+  file. No separate meta-DB handle is opened anywhere; the three
+  workspace tables live in `accomplish.db` now.
 
 ### Completion Continuation
 

@@ -33,7 +33,14 @@ describe('workspaces + knowledgeNotes repositories (consolidated DB)', () => {
       dbModule = await import('../../../src/storage/database.js');
       wsModule = await import('../../../src/storage/repositories/workspaces.js');
       knModule = await import('../../../src/storage/repositories/knowledgeNotes.js');
-    } catch {
+    } catch (err) {
+      if (process.env.REQUIRE_SQLITE_TESTS) {
+        throw new Error(
+          `REQUIRE_SQLITE_TESTS set but better-sqlite3 failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
       console.warn('Skipping consolidated-repo tests: better-sqlite3 native module not available');
     }
   });
