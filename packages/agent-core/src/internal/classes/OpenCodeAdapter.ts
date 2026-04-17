@@ -76,6 +76,7 @@ import { serializeError } from '../../utils/error.js';
 import { getOAuthProviderDisplayName, isOAuthProviderId } from '../../common/types/connector.js';
 import { CONNECTOR_AUTH_REQUIRED_MARKER } from '../../common/constants.js';
 import { createConsoleLogger } from '../../utils/logging.js';
+import { ACCOMPLISH_AGENT_NAME } from '../../opencode/config-generator.js';
 // `toTaskMessage` and `ModelContext` will be wired when we move to emitting
 // pre-processed `TaskMessage` shapes on the event bus (Phase 1c / Phase 2 —
 // renderer upsert-by-ID lands there). Today we still emit `OpenCodeMessage`
@@ -474,9 +475,23 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     this.awaitingIdle = true;
 
     // Fire the prompt. We do NOT await — the response streams via events.
+    //
+    // CRITICAL: pass `agent: ACCOMPLISH_AGENT_NAME` explicitly.
+    // The OpenCode SDK's `SessionCreateData` type has NO `agent` field on
+    // create, but `SessionPromptData` DOES (`agent?: string`). Without
+    // this, OpenCode runs the session under its built-in default agent
+    // and silently ignores the entire `accomplish` agent prompt — which
+    // contains all workspace instructions, knowledge notes, skills, and
+    // connector rules. Symptom: workspace instruction notes are in the
+    // generated config but the model never sees them, so instructions
+    // like "always add Haiku suffix" are silently dropped.
+    // `config.agent` field in `opencode.json` and `default_agent` are
+    // consulted by the CLI path; the SDK path requires this explicit
+    // per-prompt selection. See `tests/unit/opencode/opencode-adapter-agent.test.ts`.
     this.client.session
       .prompt({
         sessionID: sessionId,
+        agent: ACCOMPLISH_AGENT_NAME,
         parts: [{ type: 'text', text: config.prompt }],
         ...(model ? { model } : {}),
       })
@@ -667,9 +682,15 @@ export class OpenCodeAdapter extends EventEmitter<OpenCodeAdapterEvents> {
     const callbacks: CompletionEnforcerCallbacks = {
       onStartContinuation: async (prompt: string) => {
         if (this.currentSessionId && this.client) {
+          // Same `agent: ACCOMPLISH_AGENT_NAME` reason as the initial
+          // prompt above — continuations are independent SDK calls and
+          // must also select the Accomplish agent, or the continuation
+          // nudge runs under OpenCode's default agent with none of the
+          // workspace instructions / skills / connector rules loaded.
           this.client.session
             .prompt({
               sessionID: this.currentSessionId,
+              agent: ACCOMPLISH_AGENT_NAME,
               parts: [{ type: 'text', text: prompt }],
             })
             .catch((err: unknown) => {
