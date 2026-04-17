@@ -674,6 +674,8 @@
     "empty": "No knowledge notes yet. Add notes to give your AI persistent context.",
     "maxNotes": "Maximum {{max}} notes per workspace",
     "cancel": "Cancel",
-    "save": "Save"
+    "save": "Save",
+    "edit": "Edit",
+    "delete": "Delete"
   }
 }
