@@ -9,7 +9,7 @@ This document captures all stateful data, information models, state machines, an
 
 ## 1. Database Entity-Relationship Diagram
 
-SQLite database (WAL mode, foreign keys enabled). Current schema version: 9.
+SQLite database (WAL mode, foreign keys enabled). The current schema version is tracked by the `CURRENT_VERSION` export in `packages/agent-core/src/storage/migrations/index.ts` — refer to that source rather than hard-coding a number here, since this doc has historically drifted.
 
 ```mermaid
 erDiagram

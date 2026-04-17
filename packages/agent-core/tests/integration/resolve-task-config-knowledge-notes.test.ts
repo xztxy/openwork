@@ -4,16 +4,26 @@ import * as path from 'path';
 import * as os from 'os';
 
 /**
- * Real-DB end-to-end test that workspace knowledge notes reach `resolveTaskConfig`'s
- * output without any mocks on the `knowledgeNotes` module path. Lives in
- * agent-core (not daemon) because the daemon vitest environment avoids native
- * better-sqlite3 bindings by design.
+ * Real-DB repository-level test for knowledge notes after the v030
+ * workspace-meta consolidation. Exercises the `knowledgeNotes` repository
+ * against a freshly-migrated main DB to prove the repoint from
+ * `getMetaDatabase` → `getDatabase` is functionally correct and that a
+ * fresh v30 install works without any `workspace-meta.db` file on disk.
  *
- * This is the regression test that would have caught the original
- * "forgot to init meta DB" bug in a world where `workspace-meta.db` doesn't
- * exist — consolidation put the knowledge_notes table in accomplish.db, and
- * the repository reads via `getDatabase()`. If the repoint regresses or the
- * schema mutates, this test fails.
+ * SCOPE: this test covers the repository layer only — it does NOT call
+ * `resolveTaskConfig` or `generateConfig`. End-to-end coverage of the
+ * prompt/runtime injection pipeline (knowledge notes → config generation
+ * → `session.prompt({ system })`) lives in
+ *   - `apps/daemon/__tests__/unit/task-config-builder.unit.test.ts`
+ *     (config-file shape + workspaceInstructions return)
+ *   - `tests/unit/internal/classes/opencode-adapter-agent-selection.unit.test.ts`
+ *     (adapter-level `system` injection).
+ *
+ * Together those three suites prove the original PR #947 symptom
+ * ("daemon-run tasks silently drop knowledge notes") cannot recur.
+ *
+ * Lives in agent-core (not daemon) because the daemon vitest environment
+ * avoids native better-sqlite3 bindings by design.
  */
 
 type BetterSqlite3Module = typeof import('better-sqlite3');

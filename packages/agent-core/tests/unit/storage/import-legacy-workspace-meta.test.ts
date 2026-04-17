@@ -474,46 +474,192 @@ describe('importLegacyWorkspaceMeta', () => {
     expect(fs.existsSync(legacyPath)).toBe(true);
   });
 
-  // --- 18g. statSync throws — force `safeFileState` to return 'unknown' ---
-  it('18g. statSync EACCES → unknown state → helper never writes status=none', async () => {
+  // --- 18f. -shm alone does not count as recoverable content ---
+  it('18f. Zero-byte main + missing/zero -wal + non-empty -shm → still whole-triplet empty', () => {
     if (!Database || !importModule) return;
-    const db = openMainDb();
-    const legacyPath = path.join(testDir, 'permission-denied.db');
-    // Seed a valid legacy file so fallthrough-import-path can actually
-    // succeed if statSync behaves. We're testing the 'unknown' state,
-    // not openLegacy failures.
-    const seededLegacy = buildLegacyDb({ workspaces: [{ id: 'ws-ok', name: 'OK' }] });
-    fs.copyFileSync(seededLegacy, legacyPath);
+    const db = openMainDb('18f');
+    const legacyPath = path.join(testDir, 'shm-only.db');
+    fs.writeFileSync(legacyPath, Buffer.alloc(0)); // zero-byte main
+    // No -wal file at all.
+    // -shm is non-empty. In WAL mode, -shm is a shared-memory mirror that
+    // SQLite regenerates from the main + -wal on every open — its bytes
+    // are never the source of truth. The helper deliberately ignores
+    // -shm size when deciding "is the triplet empty", and this test
+    // pins that invariant: even a hefty -shm blob should NOT prevent
+    // the inline cleanup path.
+    fs.writeFileSync(legacyPath + '-shm', Buffer.alloc(32768, 0xab));
 
-    // Mock fs.statSync to throw EACCES specifically for the legacy main path.
-    // safeFileState catches the error and must return { kind: 'unknown' },
-    // NOT { kind: 'missing' } — otherwise the helper would treat the file as
-    // absent and potentially write status='none' on the upgrade boot.
+    importModule.importLegacyWorkspaceMeta(db, legacyPath, 29);
+
+    // Whole-triplet-empty short-circuit fired → status='none' on upgrade boot.
+    expect(readStatus(db)).toBe('none');
+    // Cleanup removed all siblings (including the orphan -shm).
+    expect(fs.existsSync(legacyPath)).toBe(false);
+    expect(fs.existsSync(legacyPath + '-shm')).toBe(false);
+    // No path key is written — path is only recorded on status='copied'.
+    expect(readPath(db)).toBeUndefined();
+  });
+
+  // --- 18h. whole-triplet empty on post-consolidation boot (preMigrationVersion=30) ---
+  it('18h. Whole-triplet empty + preMigrationVersion=30 → cleanup runs, NO status write', () => {
+    if (!Database || !importModule) return;
+    const db = openMainDb('18h');
+    const legacyPath = path.join(testDir, 'stray-post-v30.db');
+    // Zero-byte main + zero-byte wal + non-empty shm — same "whole-triplet
+    // empty" condition as 18f, but simulating a post-consolidation boot
+    // where the main DB already ran v30 previously. The cleanup step
+    // should still run (we don't want stray empty files lingering), but
+    // the helper must NOT record a terminal 'none' status — that's only
+    // written on the original upgrade boot (preMigrationVersion < 30).
+    fs.writeFileSync(legacyPath, Buffer.alloc(0));
+    fs.writeFileSync(legacyPath + '-wal', Buffer.alloc(0));
+    fs.writeFileSync(legacyPath + '-shm', Buffer.alloc(64, 0x01));
+
+    importModule.importLegacyWorkspaceMeta(db, legacyPath, 30);
+
+    // Status key was NOT written — leaving it missing so a later expert
+    // recovery (e.g. dropping a restored legacy DB into place) can
+    // re-trigger the import on a subsequent boot.
+    expect(readStatus(db)).toBeUndefined();
+    // But files WERE cleaned up — we still honor the one-DB-on-disk
+    // outcome regardless of whether we record a terminal state.
+    expect(fs.existsSync(legacyPath)).toBe(false);
+    expect(fs.existsSync(legacyPath + '-wal')).toBe(false);
+    expect(fs.existsSync(legacyPath + '-shm')).toBe(false);
+  });
+
+  // --- 17. Single-transaction rollback coverage ---
+  //
+  // Earlier tests (#8 "required table missing", #18 "FK violation") pin
+  // status='failed' on various error paths. This case specifically pins
+  // the single-outer-transaction atomicity promise: a failure AFTER the
+  // first required table inserted rows must roll back those rows so
+  // main DB ends up empty, not half-populated.
+  //
+  // Reproduction: seed legacy with a valid `workspaces` table (copies
+  // successfully) + a `knowledge_notes` row whose `workspace_id` points
+  // at a non-existent workspace. With foreign_keys=ON on the main DB,
+  // either the INSERT into knowledge_notes throws FK-at-insert time or
+  // the post-copy `PRAGMA foreign_key_check(knowledge_notes)` throws.
+  // Either way the OUTER IMMEDIATE transaction aborts and the earlier
+  // `workspaces` INSERT must be undone as well.
+  it('17. Rollback after first table succeeded but later step failed → workspaces empty, status=failed', () => {
+    if (!Database || !importModule) return;
+    const db = openMainDb('rollback');
+    const legacy = buildLegacyDb({
+      workspaces: [
+        { id: 'ws-a', name: 'Alpha' },
+        { id: 'ws-b', name: 'Beta' },
+      ],
+      workspace_meta: [{ key: 'active_workspace_id', value: 'ws-a' }],
+      // One note references a real workspace (ws-a), another references a ghost.
+      knowledge_notes: [
+        { id: 'kn-valid', workspace_id: 'ws-a', content: 'valid' },
+        { id: 'kn-orphan', workspace_id: 'ws-ghost', content: 'will explode main DB' },
+      ],
+    });
+
+    importModule.importLegacyWorkspaceMeta(db, legacy, 29);
+
+    // Outcome: tx rolled back → status='failed' (terminal).
+    expect(readStatus(db)).toBe('failed');
+
+    // Critical atomicity check: the `workspaces` INSERT succeeded earlier
+    // in the loop but must be undone by the rollback. Without the outer
+    // IMMEDIATE tx wrapping everything, the main DB would end up with
+    // ws-a + ws-b in it despite the import having "failed" — leaving a
+    // half-populated dataset that downstream queries would see.
+    const wsCount = (db.prepare('SELECT COUNT(*) AS n FROM workspaces').get() as { n: number }).n;
+    expect(wsCount).toBe(0);
+    const metaCount = (
+      db.prepare('SELECT COUNT(*) AS n FROM workspace_meta').get() as { n: number }
+    ).n;
+    expect(metaCount).toBe(0);
+    const notesCount = (
+      db.prepare('SELECT COUNT(*) AS n FROM knowledge_notes').get() as { n: number }
+    ).n;
+    expect(notesCount).toBe(0);
+
+    // Legacy file preserved for manual recovery.
+    expect(fs.existsSync(legacy)).toBe(true);
+  });
+
+  // --- 18g. statSync throws — force `safeFileState` to return 'unknown' ---
+  //
+  // The original plan called for two subcases to fully pin the contract:
+  //   - unknown stat + valid legacy file → status='copied' (open succeeds,
+  //     import runs, NOT 'none' and NOT 'failed')
+  //   - unknown stat + bad legacy file   → status='failed' (open throws,
+  //     outer catch writes 'failed', NOT 'none')
+  //
+  // The shared invariant: regardless of whether the open succeeds, the
+  // helper must NEVER collapse an 'unknown' stat into 'none'. Writing
+  // 'none' would bake a terminal "nothing to do" state over an
+  // inaccessible-but-potentially-recoverable legacy DB.
+
+  async function withStatSyncThrowingFor(
+    targetPath: string,
+    errCode: string,
+    fn: () => Promise<void> | void,
+  ): Promise<void> {
     const { default: fsModule } = await import('fs');
     const realStatSync = fsModule.statSync;
     const statSpy = vi.spyOn(fsModule, 'statSync').mockImplementation(((p: fs.PathLike) => {
-      if (p === legacyPath) {
-        const err = new Error('EACCES: permission denied') as NodeJS.ErrnoException;
-        err.code = 'EACCES';
+      if (p === targetPath) {
+        const err = new Error(`${errCode}: simulated for test`) as NodeJS.ErrnoException;
+        err.code = errCode;
         throw err;
       }
       return realStatSync(p as fs.PathLike);
     }) as typeof fsModule.statSync);
     try {
-      importModule.importLegacyWorkspaceMeta(db, legacyPath, 29);
-
-      // Contract: unknown → helper falls through to import path; it does
-      // NOT write 'none' just because it couldn't stat. Final status
-      // depends on whether openLegacy succeeded — with a valid seeded
-      // file it should be 'copied'. Either way, status must never be
-      // 'none' — that's the property we're pinning.
-      const status = readStatus(db);
-      expect(status).not.toBe('none');
-      // The legacy file is preserved regardless (not inline-deleted).
-      expect(fs.existsSync(legacyPath)).toBe(true);
+      await fn();
     } finally {
       statSpy.mockRestore();
     }
+  }
+
+  it('18g(a). statSync EACCES + valid legacy DB → status=copied (open still succeeds; never none)', async () => {
+    if (!Database || !importModule) return;
+    const db = openMainDb('unknown-valid');
+    const legacyPath = path.join(testDir, 'eacces-valid.db');
+    const seededLegacy = buildLegacyDb({ workspaces: [{ id: 'ws-ok', name: 'Valid' }] });
+    fs.copyFileSync(seededLegacy, legacyPath);
+
+    await withStatSyncThrowingFor(legacyPath, 'EACCES', () => {
+      importModule!.importLegacyWorkspaceMeta(db, legacyPath, 29);
+    });
+
+    // Contract (primary): unknown → fall through to import path; helper
+    // never writes 'none' based on a stat that didn't resolve.
+    expect(readStatus(db)).not.toBe('none');
+    // Contract (secondary): since the legacy file is actually valid and
+    // readable, openLegacy + import should succeed — we observed 'copied',
+    // proving the fallthrough actually runs the import rather than
+    // silently short-circuiting.
+    expect(readStatus(db)).toBe('copied');
+    expect(fs.existsSync(legacyPath)).toBe(true);
+  });
+
+  it('18g(b). statSync EACCES + invalid legacy file → status=failed (open throws; still never none)', async () => {
+    if (!Database || !importModule) return;
+    const db = openMainDb('unknown-invalid');
+    const legacyPath = path.join(testDir, 'eacces-garbage.db');
+    // Not a valid SQLite file; openLegacy will throw.
+    fs.writeFileSync(legacyPath, Buffer.from('definitely not sqlite content'));
+
+    await withStatSyncThrowingFor(legacyPath, 'EACCES', () => {
+      importModule!.importLegacyWorkspaceMeta(db, legacyPath, 29);
+    });
+
+    // Contract (primary — same as 18g(a)): unknown must not collapse to 'none'.
+    expect(readStatus(db)).not.toBe('none');
+    // Contract (secondary): open fails → outer catch writes 'failed'. This
+    // distinguishes from 18g(a)'s 'copied' outcome and rules out the
+    // regression where a valid-import path would silently land in 'failed'.
+    expect(readStatus(db)).toBe('failed');
+    // The legacy file is preserved for manual recovery.
+    expect(fs.existsSync(legacyPath)).toBe(true);
   });
 
   // --- 18i. Cleanup failure leaves status missing ---
