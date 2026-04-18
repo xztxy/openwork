@@ -17,11 +17,11 @@ server.registerTool(
   'request_connector_auth',
   {
     description:
-      'Pause the task and ask the user to authenticate a built-in connector from inside the chat transcript before continuing.',
+      'Pause the task and ask the user to authenticate a built-in Slack or Google connector from inside the chat transcript before continuing. This is only for external connector OAuth, never for filesystem, browser, shell, or local app permissions.',
     inputSchema: {
       providerId: z
         .enum([OAuthProviderId.Slack, OAuthProviderId.Google])
-        .describe('Which built-in connector must be authenticated.'),
+        .describe('Which built-in connector must be authenticated. Use only Slack or Google.'),
       message: z
         .string()
         .describe(

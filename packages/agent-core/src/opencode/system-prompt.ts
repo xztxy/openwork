@@ -46,8 +46,7 @@ ${FILE_PERMISSION_SECTION}
 
 <important name="user-communication">
 CRITICAL: The user CANNOT see your text output or CLI prompts!
-To ask ANY question or get user input, you MUST use the AskUserQuestion MCP tool.
-See the ask-user-question MCP tool for full documentation and examples.
+To ask ANY question or get user input, you MUST use the available question tool.
 </important>
 
 ${TASK_COMPLETION_BEHAVIOR}

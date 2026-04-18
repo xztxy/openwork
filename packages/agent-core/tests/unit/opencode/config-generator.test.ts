@@ -539,7 +539,12 @@ describe('ConfigGenerator', () => {
       const result = generateConfig(options);
 
       expect(result.systemPrompt).toContain('<important name="filesystem-rules">');
-      expect(result.systemPrompt).toContain('request_file_permission');
+      expect(result.systemPrompt).toContain('OpenCode will automatically pause');
+      expect(result.systemPrompt).toContain('There is no request_file_permission tool');
+      expect(result.systemPrompt).toContain('file-capable tool directly');
+      expect(result.systemPrompt).toContain('Do not use connector authentication');
+      expect(result.systemPrompt).toContain('"Desktop" means "$HOME/Desktop"');
+      expect(result.systemPrompt).not.toContain('<tool name="request_file_permission">');
     });
 
     it('should include capabilities section', () => {
@@ -586,8 +591,10 @@ describe('ConfigGenerator', () => {
 
       const result = generateConfig(options);
 
-      expect(result.systemPrompt).toContain('AskUserQuestion');
+      expect(result.systemPrompt).toContain('available question tool');
       expect(result.systemPrompt).toContain('user CANNOT see your text output');
+      expect(result.systemPrompt).not.toContain('AskUserQuestion');
+      expect(result.systemPrompt).not.toContain('ask-user-question');
     });
 
     it('should include Slack usage and authentication guidance', () => {
@@ -612,6 +619,8 @@ describe('ConfigGenerator', () => {
       );
       expect(result.systemPrompt).toContain('If Slack authentication is required');
       expect(result.systemPrompt).toContain('request-connector-auth_request_connector_auth');
+      expect(result.systemPrompt).toContain('ONLY for connector authentication');
+      expect(result.systemPrompt).toContain('Never use it for filesystem permission');
       expect(result.systemPrompt).toContain('Authenticate Slack');
       expect(result.systemPrompt).toContain('Settings -> Connectors -> Slack');
       expect(result.systemPrompt).toContain('Authenticate button');

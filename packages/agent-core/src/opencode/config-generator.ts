@@ -303,7 +303,7 @@ ${options.knowledgeContext}
     },
     mcp: mcpServers,
     experimental: {
-      mcp_timeout: 600000, // 10 minutes — allow long-running MCP tools like AskUserQuestion
+      mcp_timeout: 600000, // 10 minutes — allow long-running MCP tools
     },
   };
 
