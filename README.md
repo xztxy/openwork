@@ -41,10 +41,6 @@ Accomplish is an open source AI desktop agent that automates file management, do
   ·
   <a href="https://downloads.accomplish.ai/downloads/0.5.17/linux/Accomplish-0.5.17-linux-amd64.deb"><strong>Download for Linux (.deb x64)</strong></a>
   ·
-  <a href="https://www.accomplish.ai/">Accomplish website</a>
-  ·
-  <a href="https://www.accomplish.ai/blog/">Accomplish blog</a>
-  ·
   <a href="https://github.com/accomplish-ai/accomplish/releases">Accomplish releases</a>
 </p>
 
@@ -333,11 +329,11 @@ git push origin feature/amazing-feature
 
 <div align="center">
 
-**[Accomplish website](https://www.accomplish.ai/)** · **[Accomplish blog](https://www.accomplish.ai/blog/)** · **[Accomplish releases](https://github.com/accomplish-ai/accomplish/releases)** · **[Issues](https://github.com/accomplish-ai/accomplish/issues)** · **[Twitter](https://x.com/Accomplish_ai)**
+**[Accomplish releases](https://github.com/accomplish-ai/accomplish/releases)** · **[Issues](https://github.com/accomplish-ai/accomplish/issues)** · **[Twitter](https://x.com/Accomplish_ai)**
 
 <br />
 
-MIT License · Built by [Accomplish](https://www.accomplish.ai)
+MIT License
 
 <br />
 
